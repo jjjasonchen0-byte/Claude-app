@@ -1,0 +1,3709 @@
+<title>Midway</title>
+<meta name="description" content="Find a fair place to meet: routes grow from every friend's address and meet in the middle.">
+<style>
+/* required styles */
+
+.leaflet-pane,
+.leaflet-tile,
+.leaflet-marker-icon,
+.leaflet-marker-shadow,
+.leaflet-tile-container,
+.leaflet-pane > svg,
+.leaflet-pane > canvas,
+.leaflet-zoom-box,
+.leaflet-image-layer,
+.leaflet-layer {
+	position: absolute;
+	left: 0;
+	top: 0;
+	}
+.leaflet-container {
+	overflow: hidden;
+	}
+.leaflet-tile,
+.leaflet-marker-icon,
+.leaflet-marker-shadow {
+	-webkit-user-select: none;
+	   -moz-user-select: none;
+	        user-select: none;
+	  -webkit-user-drag: none;
+	}
+/* Prevents IE11 from highlighting tiles in blue */
+.leaflet-tile::selection {
+	background: transparent;
+}
+/* Safari renders non-retina tile on retina better with this, but Chrome is worse */
+.leaflet-safari .leaflet-tile {
+	image-rendering: -webkit-optimize-contrast;
+	}
+/* hack that prevents hw layers "stretching" when loading new tiles */
+.leaflet-safari .leaflet-tile-container {
+	width: 1600px;
+	height: 1600px;
+	-webkit-transform-origin: 0 0;
+	}
+.leaflet-marker-icon,
+.leaflet-marker-shadow {
+	display: block;
+	}
+/* .leaflet-container svg: reset svg max-width decleration shipped in Joomla! (joomla.org) 3.x */
+/* .leaflet-container img: map is broken in FF if you have max-width: 100% on tiles */
+.leaflet-container .leaflet-overlay-pane svg {
+	max-width: none !important;
+	max-height: none !important;
+	}
+.leaflet-container .leaflet-marker-pane img,
+.leaflet-container .leaflet-shadow-pane img,
+.leaflet-container .leaflet-tile-pane img,
+.leaflet-container img.leaflet-image-layer,
+.leaflet-container .leaflet-tile {
+	max-width: none !important;
+	max-height: none !important;
+	width: auto;
+	padding: 0;
+	}
+
+.leaflet-container img.leaflet-tile {
+	/* See: https://bugs.chromium.org/p/chromium/issues/detail?id=600120 */
+	mix-blend-mode: plus-lighter;
+}
+
+.leaflet-container.leaflet-touch-zoom {
+	-ms-touch-action: pan-x pan-y;
+	touch-action: pan-x pan-y;
+	}
+.leaflet-container.leaflet-touch-drag {
+	-ms-touch-action: pinch-zoom;
+	/* Fallback for FF which doesn't support pinch-zoom */
+	touch-action: none;
+	touch-action: pinch-zoom;
+}
+.leaflet-container.leaflet-touch-drag.leaflet-touch-zoom {
+	-ms-touch-action: none;
+	touch-action: none;
+}
+.leaflet-container {
+	-webkit-tap-highlight-color: transparent;
+}
+.leaflet-container a {
+	-webkit-tap-highlight-color: rgba(51, 181, 229, 0.4);
+}
+.leaflet-tile {
+	filter: inherit;
+	visibility: hidden;
+	}
+.leaflet-tile-loaded {
+	visibility: inherit;
+	}
+.leaflet-zoom-box {
+	width: 0;
+	height: 0;
+	-moz-box-sizing: border-box;
+	     box-sizing: border-box;
+	z-index: 800;
+	}
+/* workaround for https://bugzilla.mozilla.org/show_bug.cgi?id=888319 */
+.leaflet-overlay-pane svg {
+	-moz-user-select: none;
+	}
+
+.leaflet-pane         { z-index: 400; }
+
+.leaflet-tile-pane    { z-index: 200; }
+.leaflet-overlay-pane { z-index: 400; }
+.leaflet-shadow-pane  { z-index: 500; }
+.leaflet-marker-pane  { z-index: 600; }
+.leaflet-tooltip-pane   { z-index: 650; }
+.leaflet-popup-pane   { z-index: 700; }
+
+.leaflet-map-pane canvas { z-index: 100; }
+.leaflet-map-pane svg    { z-index: 200; }
+
+.leaflet-vml-shape {
+	width: 1px;
+	height: 1px;
+	}
+.lvml {
+	behavior: url(#default#VML);
+	display: inline-block;
+	position: absolute;
+	}
+
+
+/* control positioning */
+
+.leaflet-control {
+	position: relative;
+	z-index: 800;
+	pointer-events: visiblePainted; /* IE 9-10 doesn't have auto */
+	pointer-events: auto;
+	}
+.leaflet-top,
+.leaflet-bottom {
+	position: absolute;
+	z-index: 1000;
+	pointer-events: none;
+	}
+.leaflet-top {
+	top: 0;
+	}
+.leaflet-right {
+	right: 0;
+	}
+.leaflet-bottom {
+	bottom: 0;
+	}
+.leaflet-left {
+	left: 0;
+	}
+.leaflet-control {
+	float: left;
+	clear: both;
+	}
+.leaflet-right .leaflet-control {
+	float: right;
+	}
+.leaflet-top .leaflet-control {
+	margin-top: 10px;
+	}
+.leaflet-bottom .leaflet-control {
+	margin-bottom: 10px;
+	}
+.leaflet-left .leaflet-control {
+	margin-left: 10px;
+	}
+.leaflet-right .leaflet-control {
+	margin-right: 10px;
+	}
+
+
+/* zoom and fade animations */
+
+.leaflet-fade-anim .leaflet-popup {
+	opacity: 0;
+	-webkit-transition: opacity 0.2s linear;
+	   -moz-transition: opacity 0.2s linear;
+	        transition: opacity 0.2s linear;
+	}
+.leaflet-fade-anim .leaflet-map-pane .leaflet-popup {
+	opacity: 1;
+	}
+.leaflet-zoom-animated {
+	-webkit-transform-origin: 0 0;
+	    -ms-transform-origin: 0 0;
+	        transform-origin: 0 0;
+	}
+svg.leaflet-zoom-animated {
+	will-change: transform;
+}
+
+.leaflet-zoom-anim .leaflet-zoom-animated {
+	-webkit-transition: -webkit-transform 0.25s cubic-bezier(0,0,0.25,1);
+	   -moz-transition:    -moz-transform 0.25s cubic-bezier(0,0,0.25,1);
+	        transition:         transform 0.25s cubic-bezier(0,0,0.25,1);
+	}
+.leaflet-zoom-anim .leaflet-tile,
+.leaflet-pan-anim .leaflet-tile {
+	-webkit-transition: none;
+	   -moz-transition: none;
+	        transition: none;
+	}
+
+.leaflet-zoom-anim .leaflet-zoom-hide {
+	visibility: hidden;
+	}
+
+
+/* cursors */
+
+.leaflet-interactive {
+	cursor: pointer;
+	}
+.leaflet-grab {
+	cursor: -webkit-grab;
+	cursor:    -moz-grab;
+	cursor:         grab;
+	}
+.leaflet-crosshair,
+.leaflet-crosshair .leaflet-interactive {
+	cursor: crosshair;
+	}
+.leaflet-popup-pane,
+.leaflet-control {
+	cursor: auto;
+	}
+.leaflet-dragging .leaflet-grab,
+.leaflet-dragging .leaflet-grab .leaflet-interactive,
+.leaflet-dragging .leaflet-marker-draggable {
+	cursor: move;
+	cursor: -webkit-grabbing;
+	cursor:    -moz-grabbing;
+	cursor:         grabbing;
+	}
+
+/* marker & overlays interactivity */
+.leaflet-marker-icon,
+.leaflet-marker-shadow,
+.leaflet-image-layer,
+.leaflet-pane > svg path,
+.leaflet-tile-container {
+	pointer-events: none;
+	}
+
+.leaflet-marker-icon.leaflet-interactive,
+.leaflet-image-layer.leaflet-interactive,
+.leaflet-pane > svg path.leaflet-interactive,
+svg.leaflet-image-layer.leaflet-interactive path {
+	pointer-events: visiblePainted; /* IE 9-10 doesn't have auto */
+	pointer-events: auto;
+	}
+
+/* visual tweaks */
+
+.leaflet-container {
+	background: #ddd;
+	outline-offset: 1px;
+	}
+.leaflet-container a {
+	color: #0078A8;
+	}
+.leaflet-zoom-box {
+	border: 2px dotted #38f;
+	background: rgba(255,255,255,0.5);
+	}
+
+
+/* general typography */
+.leaflet-container {
+	font-family: "Helvetica Neue", Arial, Helvetica, sans-serif;
+	font-size: 12px;
+	font-size: 0.75rem;
+	line-height: 1.5;
+	}
+
+
+/* general toolbar styles */
+
+.leaflet-bar {
+	box-shadow: 0 1px 5px rgba(0,0,0,0.65);
+	border-radius: 4px;
+	}
+.leaflet-bar a {
+	background-color: #fff;
+	border-bottom: 1px solid #ccc;
+	width: 26px;
+	height: 26px;
+	line-height: 26px;
+	display: block;
+	text-align: center;
+	text-decoration: none;
+	color: black;
+	}
+.leaflet-bar a,
+.leaflet-control-layers-toggle {
+	background-position: 50% 50%;
+	background-repeat: no-repeat;
+	display: block;
+	}
+.leaflet-bar a:hover,
+.leaflet-bar a:focus {
+	background-color: #f4f4f4;
+	}
+.leaflet-bar a:first-child {
+	border-top-left-radius: 4px;
+	border-top-right-radius: 4px;
+	}
+.leaflet-bar a:last-child {
+	border-bottom-left-radius: 4px;
+	border-bottom-right-radius: 4px;
+	border-bottom: none;
+	}
+.leaflet-bar a.leaflet-disabled {
+	cursor: default;
+	background-color: #f4f4f4;
+	color: #bbb;
+	}
+
+.leaflet-touch .leaflet-bar a {
+	width: 30px;
+	height: 30px;
+	line-height: 30px;
+	}
+.leaflet-touch .leaflet-bar a:first-child {
+	border-top-left-radius: 2px;
+	border-top-right-radius: 2px;
+	}
+.leaflet-touch .leaflet-bar a:last-child {
+	border-bottom-left-radius: 2px;
+	border-bottom-right-radius: 2px;
+	}
+
+/* zoom control */
+
+.leaflet-control-zoom-in,
+.leaflet-control-zoom-out {
+	font: bold 18px 'Lucida Console', Monaco, monospace;
+	text-indent: 1px;
+	}
+
+.leaflet-touch .leaflet-control-zoom-in, .leaflet-touch .leaflet-control-zoom-out  {
+	font-size: 22px;
+	}
+
+
+/* layers control */
+
+.leaflet-control-layers {
+	box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+	background: #fff;
+	border-radius: 5px;
+	}
+.leaflet-control-layers-toggle {
+	background-image: none;
+	width: 36px;
+	height: 36px;
+	}
+.leaflet-retina .leaflet-control-layers-toggle {
+	background-image: none;
+	background-size: 26px 26px;
+	}
+.leaflet-touch .leaflet-control-layers-toggle {
+	width: 44px;
+	height: 44px;
+	}
+.leaflet-control-layers .leaflet-control-layers-list,
+.leaflet-control-layers-expanded .leaflet-control-layers-toggle {
+	display: none;
+	}
+.leaflet-control-layers-expanded .leaflet-control-layers-list {
+	display: block;
+	position: relative;
+	}
+.leaflet-control-layers-expanded {
+	padding: 6px 10px 6px 6px;
+	color: #333;
+	background: #fff;
+	}
+.leaflet-control-layers-scrollbar {
+	overflow-y: scroll;
+	overflow-x: hidden;
+	padding-right: 5px;
+	}
+.leaflet-control-layers-selector {
+	margin-top: 2px;
+	position: relative;
+	top: 1px;
+	}
+.leaflet-control-layers label {
+	display: block;
+	font-size: 13px;
+	font-size: 1.08333em;
+	}
+.leaflet-control-layers-separator {
+	height: 0;
+	border-top: 1px solid #ddd;
+	margin: 5px -10px 5px -6px;
+	}
+
+/* Default icon URLs */
+.leaflet-default-icon-path { /* used only in path-guessing heuristic, see L.Icon.Default */
+	background-image: none;
+	}
+
+
+/* attribution and scale controls */
+
+.leaflet-container .leaflet-control-attribution {
+	background: #fff;
+	background: rgba(255, 255, 255, 0.8);
+	margin: 0;
+	}
+.leaflet-control-attribution,
+.leaflet-control-scale-line {
+	padding: 0 5px;
+	color: #333;
+	line-height: 1.4;
+	}
+.leaflet-control-attribution a {
+	text-decoration: none;
+	}
+.leaflet-control-attribution a:hover,
+.leaflet-control-attribution a:focus {
+	text-decoration: underline;
+	}
+.leaflet-attribution-flag {
+	display: inline !important;
+	vertical-align: baseline !important;
+	width: 1em;
+	height: 0.6669em;
+	}
+.leaflet-left .leaflet-control-scale {
+	margin-left: 5px;
+	}
+.leaflet-bottom .leaflet-control-scale {
+	margin-bottom: 5px;
+	}
+.leaflet-control-scale-line {
+	border: 2px solid #777;
+	border-top: none;
+	line-height: 1.1;
+	padding: 2px 5px 1px;
+	white-space: nowrap;
+	-moz-box-sizing: border-box;
+	     box-sizing: border-box;
+	background: rgba(255, 255, 255, 0.8);
+	text-shadow: 1px 1px #fff;
+	}
+.leaflet-control-scale-line:not(:first-child) {
+	border-top: 2px solid #777;
+	border-bottom: none;
+	margin-top: -2px;
+	}
+.leaflet-control-scale-line:not(:first-child):not(:last-child) {
+	border-bottom: 2px solid #777;
+	}
+
+.leaflet-touch .leaflet-control-attribution,
+.leaflet-touch .leaflet-control-layers,
+.leaflet-touch .leaflet-bar {
+	box-shadow: none;
+	}
+.leaflet-touch .leaflet-control-layers,
+.leaflet-touch .leaflet-bar {
+	border: 2px solid rgba(0,0,0,0.2);
+	background-clip: padding-box;
+	}
+
+
+/* popup */
+
+.leaflet-popup {
+	position: absolute;
+	text-align: center;
+	margin-bottom: 20px;
+	}
+.leaflet-popup-content-wrapper {
+	padding: 1px;
+	text-align: left;
+	border-radius: 12px;
+	}
+.leaflet-popup-content {
+	margin: 13px 24px 13px 20px;
+	line-height: 1.3;
+	font-size: 13px;
+	font-size: 1.08333em;
+	min-height: 1px;
+	}
+.leaflet-popup-content p {
+	margin: 17px 0;
+	margin: 1.3em 0;
+	}
+.leaflet-popup-tip-container {
+	width: 40px;
+	height: 20px;
+	position: absolute;
+	left: 50%;
+	margin-top: -1px;
+	margin-left: -20px;
+	overflow: hidden;
+	pointer-events: none;
+	}
+.leaflet-popup-tip {
+	width: 17px;
+	height: 17px;
+	padding: 1px;
+
+	margin: -10px auto 0;
+	pointer-events: auto;
+
+	-webkit-transform: rotate(45deg);
+	   -moz-transform: rotate(45deg);
+	    -ms-transform: rotate(45deg);
+	        transform: rotate(45deg);
+	}
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+	background: white;
+	color: #333;
+	box-shadow: 0 3px 14px rgba(0,0,0,0.4);
+	}
+.leaflet-container a.leaflet-popup-close-button {
+	position: absolute;
+	top: 0;
+	right: 0;
+	border: none;
+	text-align: center;
+	width: 24px;
+	height: 24px;
+	font: 16px/24px Tahoma, Verdana, sans-serif;
+	color: #757575;
+	text-decoration: none;
+	background: transparent;
+	}
+.leaflet-container a.leaflet-popup-close-button:hover,
+.leaflet-container a.leaflet-popup-close-button:focus {
+	color: #585858;
+	}
+.leaflet-popup-scrolled {
+	overflow: auto;
+	}
+
+.leaflet-oldie .leaflet-popup-content-wrapper {
+	-ms-zoom: 1;
+	}
+.leaflet-oldie .leaflet-popup-tip {
+	width: 24px;
+	margin: 0 auto;
+
+	-ms-filter: "progid:DXImageTransform.Microsoft.Matrix(M11=0.70710678, M12=0.70710678, M21=-0.70710678, M22=0.70710678)";
+	filter: progid:DXImageTransform.Microsoft.Matrix(M11=0.70710678, M12=0.70710678, M21=-0.70710678, M22=0.70710678);
+	}
+
+.leaflet-oldie .leaflet-control-zoom,
+.leaflet-oldie .leaflet-control-layers,
+.leaflet-oldie .leaflet-popup-content-wrapper,
+.leaflet-oldie .leaflet-popup-tip {
+	border: 1px solid #999;
+	}
+
+
+/* div icon */
+
+.leaflet-div-icon {
+	background: #fff;
+	border: 1px solid #666;
+	}
+
+
+/* Tooltip */
+/* Base styles for the element that has a tooltip */
+.leaflet-tooltip {
+	position: absolute;
+	padding: 6px;
+	background-color: #fff;
+	border: 1px solid #fff;
+	border-radius: 3px;
+	color: #222;
+	white-space: nowrap;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+	pointer-events: none;
+	box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+	}
+.leaflet-tooltip.leaflet-interactive {
+	cursor: pointer;
+	pointer-events: auto;
+	}
+.leaflet-tooltip-top:before,
+.leaflet-tooltip-bottom:before,
+.leaflet-tooltip-left:before,
+.leaflet-tooltip-right:before {
+	position: absolute;
+	pointer-events: none;
+	border: 6px solid transparent;
+	background: transparent;
+	content: "";
+	}
+
+/* Directions */
+
+.leaflet-tooltip-bottom {
+	margin-top: 6px;
+}
+.leaflet-tooltip-top {
+	margin-top: -6px;
+}
+.leaflet-tooltip-bottom:before,
+.leaflet-tooltip-top:before {
+	left: 50%;
+	margin-left: -6px;
+	}
+.leaflet-tooltip-top:before {
+	bottom: 0;
+	margin-bottom: -12px;
+	border-top-color: #fff;
+	}
+.leaflet-tooltip-bottom:before {
+	top: 0;
+	margin-top: -12px;
+	margin-left: -6px;
+	border-bottom-color: #fff;
+	}
+.leaflet-tooltip-left {
+	margin-left: -6px;
+}
+.leaflet-tooltip-right {
+	margin-left: 6px;
+}
+.leaflet-tooltip-left:before,
+.leaflet-tooltip-right:before {
+	top: 50%;
+	margin-top: -6px;
+	}
+.leaflet-tooltip-left:before {
+	right: 0;
+	margin-right: -12px;
+	border-left-color: #fff;
+	}
+.leaflet-tooltip-right:before {
+	left: 0;
+	margin-left: -12px;
+	border-right-color: #fff;
+	}
+
+/* Printing */
+
+@media print {
+	/* Prevent printers from removing background-images of controls. */
+	.leaflet-control {
+		-webkit-print-color-adjust: exact;
+		print-color-adjust: exact;
+		}
+	}
+
+/* ================================================================ tokens */
+:root {
+  --bg: #f4f5fb;
+  --surface: #ffffff;
+  --surface-2: #f0f1f8;
+  --text: #171a2b;
+  --muted: #646a85;
+  --border: #e2e4ef;
+  --primary: #5b5bf0;
+  --primary-ink: #ffffff;
+  --primary-soft: #ececfe;
+  --danger: #d8344f;
+  --success: #138a5b;
+  --shadow: 0 10px 30px rgba(23, 26, 43, 0.12), 0 2px 6px rgba(23, 26, 43, 0.06);
+  --radius: 16px;
+  --panel-w: 400px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1120; --surface: #181b2e; --surface-2: #22263d; --text: #eef0fb; --muted: #9aa0bd;
+    --border: #2c3150; --primary: #8080ff; --primary-soft: #2a2c55; --shadow: 0 10px 30px rgba(0,0,0,.45);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1120; --surface: #181b2e; --surface-2: #22263d; --text: #eef0fb; --muted: #9aa0bd;
+  --border: #2c3150; --primary: #8080ff; --primary-soft: #2a2c55; --shadow: 0 10px 30px rgba(0,0,0,.45);
+  color-scheme: dark;
+}
+
+/* ================================================================ base */
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font: 15px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+h1 { font-size: 26px; line-height: 1.2; margin: 6px 0 8px; letter-spacing: -0.02em; }
+h2 { font-size: 19px; margin: 0; letter-spacing: -0.01em; }
+h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 8px; }
+a { color: var(--primary); }
+[hidden] { display: none !important; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+button { font: inherit; color: inherit; cursor: pointer; }
+input { font: inherit; color: inherit; }
+.noscript { padding: 2rem; text-align: center; }
+
+.screen { position: fixed; inset: 0; }
+.screen-centered {
+  display: grid; place-items: center; padding: 20px; overflow: auto;
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(91,91,240,.18), transparent 60%),
+    radial-gradient(900px 500px at 110% 110%, rgba(255,107,107,.16), transparent 60%),
+    var(--bg);
+}
+.card { background: var(--surface); border-radius: 22px; box-shadow: var(--shadow); padding: 28px; width: 100%; }
+.auth-card { max-width: 400px; }
+.onboard-card { max-width: 480px; }
+
+/* ================================================================ brand */
+.brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; letter-spacing: -0.02em; font-size: 18px; }
+.brand-lg { font-size: 30px; }
+.brand-mark {
+  width: 1.15em; height: 1.15em; border-radius: 50%; position: relative; flex: none;
+  background: conic-gradient(from 200deg, #5b5bf0, #ff6b6b, #12b5a5, #5b5bf0);
+}
+.brand-mark::after { content: ""; position: absolute; inset: 32%; background: var(--surface); border-radius: 50%; }
+.tagline { color: var(--muted); margin: 4px 0 20px; }
+.step { font-size: 12px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: .08em; }
+
+/* ================================================================ controls */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  border: 1px solid transparent; border-radius: 12px; padding: 11px 16px; font-weight: 600;
+  background: var(--surface-2); transition: transform .08s ease, background .15s ease, opacity .15s;
+  text-decoration: none; color: var(--text);
+}
+.btn:active { transform: scale(.98); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-primary { background: var(--primary); color: var(--primary-ink); box-shadow: 0 6px 18px rgba(91,91,240,.35); }
+.btn-primary:hover:not(:disabled) { filter: brightness(1.06); }
+.btn-ghost { background: transparent; border-color: var(--border); }
+.btn-ghost:hover { background: var(--surface-2); }
+.btn-link { background: none; border: 0; color: var(--primary); padding: 8px; }
+.btn-block { width: 100%; margin-top: 10px; }
+.btn-sm { padding: 7px 12px; font-size: 13px; border-radius: 10px; margin-top: 8px; }
+.btn-lg { padding: 15px 18px; font-size: 16px; border-radius: 14px; }
+.btn-danger { color: var(--danger); }
+.icon-btn {
+  border: 0; background: transparent; border-radius: 10px; padding: 6px 9px; line-height: 1; font-size: 16px; color: var(--muted);
+}
+.icon-btn:hover { background: var(--surface-2); color: var(--text); }
+.icon-btn.round { background: var(--surface); box-shadow: var(--shadow); border-radius: 50%; width: 42px; height: 42px; font-size: 18px; color: var(--text); }
+
+.field { display: block; margin: 0 0 14px; }
+.field > span { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.field em { font-weight: 400; color: var(--muted); font-style: normal; }
+input[type=email], input[type=password], input[type=text], input[type=search], input:not([type]), input[type=datetime-local], textarea {
+  width: 100%; border: 1px solid var(--border); background: var(--surface); border-radius: 12px; padding: 11px 13px; outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+input:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 4px var(--primary-soft); }
+.input-row { display: flex; gap: 6px; align-items: center; }
+.form-error { color: var(--danger); font-size: 13px; margin: 0 0 6px; }
+
+.segmented { display: flex; background: var(--surface-2); border-radius: 12px; padding: 4px; gap: 4px; margin-bottom: 18px; }
+.segmented .seg { flex: 1; border: 0; background: transparent; padding: 8px 10px; border-radius: 9px; font-weight: 600; color: var(--muted); }
+.segmented .seg.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.segmented.small { margin-bottom: 4px; flex-wrap: wrap; }
+.segmented.small .seg { font-size: 13px; padding: 6px 8px; }
+
+/* ================================================================ search box */
+.search { position: relative; margin: 16px 0 4px; }
+.suggestions {
+  position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 1200; margin: 0; padding: 6px; list-style: none;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); max-height: 280px; overflow: auto;
+}
+.suggestions li { padding: 9px 10px; border-radius: 9px; cursor: pointer; }
+.suggestions li[aria-selected=true], .suggestions li:hover { background: var(--primary-soft); }
+.suggestions .s-title { font-weight: 600; }
+.suggestions .s-sub { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.suggestions .s-empty { color: var(--muted); cursor: default; }
+
+/* ================================================================ main layout */
+#map { position: absolute; inset: 0; background: var(--surface-2); }
+.topbar {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 1000; pointer-events: none;
+  display: flex; justify-content: space-between; align-items: center; padding: calc(12px + env(safe-area-inset-top)) 14px 12px;
+}
+.topbar > * { pointer-events: auto; }
+.topbar .brand { background: var(--surface); padding: 9px 14px; border-radius: 999px; box-shadow: var(--shadow); }
+.topbar-actions { display: flex; gap: 8px; }
+
+.panel {
+  position: absolute; z-index: 1001; background: var(--surface); box-shadow: var(--shadow);
+  display: flex; flex-direction: column; transition: transform .35s cubic-bezier(.2,.8,.2,1), opacity .25s;
+}
+.panel-body { overflow: auto; padding: 18px 18px 20px; flex: 1; overscroll-behavior: contain; }
+.panel-handle { display: none; }
+.panel.away { transform: translateY(120%); opacity: 0; pointer-events: none; }
+.panel.pop { animation: pop .5s cubic-bezier(.2,1.3,.4,1); }
+@keyframes pop { from { transform: translateY(40px) scale(.96); opacity: 0; } }
+
+@media (min-width: 760px) {
+  .panel { top: 76px; left: 14px; bottom: 14px; width: var(--panel-w); border-radius: 20px; }
+  .panel.away { transform: translateX(-110%); }
+  .leaflet-left { left: calc(var(--panel-w) + 14px); }
+}
+@media (max-width: 759px) {
+  .panel { left: 0; right: 0; bottom: 0; max-height: 62vh; border-radius: 22px 22px 0 0; padding-bottom: env(safe-area-inset-bottom); }
+  .panel.tall { max-height: 88vh; }
+  .panel.half { max-height: 46vh; }
+  .panel.mini .panel-body { max-height: 128px; overflow: hidden; }
+  .panel-handle { display: block; border: 0; background: transparent; padding: 10px 0 2px; flex: none; }
+  .panel-handle::before { content: ""; display: block; margin: 0 auto; width: 42px; height: 5px; border-radius: 3px; background: var(--border); }
+  .panel-body { padding-top: 6px; }
+  .leaflet-bottom { bottom: 0; }
+}
+
+/* ================================================================ status chip */
+.status-chip {
+  position: absolute; z-index: 1002; top: calc(72px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px; background: var(--surface); color: var(--text);
+  padding: 8px 8px 8px 14px; border-radius: 999px; box-shadow: var(--shadow); white-space: nowrap; max-width: calc(100vw - 24px);
+}
+.status-text { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; }
+.chip-btn { border: 0; background: var(--surface-2); padding: 6px 12px; border-radius: 999px; font-weight: 600; font-size: 13px; }
+.spinner { width: 16px; height: 16px; border-radius: 50%; border: 2.5px solid var(--primary-soft); border-top-color: var(--primary); animation: spin .8s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.growth-canvas { position: absolute; inset: 0; z-index: 450; pointer-events: none; transition: opacity .3s; }
+.growth-canvas.dim { opacity: .3; }
+
+/* ================================================================ people list */
+.panel-title { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.people { list-style: none; margin: 12px 0; padding: 0; display: grid; gap: 8px; }
+.person {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center;
+  padding: 10px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface);
+  transition: opacity .2s, border-color .2s;
+}
+.person.inactive { opacity: .5; }
+.person:hover { border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); }
+.avatar {
+  width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 14px; flex: none;
+  box-shadow: 0 0 0 3px var(--surface), 0 0 0 4px currentColor;
+}
+.avatar span { color: #fff; }
+.person-main { min-width: 0; cursor: pointer; }
+.person-name { font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.person-addr { font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.person-actions { display: flex; align-items: center; gap: 2px; }
+.switch { position: relative; width: 36px; height: 22px; flex: none; }
+.switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+.switch span { position: absolute; inset: 0; background: var(--border); border-radius: 999px; transition: background .2s; cursor: pointer; }
+.switch span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .2s; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+.switch input:checked + span { background: var(--primary); }
+.switch input:checked + span::after { transform: translateX(14px); }
+.switch input:focus-visible + span { box-shadow: 0 0 0 3px var(--primary-soft); }
+
+.add-box { border: 1.5px dashed var(--border); border-radius: 16px; padding: 12px; margin-bottom: 14px; }
+.add-box .search { margin: 0 0 8px; }
+.add-row { display: flex; gap: 8px; }
+.add-row input { flex: 1; min-width: 0; }
+.hint { font-size: 12.5px; color: var(--muted); margin: 8px 2px 0; }
+.edit-inline { display: flex; gap: 6px; margin-top: 6px; }
+.edit-inline input { padding: 6px 9px; font-size: 13px; border-radius: 9px; }
+
+.find-btn { position: sticky; bottom: 0; }
+.find-wrap { position: sticky; bottom: -20px; background: linear-gradient(transparent, var(--surface) 30%); padding: 14px 0 4px; margin-top: 4px; }
+
+/* ================================================================ results */
+.result-head { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 12px; }
+.meet-badge { width: 44px; height: 44px; border-radius: 14px; flex: none; display: grid; place-items: center; font-size: 22px; background: var(--primary-soft); }
+.eyebrow { font-size: 12px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: .08em; }
+.travel-grid { display: grid; gap: 6px; margin: 4px 0 14px; }
+.travel { display: grid; grid-template-columns: 12px 1fr auto; gap: 8px; align-items: center; font-size: 13.5px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; }
+.travel b { font-weight: 650; }
+.travel .bar { grid-column: 2 / 4; height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; margin-top: -2px; }
+.travel .bar i { display: block; height: 100%; border-radius: 2px; }
+.notice { background: var(--surface-2); border-radius: 12px; padding: 9px 12px; font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+
+.tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; margin: 0 -18px 10px; padding-left: 18px; padding-right: 18px; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+  border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 8px 13px; font-weight: 600; font-size: 14px;
+  display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; flex: none;
+}
+.tab .count { font-size: 12px; color: var(--muted); font-weight: 600; }
+.tab.active { background: var(--text); color: var(--surface); border-color: var(--text); }
+.tab.active .count { color: inherit; opacity: .7; }
+.tab:disabled { opacity: .4; cursor: default; }
+
+.groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.group-btn {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px; text-align: left;
+  border: 1px solid var(--border); background: var(--surface); border-radius: 14px; padding: 13px 12px; font-weight: 600;
+  transition: border-color .15s, transform .08s, background .15s;
+}
+.group-btn:hover { border-color: var(--primary); background: var(--primary-soft); }
+.group-btn:active { transform: scale(.98); }
+.group-btn .n { background: var(--primary-soft); color: var(--primary); border-radius: 999px; padding: 2px 9px; font-size: 13px; font-weight: 700; flex: none; }
+.group-btn.all { grid-column: 1 / -1; background: var(--surface-2); }
+.empty { text-align: center; color: var(--muted); padding: 26px 10px; }
+.empty .big { font-size: 34px; display: block; margin-bottom: 6px; }
+.row-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.row-actions .btn { flex: 1; min-width: 120px; }
+.radius-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 13px; color: var(--muted); margin: 14px 0 0; }
+.radius-row .chips { display: flex; gap: 6px; }
+.chip { white-space: nowrap; }
+
+/* ================================================================ POI list */
+.back { border: 0; background: none; color: var(--primary); font-weight: 600; padding: 4px 0; margin-bottom: 6px; }
+.sortbar { display: flex; gap: 6px; margin: 10px 0; }
+.chip { border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 5px 11px; font-size: 13px; font-weight: 600; }
+.chip.active { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); }
+.poi-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.poi {
+  display: grid; grid-template-columns: 30px 1fr auto; gap: 10px; align-items: center; cursor: pointer;
+  padding: 11px; border-radius: 14px; border: 1px solid var(--border); transition: border-color .15s, background .15s;
+}
+.poi:hover, .poi.hl { border-color: var(--primary); background: var(--primary-soft); }
+.poi-num { width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: #fff; display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+.poi-name { font-weight: 650; }
+.poi-meta { font-size: 12.5px; color: var(--muted); }
+.poi-dist { font-size: 12.5px; color: var(--muted); text-align: right; white-space: nowrap; }
+.tagline-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+.pill { font-size: 12px; background: var(--surface-2); padding: 3px 9px; border-radius: 999px; color: var(--muted); font-weight: 600; }
+
+.detail-list { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 8px; font-size: 14px; }
+.detail-list li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; }
+.detail-list a { word-break: break-all; }
+
+/* ================================================================ share */
+.share-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
+.share-btn { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 6px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); font-size: 13px; font-weight: 600; text-decoration: none; color: var(--text); }
+.share-btn:hover { border-color: var(--primary); background: var(--primary-soft); }
+.share-btn .ico { font-size: 22px; }
+textarea { resize: vertical; min-height: 110px; font-size: 13.5px; line-height: 1.45; }
+
+/* ================================================================ drawer */
+.drawer-backdrop { position: fixed; inset: 0; background: rgba(10,12,25,.35); z-index: 1500; animation: fade .2s; }
+@keyframes fade { from { opacity: 0; } }
+.drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; width: min(360px, 92vw); z-index: 1501; background: var(--surface);
+  box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: auto; animation: slide .25s cubic-bezier(.2,.8,.2,1);
+  padding-top: env(safe-area-inset-top);
+}
+@keyframes slide { from { transform: translateX(100%); } }
+.drawer-head { display: flex; justify-content: space-between; align-items: flex-start; padding: 20px 18px 10px; }
+.drawer-name { font-weight: 750; font-size: 18px; }
+.drawer-section { padding: 12px 18px; border-top: 1px solid var(--border); }
+.drawer-section.grow { flex: 1; }
+.history { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.history li { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); cursor: pointer; }
+.history .h-name { font-weight: 600; font-size: 14px; }
+.history .h-sub { font-size: 12px; color: var(--muted); }
+
+/* ================================================================ toasts */
+.toasts { position: fixed; z-index: 2000; left: 50%; bottom: 24px; transform: translateX(-50%); display: grid; gap: 8px; width: max-content; max-width: calc(100vw - 24px); }
+.toast { background: var(--text); color: var(--surface); padding: 11px 16px; border-radius: 12px; box-shadow: var(--shadow); font-weight: 600; font-size: 14px; display: flex; gap: 14px; align-items: center; animation: toast .25s ease; }
+.toast button { background: none; border: 0; color: var(--primary-soft); font-weight: 700; text-decoration: underline; padding: 0; }
+.toast.error { background: var(--danger); color: #fff; }
+@keyframes toast { from { transform: translateY(12px); opacity: 0; } }
+@media (max-width: 759px) { .toasts { bottom: auto; top: calc(70px + env(safe-area-inset-top)); } }
+
+/* ================================================================ map markers */
+.pin { position: relative; }
+.pin-dot {
+  width: 34px; height: 34px; border-radius: 50% 50% 50% 4px; transform: rotate(-45deg); display: grid; place-items: center;
+  border: 3px solid #fff; box-shadow: 0 4px 12px rgba(0,0,0,.3);
+}
+.pin-dot span { transform: rotate(45deg); color: #fff; font-weight: 800; font-size: 14px; }
+.meet-pin { width: 26px; height: 26px; border-radius: 50%; background: #fff; border: 6px solid var(--primary); box-shadow: 0 0 0 0 rgba(91,91,240,.6); animation: pulse 1.8s infinite; }
+@keyframes pulse { 70% { box-shadow: 0 0 0 26px rgba(91,91,240,0); } 100% { box-shadow: 0 0 0 0 rgba(91,91,240,0); } }
+.poi-pin { width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 13px; border: 2.5px solid #fff; box-shadow: 0 3px 10px rgba(0,0,0,.3); transition: transform .15s; }
+.poi-pin.hl { transform: scale(1.25); background: #ff6b6b; }
+.leaflet-tooltip.label {
+  background: var(--surface); color: var(--text); border: 0; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.18);
+  font-weight: 650; font-size: 12px; padding: 3px 8px;
+}
+.leaflet-tooltip.label::before { display: none; }
+.leaflet-popup-content-wrapper { border-radius: 14px; background: var(--surface); color: var(--text); }
+.leaflet-popup-tip { background: var(--surface); }
+.leaflet-popup-content { margin: 12px 14px; font: inherit; }
+.map-popup .btn { margin-top: 8px; width: 100%; padding: 8px 12px; }
+.leaflet-container { font: inherit; }
+.leaflet-control-attribution { font-size: 10px; }
+:root[data-theme="dark"] .leaflet-tile-pane, :root[data-dark-tiles] .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.9) saturate(.7); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+:root { --map-land: #eef0f4; --map-park: #cfe8c9; --map-water: #a9cdf0; --map-road: #ffffff; --map-casing: #d5d8e3; --map-major: #ffe7a8; --map-label: #5d6380; --map-halo: rgba(255,255,255,.85); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --map-land: #1a1d2e; --map-park: #1f3a2c; --map-water: #1d3557; --map-road: #33384f; --map-casing: #23273a; --map-major: #5a5030; --map-label: #9aa0bd; --map-halo: rgba(15,17,32,.85); } }
+:root[data-theme="dark"] { --map-land: #1a1d2e; --map-park: #1f3a2c; --map-water: #1d3557; --map-road: #33384f; --map-casing: #23273a; --map-major: #5a5030; --map-label: #9aa0bd; --map-halo: rgba(15,17,32,.85); }
+.basemap-canvas { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+#map { background: var(--map-land); }
+.demo-cta { margin-top: 14px; display: grid; gap: 4px; text-align: center; }
+.demo-cta .btn-block { margin-top: 0; }
+.divider { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+.divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+
+</style>
+<!-- ============ Sign in ============ -->
+  <section id="screen-auth" class="screen screen-centered" hidden>
+    <div class="auth-card card">
+      <div class="brand brand-lg"><span class="brand-mark" aria-hidden="true"></span>Midway</div>
+      <p class="tagline">Find the spot that's fair for everyone.</p>
+      <div class="segmented" role="tablist">
+        <button type="button" role="tab" class="seg active" data-auth-mode="login" aria-selected="true">Sign in</button>
+        <button type="button" role="tab" class="seg" data-auth-mode="signup" aria-selected="false">Create account</button>
+      </div>
+      <form id="auth-form" novalidate>
+        <label class="field" data-signup-only hidden>
+          <span>Your name <em>(optional)</em></span>
+          <input name="name" autocomplete="name" maxlength="60" placeholder="Alex">
+        </label>
+        <label class="field">
+          <span>Email</span>
+          <input name="email" type="email" autocomplete="email" required placeholder="you@example.com">
+        </label>
+        <label class="field">
+          <span>Password</span>
+          <div class="input-row">
+            <input name="password" type="password" autocomplete="current-password" required minlength="6" placeholder="At least 6 characters">
+            <button type="button" class="icon-btn" id="toggle-password" aria-label="Show password">👁</button>
+          </div>
+        </label>
+        <p class="form-error" id="auth-error" role="alert" hidden></p>
+        <button class="btn btn-primary btn-block" type="submit" id="auth-submit">Sign in</button>
+      </form>
+      <div class="demo-cta">
+        <div class="divider"><span>or</span></div>
+        <button class="btn btn-ghost btn-block" type="button" id="demo-login">👥 Try it with a sample group</button>
+        <p class="muted small">Test version. Port Verity is a made-up town, and anything you save stays in this browser.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Home address ============ -->
+  <section id="screen-home" class="screen screen-centered" hidden>
+    <div class="card onboard-card">
+      <div class="step">Step 1 of 2</div>
+      <h1>Where do you live?</h1>
+      <p class="muted">We'll centre the map here and use it as your starting point. Only you can see it.</p>
+      <div class="search" id="home-search">
+        <input type="search" placeholder="Try “Hazel Street” or “12 Maple”" autocomplete="off" aria-label="Your address">
+        <ul class="suggestions" role="listbox" hidden></ul>
+      </div>
+      <button class="btn btn-ghost btn-block" type="button" id="home-locate">🎲 Pick a random address for me</button>
+      <button class="btn btn-link" type="button" id="home-cancel" hidden>Cancel</button>
+    </div>
+  </section>
+
+  <!-- ============ Main app ============ -->
+  <section id="screen-main" class="screen" hidden>
+    <div id="map" aria-label="Map"></div>
+
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"></span>Midway</div>
+      <div class="topbar-actions">
+        <button class="icon-btn round" id="btn-recenter" title="Centre on home" aria-label="Centre on home">⌂</button>
+        <button class="icon-btn round" id="btn-menu" title="Menu" aria-label="Open menu">☰</button>
+      </div>
+    </header>
+
+    <div class="status-chip" id="search-status" hidden>
+      <span class="spinner" aria-hidden="true"></span>
+      <span class="status-text">Finding routes…</span>
+      <button class="chip-btn" id="btn-skip" hidden>Skip ›</button>
+      <button class="chip-btn" id="btn-cancel-search">Cancel</button>
+    </div>
+
+    <aside class="panel" id="panel" aria-live="polite">
+      <button class="panel-handle" id="panel-handle" aria-label="Expand or collapse panel"></button>
+      <div class="panel-body" id="panel-body"></div>
+    </aside>
+  </section>
+
+  <!-- ============ Menu drawer ============ -->
+  <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
+  <nav class="drawer" id="drawer" aria-label="Menu" hidden>
+    <div class="drawer-head">
+      <div>
+        <div class="drawer-name" id="drawer-name"></div>
+        <div class="muted small" id="drawer-email"></div>
+      </div>
+      <button class="icon-btn" id="drawer-close" aria-label="Close menu">✕</button>
+    </div>
+    <div class="drawer-section">
+      <h3>Home</h3>
+      <div class="muted small" id="drawer-home"></div>
+      <button class="btn btn-ghost btn-sm" id="btn-edit-home">Change home address</button>
+    </div>
+    <div class="drawer-section">
+      <h3>Meeting point</h3>
+      <div class="segmented small" id="set-mode">
+        <button class="seg" data-value="fair">Fairest</button>
+        <button class="seg" data-value="total">Least total travel</button>
+      </div>
+      <p class="muted small" id="mode-hint"></p>
+    </div>
+    <div class="drawer-section">
+      <h3>Travel times shown for</h3>
+      <div class="segmented small" id="set-travel">
+        <button class="seg" data-value="walk">🚶 Walk</button>
+        <button class="seg" data-value="bike">🚲 Bike</button>
+        <button class="seg" data-value="transit">🚆 Transit</button>
+        <button class="seg" data-value="drive">🚗 Drive</button>
+      </div>
+    </div>
+    <div class="drawer-section">
+      <h3>Animation</h3>
+      <div class="segmented small" id="set-speed">
+        <button class="seg" data-value="slow">Relaxed</button>
+        <button class="seg" data-value="normal">Normal</button>
+        <button class="seg" data-value="fast">Quick</button>
+      </div>
+    </div>
+    <div class="drawer-section">
+      <h3>Theme</h3>
+      <div class="segmented small" id="set-theme">
+        <button class="seg" data-value="auto">Auto</button>
+        <button class="seg" data-value="light">Light</button>
+        <button class="seg" data-value="dark">Dark</button>
+      </div>
+    </div>
+    <div class="drawer-section grow">
+      <h3>Past meetups</h3>
+      <ul class="history" id="history-list"></ul>
+    </div>
+    <div class="drawer-section">
+      <button class="btn btn-ghost btn-block" id="btn-logout">Sign out</button>
+    </div>
+  </nav>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <noscript><p class="noscript">Midway needs JavaScript to run.</p></noscript>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+const __m = {};
+// ---- geo
+(() => {
+// Geometry helpers. Pure functions, usable in the browser and in Node tests.
+
+const R = 6371008.8; // mean Earth radius, metres
+const toRad = (d) => (d * Math.PI) / 180;
+
+/** Great-circle distance in metres. */
+function haversine(lat1, lon1, lat2, lon2) {
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+const dist = (a, b) => haversine(a.lat, a.lon, b.lat, b.lon);
+
+/** Local equirectangular projection around a reference point (metres). */
+function makeProjector(ref) {
+  const kx = Math.cos(toRad(ref.lat)) * (Math.PI / 180) * R;
+  const ky = (Math.PI / 180) * R;
+  return {
+    toXY: (p) => ({ x: (p.lon - ref.lon) * kx, y: (p.lat - ref.lat) * ky }),
+    toLL: (q) => ({ lat: ref.lat + q.y / ky, lon: ref.lon + q.x / kx }),
+  };
+}
+
+function centroid(points) {
+  const n = points.length;
+  return {
+    lat: points.reduce((s, p) => s + p.lat, 0) / n,
+    lon: points.reduce((s, p) => s + p.lon, 0) / n,
+  };
+}
+
+/** Bounding box {s,w,n,e} padded by `padFrac` of its span (min `minPadM` metres). */
+function paddedBBox(points, padFrac = 0.2, minPadM = 600) {
+  let s = 90, n = -90, w = 180, e = -180;
+  for (const p of points) {
+    s = Math.min(s, p.lat); n = Math.max(n, p.lat);
+    w = Math.min(w, p.lon); e = Math.max(e, p.lon);
+  }
+  const midLat = (s + n) / 2;
+  const mPerDegLat = 111320;
+  const mPerDegLon = 111320 * Math.cos(toRad(midLat));
+  const padLat = Math.max((n - s) * padFrac, minPadM / mPerDegLat);
+  const padLon = Math.max((e - w) * padFrac, minPadM / mPerDegLon);
+  return { s: s - padLat, n: n + padLat, w: w - padLon, e: e + padLon };
+}
+
+/** Largest pairwise straight-line distance between points (metres). */
+function span(points) {
+  let m = 0;
+  for (let i = 0; i < points.length; i++) {
+    for (let j = i + 1; j < points.length; j++) m = Math.max(m, dist(points[i], points[j]));
+  }
+  return m;
+}
+
+/**
+ * Smallest enclosing circle (Welzl, iterative). Its centre is the point that
+ * minimises the maximum straight-line distance to everyone — the geometric
+ * "fairest" spot. Used when no road network is available.
+ */
+function smallestEnclosingCircle(points) {
+  const ref = centroid(points);
+  const proj = makeProjector(ref);
+  const P = points.map(proj.toXY);
+  for (let i = P.length - 1; i > 0; i--) { // deterministic shuffle is fine for tiny n
+    const j = (i * 7919) % (i + 1);
+    [P[i], P[j]] = [P[j], P[i]];
+  }
+  const inC = (c, p) => c && Math.hypot(p.x - c.x, p.y - c.y) <= c.r + 1e-7;
+  const c2 = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, r: Math.hypot(a.x - b.x, a.y - b.y) / 2 });
+  const c3 = (a, b, c) => {
+    const d = 2 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
+    if (Math.abs(d) < 1e-12) { // collinear: use the widest pair
+      const cs = [c2(a, b), c2(a, c), c2(b, c)];
+      return cs.sort((u, v) => v.r - u.r)[0];
+    }
+    const a2 = a.x * a.x + a.y * a.y, b2 = b.x * b.x + b.y * b.y, cc = c.x * c.x + c.y * c.y;
+    const x = (a2 * (b.y - c.y) + b2 * (c.y - a.y) + cc * (a.y - b.y)) / d;
+    const y = (a2 * (c.x - b.x) + b2 * (a.x - c.x) + cc * (b.x - a.x)) / d;
+    return { x, y, r: Math.hypot(a.x - x, a.y - y) };
+  };
+  let c = null;
+  for (let i = 0; i < P.length; i++) {
+    if (inC(c, P[i])) continue;
+    c = { x: P[i].x, y: P[i].y, r: 0 };
+    for (let j = 0; j < i; j++) {
+      if (inC(c, P[j])) continue;
+      c = c2(P[i], P[j]);
+      for (let k = 0; k < j; k++) if (!inC(c, P[k])) c = c3(P[i], P[j], P[k]);
+    }
+  }
+  const ll = proj.toLL(c);
+  return { lat: ll.lat, lon: ll.lon, radius: c.r };
+}
+
+__m["geo"] = { haversine, dist, makeProjector, centroid, paddedBBox, span, smallestEnclosingCircle };
+})();
+// ---- network
+(() => {
+// Road network loading. Fetches real streets from OpenStreetMap (Overpass API)
+// for the area around everyone's addresses and turns them into a compact
+// graph. If that is not possible (offline, rate-limited, too far apart) a
+// synthetic organic "street" graph is generated so the experience still works.
+const { haversine, paddedBBox, span } = __m["geo"];
+const OVERPASS_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+];
+
+/** Which road classes to download, scaled by how spread out the group is. */
+function roadClassesFor(spanM) {
+  if (spanM < 6000) return 'motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|pedestrian|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link';
+  if (spanM < 20000) return 'motorway|trunk|primary|secondary|tertiary|unclassified|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link';
+  if (spanM < 60000) return 'motorway|trunk|primary|secondary|motorway_link|trunk_link|primary_link';
+  return 'motorway|trunk|primary|motorway_link|trunk_link';
+}
+
+const MAX_NETWORK_SPAN_M = 220000;
+
+/** Overpass QL for the road network in a bbox. */
+function roadQuery(bbox, classes) {
+  const b = `${bbox.s.toFixed(5)},${bbox.w.toFixed(5)},${bbox.n.toFixed(5)},${bbox.e.toFixed(5)}`;
+  return `[out:json][timeout:40][maxsize:268435456];way["highway"~"^(${classes})$"](${b});(._;>;);out skel qt;`;
+}
+
+/** POST an Overpass query, trying mirrors in turn. */
+async function overpass(query, { signal, timeoutMs = 45000 } = {}) {
+  let lastErr;
+  for (const url of OVERPASS_ENDPOINTS) {
+    const ctrl = new AbortController();
+    const onAbort = () => ctrl.abort();
+    signal?.addEventListener('abort', onAbort);
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        body: new URLSearchParams({ data: query }),
+        signal: ctrl.signal,
+      });
+      if (!res.ok) throw new Error(`Overpass ${res.status}`);
+      const json = await res.json();
+      if (!json || !Array.isArray(json.elements)) throw new Error('Bad Overpass response');
+      return json;
+    } catch (err) {
+      if (signal?.aborted) throw err;
+      lastErr = err;
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+    }
+  }
+  throw lastErr || new Error('Overpass unavailable');
+}
+
+/**
+ * Build a CSR adjacency graph from Overpass `out skel` elements.
+ * Returns { n, lat, lon, adjStart, adjNode, adjLen, synthetic }.
+ */
+function buildGraph(elements) {
+  const nodeIdx = new Map();
+  const lats = [];
+  const lons = [];
+  const coords = new Map();
+  for (const el of elements) if (el.type === 'node') coords.set(el.id, el);
+
+  const edgesA = [];
+  const edgesB = [];
+  const idx = (id) => {
+    let i = nodeIdx.get(id);
+    if (i === undefined) {
+      const c = coords.get(id);
+      if (!c) return -1;
+      i = lats.length;
+      nodeIdx.set(id, i);
+      lats.push(c.lat);
+      lons.push(c.lon);
+    }
+    return i;
+  };
+  for (const el of elements) {
+    if (el.type !== 'way' || !Array.isArray(el.nodes)) continue;
+    let prev = -1;
+    for (const id of el.nodes) {
+      const i = idx(id);
+      if (i >= 0 && prev >= 0 && i !== prev) { edgesA.push(prev); edgesB.push(i); }
+      prev = i;
+    }
+  }
+  return fromEdgeList(Float64Array.from(lats), Float64Array.from(lons), edgesA, edgesB, false);
+}
+
+/** Make an undirected CSR graph from parallel edge arrays. */
+function fromEdgeList(lat, lon, A, B, synthetic) {
+  const n = lat.length;
+  const deg = new Int32Array(n + 1);
+  for (let k = 0; k < A.length; k++) { deg[A[k]]++; deg[B[k]]++; }
+  const adjStart = new Int32Array(n + 1);
+  for (let i = 0; i < n; i++) adjStart[i + 1] = adjStart[i] + deg[i];
+  const fill = adjStart.slice(0, n);
+  const m = adjStart[n];
+  const adjNode = new Int32Array(m);
+  const adjLen = new Float32Array(m);
+  for (let k = 0; k < A.length; k++) {
+    const a = A[k], b = B[k];
+    const len = haversine(lat[a], lon[a], lat[b], lon[b]);
+    adjNode[fill[a]] = b; adjLen[fill[a]++] = len;
+    adjNode[fill[b]] = a; adjLen[fill[b]++] = len;
+  }
+  return { n, lat, lon, adjStart, adjNode, adjLen, synthetic };
+}
+
+/** Small deterministic PRNG (mulberry32). */
+function rng(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Generate an organic, street-like graph covering the group's area:
+ * a jittered grid with random diagonals and a few missing links.
+ */
+function syntheticGraph(points, { cells = 70, seed = 7 } = {}) {
+  const bbox = paddedBBox(points, 0.25, 800);
+  const rand = rng(seed + Math.round(points[0].lat * 1e4) + Math.round(points[0].lon * 1e4));
+  const midLat = (bbox.s + bbox.n) / 2;
+  const aspect = ((bbox.e - bbox.w) * Math.cos((midLat * Math.PI) / 180)) / (bbox.n - bbox.s);
+  const cols = Math.max(12, Math.round(cells * Math.sqrt(aspect)));
+  const rows = Math.max(12, Math.round(cells / Math.sqrt(aspect)));
+  const dLat = (bbox.n - bbox.s) / rows;
+  const dLon = (bbox.e - bbox.w) / cols;
+  const n = (rows + 1) * (cols + 1);
+  const lat = new Float64Array(n);
+  const lon = new Float64Array(n);
+  const id = (r, c) => r * (cols + 1) + c;
+  for (let r = 0; r <= rows; r++) {
+    for (let c = 0; c <= cols; c++) {
+      const i = id(r, c);
+      lat[i] = bbox.s + (r + (rand() - 0.5) * 0.7) * dLat;
+      lon[i] = bbox.w + (c + (rand() - 0.5) * 0.7) * dLon;
+    }
+  }
+  const A = [];
+  const B = [];
+  const link = (a, b, p) => { if (rand() < p) { A.push(a); B.push(b); } };
+  for (let r = 0; r <= rows; r++) {
+    for (let c = 0; c <= cols; c++) {
+      if (c < cols) link(id(r, c), id(r, c + 1), 0.88);
+      if (r < rows) link(id(r, c), id(r + 1, c), 0.88);
+      if (r < rows && c < cols) link(id(r, c), id(r + 1, c + 1), 0.22);
+      if (r < rows && c > 0) link(id(r, c), id(r + 1, c - 1), 0.22);
+    }
+  }
+  return fromEdgeList(lat, lon, A, B, true);
+}
+
+/**
+ * Load the best graph available for these points.
+ * Resolves to { graph, source: 'osm' | 'synthetic', reason? }.
+ */
+async function loadNetwork(points, { signal, onStatus = () => {} } = {}) {
+  const s = span(points);
+  if (s > MAX_NETWORK_SPAN_M) {
+    return { graph: syntheticGraph(points), source: 'synthetic', reason: 'Addresses are very far apart, so routes are approximated.' };
+  }
+  try {
+    onStatus('Downloading streets…');
+    const bbox = paddedBBox(points, 0.2, 700);
+    const json = await overpass(roadQuery(bbox, roadClassesFor(s)), { signal });
+    onStatus('Mapping intersections…');
+    const graph = buildGraph(json.elements);
+    if (graph.n < 20) throw new Error('Too few roads found');
+    return { graph, source: 'osm' };
+  } catch (err) {
+    if (signal?.aborted) throw err;
+    return { graph: syntheticGraph(points), source: 'synthetic', reason: 'Street data could not be loaded, so routes are approximated.' };
+  }
+}
+
+__m["network"] = { OVERPASS_ENDPOINTS, roadClassesFor, MAX_NETWORK_SPAN_M, roadQuery, overpass, buildGraph, fromEdgeList, rng, syntheticGraph, loadNetwork };
+})();
+// ---- meet
+(() => {
+// The meeting-point solver.
+//
+// Every friend's address is a source. From each source we run Dijkstra over
+// the road graph — the frontier of that search is exactly "all routes
+// branching out at the same rate" (an invisible circle measured along roads).
+// Each search is restricted to nodes that lead *towards* another friend
+// (inside a travel ellipse), so branches heading away are never explored.
+// The meeting point is the first place every frontier reaches: the node that
+// minimises the longest anyone has to travel.
+const { haversine } = __m["geo"];
+/** Binary min-heap keyed by float priority, storing int ids. */
+class Heap {
+  constructor(cap = 1024) { this.k = new Float64Array(cap); this.v = new Int32Array(cap); this.size = 0; }
+  push(key, val) {
+    if (this.size === this.k.length) {
+      const k = new Float64Array(this.size * 2); k.set(this.k); this.k = k;
+      const v = new Int32Array(this.size * 2); v.set(this.v); this.v = v;
+    }
+    let i = this.size++;
+    while (i > 0) {
+      const p = (i - 1) >> 1;
+      if (this.k[p] <= key) break;
+      this.k[i] = this.k[p]; this.v[i] = this.v[p]; i = p;
+    }
+    this.k[i] = key; this.v[i] = val;
+  }
+  pop() { // returns value; key available in this.lastKey
+    const topV = this.v[0];
+    this.lastKey = this.k[0];
+    const key = this.k[--this.size];
+    const val = this.v[this.size];
+    let i = 0;
+    for (;;) {
+      let c = 2 * i + 1;
+      if (c >= this.size) break;
+      if (c + 1 < this.size && this.k[c + 1] < this.k[c]) c++;
+      if (this.k[c] >= key) break;
+      this.k[i] = this.k[c]; this.v[i] = this.v[c]; i = c;
+    }
+    this.k[i] = key; this.v[i] = val;
+    return topV;
+  }
+}
+
+/** Label connected components; returns { comp: Int32Array, largest }. */
+function components(g) {
+  const comp = new Int32Array(g.n).fill(-1);
+  const sizes = [];
+  const stack = new Int32Array(g.n);
+  for (let s = 0; s < g.n; s++) {
+    if (comp[s] !== -1 || g.adjStart[s] === g.adjStart[s + 1]) continue;
+    const c = sizes.length;
+    let top = 0, size = 0;
+    stack[top++] = s; comp[s] = c;
+    while (top) {
+      const u = stack[--top]; size++;
+      for (let e = g.adjStart[u]; e < g.adjStart[u + 1]; e++) {
+        const v = g.adjNode[e];
+        if (comp[v] === -1) { comp[v] = c; stack[top++] = v; }
+      }
+    }
+    sizes.push(size);
+  }
+  let largest = 0;
+  for (let c = 1; c < sizes.length; c++) if (sizes[c] > sizes[largest]) largest = c;
+  return { comp, largest, sizes };
+}
+
+/** Nearest graph node to a point, optionally limited to one component. */
+function nearestNode(g, p, comp, wanted) {
+  let best = -1, bestD = Infinity;
+  const cos = Math.cos((p.lat * Math.PI) / 180);
+  for (let i = 0; i < g.n; i++) {
+    if (comp && comp[i] !== wanted) continue;
+    const dy = g.lat[i] - p.lat, dx = (g.lon[i] - p.lon) * cos;
+    const d = dx * dx + dy * dy;
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
+
+/** Dijkstra from `start` (with initial distance d0) over nodes where allowed[v]. */
+function dijkstra(g, start, d0 = 0, allowed = null) {
+  const dist = new Float64Array(g.n).fill(Infinity);
+  const parent = new Int32Array(g.n).fill(-1);
+  const heap = new Heap();
+  dist[start] = d0;
+  heap.push(d0, start);
+  while (heap.size) {
+    const u = heap.pop();
+    const du = heap.lastKey;
+    if (du > dist[u]) continue;
+    for (let e = g.adjStart[u]; e < g.adjStart[u + 1]; e++) {
+      const v = g.adjNode[e];
+      if (allowed && !allowed[v]) continue;
+      const nd = du + g.adjLen[e];
+      if (nd < dist[v]) { dist[v] = nd; parent[v] = u; heap.push(nd, v); }
+    }
+  }
+  return { dist, parent };
+}
+
+/**
+ * Nodes "leading towards" another friend from source i: inside the ellipse
+ * |s_i v| + |v t| <= k * |s_i t| + slack for some other friend t (or the
+ * group centroid). Fast equirectangular distances are plenty here.
+ */
+function corridorMask(g, src, targets, k = 1.45, slack = 400) {
+  const mask = new Uint8Array(g.n);
+  const cos = Math.cos((src.lat * Math.PI) / 180);
+  const M = 111320;
+  const d = (aLat, aLon, bLat, bLon) => Math.hypot((aLat - bLat) * M, (aLon - bLon) * M * cos);
+  const lims = targets.map((t) => k * d(src.lat, src.lon, t.lat, t.lon) + slack);
+  for (let v = 0; v < g.n; v++) {
+    const ds = d(src.lat, src.lon, g.lat[v], g.lon[v]);
+    for (let j = 0; j < targets.length; j++) {
+      if (ds + d(g.lat[v], g.lon[v], targets[j].lat, targets[j].lon) <= lims[j]) { mask[v] = 1; break; }
+    }
+  }
+  return mask;
+}
+
+/**
+ * Solve for the meeting point.
+ * @param g graph from network.js
+ * @param people [{lat, lon}]
+ * @param opts { mode: 'fair' | 'total', k }
+ */
+function solveMeeting(g, people, { mode = 'fair', corridors = [1.12, 1.3, 1.6] } = {}) {
+  if (people.length < 2) throw new Error('Need at least two addresses');
+  const { comp, largest } = components(g);
+  const cLat = people.reduce((s, p) => s + p.lat, 0) / people.length;
+  const cLon = people.reduce((s, p) => s + p.lon, 0) / people.length;
+  const center = { lat: cLat, lon: cLon };
+
+  const snapped = people.map((p) => {
+    const node = nearestNode(g, p, comp, largest);
+    return { node, gap: haversine(p.lat, p.lon, g.lat[node], g.lon[node]) };
+  });
+
+  const run = (k) => people.map((p, i) => {
+    const others = people.filter((_, j) => j !== i);
+    const mask = k ? corridorMask(g, p, people.length > 2 ? [...others, center] : others, k, 150) : null;
+    if (mask) mask[snapped[i].node] = 1;
+    return dijkstra(g, snapped[i].node, snapped[i].gap, mask);
+  });
+
+  const pick = (searches) => {
+    let best = -1, bestKey = Infinity, bestTie = Infinity;
+    for (let v = 0; v < g.n; v++) {
+      let mx = 0, sum = 0, ok = true;
+      for (const s of searches) {
+        const d = s.dist[v];
+        if (d === Infinity) { ok = false; break; }
+        if (d > mx) mx = d;
+        sum += d;
+      }
+      if (!ok) continue;
+      const key = mode === 'total' ? sum : mx;
+      const tie = mode === 'total' ? mx : sum;
+      if (key < bestKey - 1e-6 || (Math.abs(key - bestKey) <= 1e-6 && tie < bestTie)) {
+        best = v; bestKey = key; bestTie = tie;
+      }
+    }
+    return best;
+  };
+
+  // Try a tight corridor first, widen it if the roads don't connect inside
+  // it (rivers, motorways…), and finally explore freely.
+  let searches, meet = -1, restricted = false;
+  for (const k of [...corridors, null]) {
+    searches = run(k);
+    meet = pick(searches);
+    restricted = k;
+    if (meet >= 0) break;
+  }
+  if (meet < 0) throw new Error('Could not connect everyone on the road network');
+
+  const reach = searches.map((s) => s.dist[meet]);
+  const radius = Math.max(...reach);
+  return {
+    meetNode: meet,
+    meet: { lat: g.lat[meet], lon: g.lon[meet] },
+    radius,
+    restricted,
+    people: people.map((p, i) => ({
+      ...p,
+      node: snapped[i].node,
+      gap: snapped[i].gap,
+      reach: reach[i],
+      dist: searches[i].dist,
+      parent: searches[i].parent,
+    })),
+  };
+}
+
+/** Road path (array of node ids) from a person's snapped node to `node`. */
+function pathTo(person, node) {
+  const out = [];
+  for (let v = node; v !== -1; v = person.parent[v]) out.push(v);
+  return out.reverse();
+}
+
+/**
+ * Animation segments for one person: the shortest-path tree, clipped at
+ * `limit`. Each segment grows from d0 to d1 (metres along the roads), so a
+ * single shared radius r draws every friend's frontier at the same rate.
+ * Returns Float64Array of [lat0, lon0, lat1, lon1, d0, d1] * count, sorted by d0.
+ */
+function treeSegments(g, person, limit, others = [], meetNode = -1) {
+  const rows = [];
+  // Connector from the doorstep to the nearest street.
+  rows.push([person.lat, person.lon, g.lat[person.node], g.lon[person.node], 0, person.gap]);
+  // Branches stop where they run into a friend's frontier (a node someone
+  // else reaches first), except along this person's route to the meeting point.
+  const onRoute = new Uint8Array(g.n);
+  if (meetNode >= 0) for (const v of pathTo(person, meetNode)) onRoute[v] = 1;
+  for (let v = 0; v < g.n; v++) {
+    const p = person.parent[v];
+    if (p < 0) continue;
+    const d0 = person.dist[p];
+    if (d0 > limit) continue;
+    if (!onRoute[v] && others.some((o) => o.dist[p] < d0)) continue;
+    rows.push([g.lat[p], g.lon[p], g.lat[v], g.lon[v], d0, person.dist[v]]);
+  }
+  rows.sort((a, b) => a[4] - b[4]);
+  const out = new Float64Array(rows.length * 6);
+  rows.forEach((r, i) => out.set(r, i * 6));
+  return out;
+}
+
+/** Approximate road distance from a person to an arbitrary point. */
+function roadDistanceTo(g, person, point, radiusM = 250) {
+  // Use the best reached node near the point; fall back to a detour factor.
+  let best = Infinity;
+  const cos = Math.cos((point.lat * Math.PI) / 180);
+  const r2 = (radiusM / 111320) ** 2;
+  for (let v = 0; v < g.n; v++) {
+    const dv = person.dist[v];
+    if (dv === Infinity) continue;
+    const dy = g.lat[v] - point.lat, dx = (g.lon[v] - point.lon) * cos;
+    if (dx * dx + dy * dy > r2) continue;
+    const total = dv + haversine(g.lat[v], g.lon[v], point.lat, point.lon);
+    if (total < best) best = total;
+  }
+  if (best === Infinity) best = haversine(person.lat, person.lon, point.lat, point.lon) * 1.3;
+  return best;
+}
+
+__m["meet"] = { components, nearestNode, dijkstra, corridorMask, solveMeeting, pathTo, treeSegments, roadDistanceTo };
+})();
+// ---- growth
+(() => {
+// Canvas overlay that draws every friend's road tree growing outward at one
+// shared rate (an invisible circle measured along the streets) until the
+// frontiers meet. Coordinates are pre-projected to Web Mercator at zoom 0, so
+// each frame is a cheap scale + translate.
+const { treeSegments, pathTo } = __m["meet"];
+class GrowthAnimation {
+  /**
+   * @param map Leaflet map
+   * @param graph road graph
+   * @param solution result of solveMeeting()
+   * @param colors one CSS colour per person
+   */
+  constructor(map, graph, solution, colors) {
+    this.map = map;
+    this.graph = graph;
+    this.solution = solution;
+    this.colors = colors;
+    this.r = 0;
+    this.done = false;
+    this.raf = 0;
+
+    const crs = L.CRS.EPSG3857;
+    const proj = (lat, lon) => crs.latLngToPoint(L.latLng(lat, lon), 0);
+    this.limit = solution.radius;
+    this.layers = solution.people.map((person) => {
+      const others = solution.people.filter((o) => o !== person);
+      const segs = treeSegments(graph, person, this.limit, others, solution.meetNode);
+      const count = segs.length / 6;
+      const xy = new Float64Array(count * 4);
+      const d = new Float64Array(count * 2);
+      for (let i = 0; i < count; i++) {
+        const a = proj(segs[i * 6], segs[i * 6 + 1]);
+        const b = proj(segs[i * 6 + 2], segs[i * 6 + 3]);
+        xy.set([a.x, a.y, b.x, b.y], i * 4);
+        d[i * 2] = segs[i * 6 + 4];
+        d[i * 2 + 1] = segs[i * 6 + 5];
+      }
+      // Highlighted route from this person to the meeting point.
+      const route = [proj(person.lat, person.lon), ...pathTo(person, solution.meetNode).map((v) => proj(graph.lat[v], graph.lon[v]))];
+      return { count, xy, d, route };
+    });
+
+    this.canvas = document.createElement('canvas');
+    this.canvas.className = 'growth-canvas';
+    map.getContainer().appendChild(this.canvas);
+    this.ctx = this.canvas.getContext('2d');
+    this.resize = this.resize.bind(this);
+    this.redraw = () => this.draw();
+    this.hide = () => { this.canvas.style.opacity = '0'; };
+    this.show = () => { this.canvas.style.opacity = ''; this.draw(); };
+    map.on('resize', this.resize);
+    map.on('move', this.redraw);
+    map.on('zoomstart', this.hide);
+    map.on('zoomend', this.show);
+    this.resize();
+  }
+
+  resize() {
+    const size = this.map.getSize();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.canvas.width = Math.round(size.x * dpr);
+    this.canvas.height = Math.round(size.y * dpr);
+    this.canvas.style.width = `${size.x}px`;
+    this.canvas.style.height = `${size.y}px`;
+    this.dpr = dpr;
+    this.draw();
+  }
+
+  /** Animate until all frontiers meet. Resolves true if completed, false if cancelled. */
+  play({ duration = 6000, onProgress } = {}) {
+    cancelAnimationFrame(this.raf);
+    this.done = false;
+    return new Promise((resolve) => {
+      this.resolve = resolve;
+      const start = performance.now();
+      const total = this.limit;
+      const step = (now) => {
+        const t = Math.min(1, (now - start) / duration);
+        // Constant speed so every frontier advances at the same rate;
+        // only the first 6% eases in.
+        const eased = t < 0.06 ? (t * t) / 0.12 : t - 0.03;
+        this.r = total * Math.min(1, eased / 0.97);
+        this.draw();
+        onProgress?.(this.r, total);
+        if (t >= 1 || this.skipRequested) {
+          this.r = total;
+          this.done = true;
+          this.draw();
+          onProgress?.(total, total);
+          this.resolve = null;
+          resolve(true);
+          return;
+        }
+        this.raf = requestAnimationFrame(step);
+      };
+      this.raf = requestAnimationFrame(step);
+    });
+  }
+
+  skip() { this.skipRequested = true; }
+
+  draw() {
+    const { ctx, map, dpr } = this;
+    const z = map.getZoom();
+    const scale = 2 ** z;
+    const origin = map.getPixelBounds().min;
+    const ox = origin.x, oy = origin.y;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    const r = this.r;
+    const finished = this.done;
+
+    this.layers.forEach((layer, li) => {
+      const color = this.colors[li % this.colors.length];
+      const { xy, d, count } = layer;
+      const tips = [];
+      ctx.beginPath();
+      for (let i = 0; i < count; i++) {
+        const d0 = d[i * 2];
+        if (d0 >= r) break; // sorted by d0
+        const d1 = d[i * 2 + 1];
+        const x0 = xy[i * 4] * scale - ox, y0 = xy[i * 4 + 1] * scale - oy;
+        let x1 = xy[i * 4 + 2] * scale - ox, y1 = xy[i * 4 + 3] * scale - oy;
+        if (d1 > r) {
+          const f = (r - d0) / Math.max(1e-9, d1 - d0);
+          x1 = x0 + (x1 - x0) * f;
+          y1 = y0 + (y1 - y0) * f;
+          tips.push(x1, y1);
+        }
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+      }
+      // Soft glow pass, then a crisp core.
+      ctx.globalAlpha = finished ? 0.12 : 0.22;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 6;
+      ctx.stroke();
+      ctx.globalAlpha = finished ? 0.45 : 0.95;
+      ctx.lineWidth = 1.6;
+      ctx.stroke();
+
+      if (!finished && tips.length) {
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        for (let i = 0; i < tips.length; i += 2) {
+          ctx.moveTo(tips[i] + 2.2, tips[i + 1]);
+          ctx.arc(tips[i], tips[i + 1], 2.2, 0, Math.PI * 2);
+        }
+        ctx.fill();
+      }
+
+      if (finished) {
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        layer.route.forEach((p, i) => {
+          const x = p.x * scale - ox, y = p.y * scale - oy;
+          if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+        });
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 7;
+        ctx.stroke();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 4;
+        ctx.stroke();
+      }
+    });
+    ctx.globalAlpha = 1;
+  }
+
+  destroy() {
+    cancelAnimationFrame(this.raf);
+    this.resolve?.(false);
+    this.map.off('resize', this.resize);
+    this.map.off('move', this.redraw);
+    this.map.off('zoomstart', this.hide);
+    this.map.off('zoomend', this.show);
+    this.canvas.remove();
+  }
+}
+
+__m["growth"] = { GrowthAnimation };
+})();
+// ---- pois
+(() => {
+// Places of interest around the meeting point, via OpenStreetMap / Overpass,
+// sorted into tabs (Food, Drinks, …) and listings ("Italian · 4").
+const { overpass } = __m["network"];
+const { haversine } = __m["geo"];
+const TABS = [
+  { id: 'food', label: 'Food', icon: '🍽️' },
+  { id: 'drinks', label: 'Drinks', icon: '☕' },
+  { id: 'fun', label: 'Fun', icon: '🎳' },
+  { id: 'culture', label: 'Culture', icon: '🎭' },
+  { id: 'outdoors', label: 'Outdoors', icon: '🌳' },
+  { id: 'shopping', label: 'Shopping', icon: '🛍️' },
+];
+
+const CUISINE = {
+  italian: 'Italian', pizza: 'Pizza', burger: 'Burgers', chinese: 'Chinese', japanese: 'Japanese',
+  sushi: 'Sushi', ramen: 'Ramen', indian: 'Indian', thai: 'Thai', mexican: 'Mexican', korean: 'Korean',
+  vietnamese: 'Vietnamese', french: 'French', greek: 'Greek', turkish: 'Turkish', kebab: 'Kebab',
+  american: 'American', mediterranean: 'Mediterranean', middle_eastern: 'Middle Eastern', lebanese: 'Lebanese',
+  spanish: 'Spanish', tapas: 'Tapas', seafood: 'Seafood', fish_and_chips: 'Fish & chips', steak_house: 'Steakhouse',
+  chicken: 'Chicken', fried_chicken: 'Chicken', sandwich: 'Sandwiches', noodle: 'Noodles', asian: 'Asian',
+  vegetarian: 'Vegetarian', vegan: 'Vegan', breakfast: 'Breakfast & brunch', brunch: 'Breakfast & brunch',
+  regional: 'Local', german: 'German', british: 'British', portuguese: 'Portuguese', brazilian: 'Brazilian',
+  peruvian: 'Peruvian', ethiopian: 'Ethiopian', african: 'African', caribbean: 'Caribbean', malaysian: 'Malaysian',
+  indonesian: 'Indonesian', filipino: 'Filipino', taiwanese: 'Taiwanese', dumpling: 'Dumplings', bbq: 'BBQ',
+  barbecue: 'BBQ', persian: 'Persian', pakistani: 'Pakistani', nepalese: 'Nepalese', polish: 'Polish',
+  russian: 'Russian', ukrainian: 'Ukrainian', hawaiian: 'Hawaiian', poke: 'Poké', crepe: 'Crêpes',
+  bagel: 'Bagels', donut: 'Doughnuts', dessert: 'Desserts', cake: 'Desserts', salad: 'Salads', soup: 'Soup',
+  hot_dog: 'Hot dogs', falafel: 'Falafel', shawarma: 'Shawarma', fusion: 'Fusion', international: 'International',
+  australian: 'Australian', cantonese: 'Chinese', sichuan: 'Chinese', dim_sum: 'Dim sum', hot_pot: 'Hot pot',
+  coffee_shop: 'Cafés', tea: 'Tea', bubble_tea: 'Bubble tea', juice: 'Juice & smoothies', smoothie: 'Juice & smoothies',
+};
+
+const titleCase = (s) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+/** Map OSM tags to { tab, group } or null if uninteresting. */
+function categorize(tags = {}) {
+  const a = tags.amenity, l = tags.leisure, t = tags.tourism, s = tags.shop;
+  const cuisine = (tags.cuisine || '').split(/[;,]/)[0].trim().toLowerCase();
+  const cuisineLabel = cuisine ? CUISINE[cuisine] || titleCase(cuisine) : '';
+
+  if (a === 'restaurant' || a === 'food_court') return { tab: 'food', group: cuisineLabel || 'Restaurants' };
+  if (a === 'fast_food') return { tab: 'food', group: cuisineLabel || 'Fast food' };
+  if (s === 'bakery' || s === 'pastry') return { tab: 'food', group: 'Bakeries' };
+  if (a === 'ice_cream' || s === 'ice_cream') return { tab: 'drinks', group: 'Ice cream' };
+  if (a === 'cafe') {
+    if (['bubble_tea', 'tea', 'juice', 'smoothie'].includes(cuisine)) return { tab: 'drinks', group: CUISINE[cuisine] };
+    return { tab: 'drinks', group: 'Cafés' };
+  }
+  if (a === 'bar') return { tab: 'drinks', group: tags.bar === 'cocktail' || cuisine === 'cocktail' ? 'Cocktail bars' : 'Bars' };
+  if (a === 'pub') return { tab: 'drinks', group: 'Pubs' };
+  if (a === 'biergarten') return { tab: 'drinks', group: 'Beer gardens' };
+  if (s === 'coffee' || s === 'tea') return { tab: 'drinks', group: 'Coffee & tea shops' };
+
+  if (a === 'cinema') return { tab: 'fun', group: 'Cinemas' };
+  if (a === 'nightclub') return { tab: 'fun', group: 'Nightclubs' };
+  if (a === 'bowling_alley' || l === 'bowling_alley') return { tab: 'fun', group: 'Bowling' };
+  if (l === 'escape_game') return { tab: 'fun', group: 'Escape rooms' };
+  if (l === 'amusement_arcade' || a === 'gambling') return { tab: 'fun', group: 'Arcades' };
+  if (l === 'miniature_golf') return { tab: 'fun', group: 'Mini golf' };
+  if (l === 'sports_centre' || l === 'fitness_centre') return { tab: 'fun', group: 'Sports & fitness' };
+  if (l === 'ice_rink') return { tab: 'fun', group: 'Ice skating' };
+  if (l === 'water_park') return { tab: 'fun', group: 'Water parks' };
+  if (t === 'theme_park') return { tab: 'fun', group: 'Theme parks' };
+  if (t === 'zoo' || t === 'aquarium') return { tab: 'fun', group: t === 'zoo' ? 'Zoos' : 'Aquariums' };
+  if (a === 'karaoke_box' || l === 'trampoline_park') return { tab: 'fun', group: titleCase(a || l) };
+
+  if (t === 'museum') return { tab: 'culture', group: 'Museums' };
+  if (t === 'gallery' || a === 'arts_centre') return { tab: 'culture', group: 'Galleries & arts' };
+  if (a === 'theatre') return { tab: 'culture', group: 'Theatres' };
+  if (a === 'library') return { tab: 'culture', group: 'Libraries' };
+  if (t === 'attraction' || a === 'community_centre') return { tab: 'culture', group: t ? 'Attractions' : 'Community centres' };
+
+  if (l === 'park') return { tab: 'outdoors', group: 'Parks' };
+  if (l === 'garden') return { tab: 'outdoors', group: 'Gardens' };
+  if (l === 'playground') return { tab: 'outdoors', group: 'Playgrounds' };
+  if (l === 'nature_reserve') return { tab: 'outdoors', group: 'Nature reserves' };
+  if (t === 'viewpoint') return { tab: 'outdoors', group: 'Viewpoints' };
+  if (t === 'picnic_site') return { tab: 'outdoors', group: 'Picnic spots' };
+  if (l === 'beach_resort' || tags.natural === 'beach') return { tab: 'outdoors', group: 'Beaches' };
+
+  if (s === 'mall' || s === 'department_store') return { tab: 'shopping', group: 'Malls & department stores' };
+  if (s === 'books') return { tab: 'shopping', group: 'Bookshops' };
+  if (s === 'games' || s === 'video_games' || s === 'toys') return { tab: 'shopping', group: 'Games & toys' };
+  if (s === 'music' || s === 'musical_instrument') return { tab: 'shopping', group: 'Music' };
+  if (s === 'gift') return { tab: 'shopping', group: 'Gifts' };
+  if (s === 'clothes' || s === 'shoes') return { tab: 'shopping', group: 'Fashion' };
+  if (s === 'supermarket' || s === 'convenience') return { tab: 'shopping', group: 'Groceries' };
+  if (a === 'marketplace') return { tab: 'shopping', group: 'Markets' };
+  return null;
+}
+
+function poiQuery(center, radius) {
+  const around = `(around:${Math.round(radius)},${center.lat.toFixed(6)},${center.lon.toFixed(6)})`;
+  const sel = [
+    `nwr${around}[amenity~"^(restaurant|fast_food|food_court|cafe|bar|pub|biergarten|ice_cream|cinema|nightclub|bowling_alley|theatre|arts_centre|library|marketplace|karaoke_box|community_centre)$"][name]`,
+    `nwr${around}[leisure~"^(park|garden|playground|nature_reserve|bowling_alley|escape_game|amusement_arcade|miniature_golf|sports_centre|fitness_centre|ice_rink|water_park|trampoline_park)$"][name]`,
+    `nwr${around}[tourism~"^(museum|gallery|attraction|zoo|aquarium|theme_park|viewpoint|picnic_site)$"][name]`,
+    `nwr${around}[shop~"^(mall|department_store|books|bakery|pastry|games|video_games|toys|music|gift|clothes|coffee|tea|ice_cream|supermarket)$"][name]`,
+  ];
+  return `[out:json][timeout:25];(${sel.join(';')};);out center tags 400;`;
+}
+
+function formatAddress(tags) {
+  const street = [tags['addr:housenumber'], tags['addr:street']].filter(Boolean).join(' ');
+  return [street, tags['addr:suburb'] || tags['addr:city']].filter(Boolean).join(', ');
+}
+
+/** Turn Overpass elements into categorised POIs (deduplicated by name + spot). */
+function parsePois(elements, center) {
+  const seen = new Set();
+  const out = [];
+  for (const el of elements) {
+    const tags = el.tags || {};
+    const lat = el.lat ?? el.center?.lat;
+    const lon = el.lon ?? el.center?.lon;
+    if (!tags.name || lat == null || lon == null) continue;
+    const cat = categorize(tags);
+    if (!cat) continue;
+    const key = `${tags.name.toLowerCase()}|${lat.toFixed(3)}|${lon.toFixed(3)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      id: `${el.type}/${el.id}`,
+      name: tags.name,
+      lat, lon,
+      tab: cat.tab,
+      group: cat.group,
+      address: formatAddress(tags),
+      cuisine: tags.cuisine || '',
+      hours: tags.opening_hours || '',
+      phone: tags.phone || tags['contact:phone'] || '',
+      website: tags.website || tags['contact:website'] || '',
+      wheelchair: tags.wheelchair || '',
+      outdoor: tags.outdoor_seating === 'yes',
+      vegan: /yes|only/.test(tags['diet:vegan'] || ''),
+      vegetarian: /yes|only/.test(tags['diet:vegetarian'] || ''),
+      fromCenter: haversine(center.lat, center.lon, lat, lon),
+    });
+  }
+  return out.sort((a, b) => a.fromCenter - b.fromCenter);
+}
+
+/** { tabId: [{ group, items: [...] }] } with groups sorted by count. */
+function groupPois(pois) {
+  const byTab = Object.fromEntries(TABS.map((t) => [t.id, new Map()]));
+  for (const p of pois) {
+    const m = byTab[p.tab];
+    if (!m.has(p.group)) m.set(p.group, []);
+    m.get(p.group).push(p);
+  }
+  const out = {};
+  for (const t of TABS) {
+    out[t.id] = [...byTab[t.id].entries()]
+      .map(([group, items]) => ({ group, items }))
+      .sort((a, b) => b.items.length - a.items.length || a.group.localeCompare(b.group));
+  }
+  return out;
+}
+
+/** Fetch POIs, widening the search radius until there is a decent choice. */
+async function findPois(center, { radius, signal, minResults = 12 } = {}) {
+  const radii = radius ? [radius] : [800, 1800, 4000];
+  let pois = [];
+  let used = radii[0];
+  for (const r of radii) {
+    used = r;
+    const json = await overpass(poiQuery(center, r), { signal, timeoutMs: 30000 });
+    pois = parsePois(json.elements, center);
+    if (pois.length >= minResults) break;
+  }
+  return { pois, radius: used };
+}
+
+__m["pois"] = { TABS, categorize, poiQuery, parsePois, groupPois, findPois };
+})();
+// ---- share
+(() => {
+// "Send location": share sheet, messaging deep links, map links, calendar invite.
+
+function mapLinks(place) {
+  const ll = `${place.lat},${place.lon}`;
+  const q = encodeURIComponent(place.name ? `${place.name} ${place.address || ''}`.trim() : ll);
+  return {
+    google: `https://www.google.com/maps/search/?api=1&query=${ll}`,
+    googleDirections: `https://www.google.com/maps/dir/?api=1&destination=${ll}`,
+    apple: `https://maps.apple.com/?ll=${ll}&q=${q}`,
+    osm: `https://www.openstreetmap.org/?mlat=${place.lat}&mlon=${place.lon}#map=18/${place.lat}/${place.lon}`,
+    geo: `geo:${ll}?q=${ll}(${encodeURIComponent(place.name || 'Meeting spot')})`,
+  };
+}
+
+function shareText(place, { when, note } = {}) {
+  const lines = [`📍 Let's meet at ${place.name || 'this spot'}`];
+  if (place.address) lines.push(place.address);
+  if (when) lines.push(`🕒 ${when.toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`);
+  if (note) lines.push(note);
+  lines.push(mapLinks(place).google);
+  lines.push('— found with Midway: the fair way to meet in the middle');
+  return lines.join('\n');
+}
+
+function messagingLinks(text, subject = 'Meet up?') {
+  const t = encodeURIComponent(text);
+  return {
+    whatsapp: `https://wa.me/?text=${t}`,
+    telegram: `https://t.me/share/url?url=${encodeURIComponent(' ')}&text=${t}`,
+    sms: `sms:?&body=${t}`,
+    email: `mailto:?subject=${encodeURIComponent(subject)}&body=${t}`,
+  };
+}
+
+async function nativeShare(place, text) {
+  if (!navigator.share) return false;
+  try {
+    await navigator.share({ title: place.name || 'Meeting spot', text });
+    return true;
+  } catch (err) {
+    return err?.name === 'AbortError'; // user closed the sheet: treat as handled
+  }
+}
+
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch { /* fall through */ }
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  const ok = document.execCommand('copy');
+  ta.remove();
+  return ok;
+}
+
+const icsDate = (d) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+const icsEscape = (s) => String(s).replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/[,;]/g, (m) => `\\${m}`);
+
+/** Build an .ics calendar invite for the chosen place. */
+function calendarInvite(place, start, minutes = 120) {
+  const end = new Date(start.getTime() + minutes * 60000);
+  const body = [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Midway//Meetup//EN', 'BEGIN:VEVENT',
+    `UID:${Date.now()}-${Math.random().toString(36).slice(2)}@midway`,
+    `DTSTAMP:${icsDate(new Date())}`, `DTSTART:${icsDate(start)}`, `DTEND:${icsDate(end)}`,
+    `SUMMARY:${icsEscape(`Meet up at ${place.name || 'the meeting spot'}`)}`,
+    `LOCATION:${icsEscape(place.address || `${place.lat},${place.lon}`)}`,
+    `GEO:${place.lat};${place.lon}`,
+    `DESCRIPTION:${icsEscape(mapLinks(place).google)}`,
+    'END:VEVENT', 'END:VCALENDAR',
+  ];
+  return body.join('\r\n');
+}
+
+function download(filename, content, type = 'text/calendar') {
+  const url = URL.createObjectURL(new Blob([content], { type }));
+  const a = Object.assign(document.createElement('a'), { href: url, download: filename });
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+__m["share"] = { mapLinks, shareText, messagingLinks, nativeShare, copyText, calendarInvite, download };
+})();
+// ---- demo
+(() => {
+// Self-contained test mode for Midway.
+//
+// Replaces everything that needs the internet or a server with local
+// stand-ins, so the real app code can run inside a sandboxed page:
+//   • a generated town ("Port Verity") with streets, a river, bridges and parks,
+//     drawn as the base map and used as the road network
+//   • address search / reverse geocoding over the town's street addresses
+//   • ~380 places of interest, tagged like OpenStreetMap data
+//   • accounts, addresses and history kept in this browser's storage
+const { fromEdgeList, rng } = __m["network"];
+const { parsePois } = __m["pois"];
+const { haversine } = __m["geo"];
+const TOWN = 'Port Verity';
+const CENTER = { lat: 40.0, lon: -40.0 }; // fictional town in open sea
+const M_LAT = 111320;
+const M_LON = 111320 * Math.cos((CENTER.lat * Math.PI) / 180);
+const toLL = (x, y) => ({ lat: CENTER.lat + y / M_LAT, lon: CENTER.lon + x / M_LON });
+
+const ROW_NAMES = ['Ash', 'Birch', 'Cedar', 'Dover', 'Elm', 'Fern', 'Garnet', 'Hazel', 'Iris', 'Juniper', 'Kestrel', 'Larch', 'Maple', 'Nettle', 'Oak', 'Poplar', 'Quarry', 'Rowan', 'Sorrel', 'Thistle', 'Upton', 'Vale', 'Willow', 'Yarrow', 'Alder', 'Bramble', 'Clover', 'Daisy', 'Ember', 'Foxglove', 'Gorse', 'Heather', 'Ivy', 'Jasmine', 'Kingfisher', 'Lavender', 'Meadow', 'Nightingale', 'Orchard', 'Primrose', 'Quince', 'Robin', 'Saffron', 'Tansy', 'Union', 'Violet', 'Wren', 'Yew', 'Acorn', 'Bluebell'];
+const COL_NAMES = ['Abbey', 'Bridge', 'Castle', 'Dock', 'Exchange', 'Ferry', 'Granary', 'Harbour', 'Inkwell', 'Jubilee', 'Keel', 'Lantern', 'Mill', 'Navigation', 'Observatory', 'Pier', 'Quay', 'Rope', 'Station', 'Tannery', 'Victoria', 'Wharf', 'Albion', 'Beacon', 'Chapel', 'Drapers', 'Eastgate', 'Foundry', 'Guild', 'Hythe', 'Kiln', 'Lighthouse', 'Market', 'Newgate', 'Orchard', 'Prospect', 'Regent', 'Salt', 'Tower', 'Upper', 'Vicarage', 'Weaver', 'Anchor', 'Brewer', 'Canal', 'Dyer', 'Elder', 'Fisher', 'Glover', 'Hatter', 'Iron', 'Joiner', 'Kings', 'Lock', 'Mason', 'North', 'Oyster', 'Potter', 'Queens', 'Rope Walk', 'Sail', 'Tide', 'Union', 'Vintner', 'Water'];
+const HOODS = [['Westwood', 'Northgate', 'Highfield'], ['Old Mill', 'Town Centre', 'Eastbank'], ['Southfields', 'Riverside', 'Harbour Quarter']];
+
+// ---------------------------------------------------------------- the town
+
+function buildTown() {
+  const rand = rng(20261110);
+  const W = 7600, H = 5600, S = 118;
+  const cols = Math.round(W / S), rows = Math.round(H / S);
+  const riverY = (x) => -350 + 650 * Math.sin(x / 1900 + 0.4) + 220 * Math.sin(x / 640);
+  const parks = [
+    { x: -2300, y: 1500, rx: 520, ry: 360, name: 'Westwood Common' },
+    { x: 1200, y: 1700, rx: 380, ry: 300, name: 'Castle Gardens' },
+    { x: 2700, y: -1700, rx: 560, ry: 340, name: 'Harbour Fields' },
+    { x: -800, y: -1900, rx: 420, ry: 300, name: 'Southfields Park' },
+    { x: 3000, y: 900, rx: 300, ry: 260, name: 'Eastbank Green' },
+  ];
+  const inPark = (x, y) => parks.find((p) => ((x - p.x) / p.rx) ** 2 + ((y - p.y) / p.ry) ** 2 < 1);
+  const bridgeCols = new Set();
+  for (let c = 4; c < cols; c += 9) bridgeCols.add(c);
+
+  // Node positions on a gently warped grid.
+  const id = (r, c) => r * (cols + 1) + c;
+  const n = (rows + 1) * (cols + 1);
+  const X = new Float64Array(n), Y = new Float64Array(n), keep = new Uint8Array(n);
+  for (let r = 0; r <= rows; r++) {
+    for (let c = 0; c <= cols; c++) {
+      let x = -W / 2 + c * S, y = -H / 2 + r * S;
+      x += 45 * Math.sin(y / 800) + (rand() - 0.5) * 26;
+      y += 35 * Math.sin(x / 950) + (rand() - 0.5) * 26;
+      const i = id(r, c);
+      X[i] = x; Y[i] = y;
+      keep[i] = Math.abs(y - riverY(x)) > 70 && !inPark(x, y) ? 1 : 0;
+    }
+  }
+  const art = (r, c, dir) => (dir === 'row' ? r % 8 === 4 : c % 8 === 4);
+  const A = [], B = [], kind = [];
+  const link = (a, b, k) => { A.push(a); B.push(b); kind.push(k); };
+  const crossesRiver = (a, b) => Math.sign(Y[a] - riverY(X[a])) !== Math.sign(Y[b] - riverY(X[b]));
+  for (let r = 0; r <= rows; r++) {
+    for (let c = 0; c <= cols; c++) {
+      const a = id(r, c);
+      if (!keep[a]) continue;
+      if (c < cols) {
+        const b = id(r, c + 1);
+        const major = art(r, c, 'row');
+        if (keep[b] && !crossesRiver(a, b) && (major || rand() > 0.06)) link(a, b, major ? 1 : 0);
+      }
+      if (r < rows) {
+        const major = art(r, c, 'col');
+        let r2 = r + 1;
+        // Bridges carry a few streets over the river.
+        if (bridgeCols.has(c)) while (r2 <= rows && !keep[id(r2, c)] && Math.abs(Y[id(r2, c)] - riverY(X[id(r2, c)])) <= 70) r2++;
+        if (r2 > rows) continue;
+        const b = id(r2, c);
+        if (!keep[b]) continue;
+        const bridge = crossesRiver(a, b);
+        if (bridge && !bridgeCols.has(c)) continue;
+        if (bridge || major || rand() > 0.08) link(a, b, bridge || major ? 1 : 0);
+      }
+    }
+  }
+  // A diagonal boulevard through the centre.
+  for (let k = 0; k < Math.min(rows, cols) - 2; k++) {
+    const r = 3 + k, c = 18 + k;
+    if (r + 1 > rows || c + 1 > cols) break;
+    const a = id(r, c), b = id(r + 1, c + 1);
+    if (keep[a] && keep[b] && !crossesRiver(a, b)) link(a, b, 1);
+  }
+
+  const lat = new Float64Array(n), lon = new Float64Array(n);
+  for (let i = 0; i < n; i++) { const ll = toLL(X[i], Y[i]); lat[i] = ll.lat; lon[i] = ll.lon; }
+  const graph = fromEdgeList(lat, lon, A, B, false);
+
+  // Addresses: every street corner is a house number on its east-west street.
+  const rowStreet = (r) => `${ROW_NAMES[r % ROW_NAMES.length]} ${r % 8 === 4 ? 'Road' : 'Street'}`;
+  const colStreet = (c) => `${COL_NAMES[c % COL_NAMES.length]} ${c % 8 === 4 ? 'Avenue' : 'Lane'}`;
+  const hood = (x, y) => HOODS[y > 900 ? 0 : y < -900 ? 2 : 1][x < -1300 ? 0 : x > 1300 ? 2 : 1];
+  const deg = new Int32Array(n);
+  for (let k = 0; k < A.length; k++) { deg[A[k]]++; deg[B[k]]++; }
+  const addresses = [];
+  for (let r = 0; r <= rows; r++) {
+    for (let c = 0; c <= cols; c++) {
+      const i = id(r, c);
+      if (!deg[i]) continue;
+      const useCol = r % 3 === 1 && c % 8 !== 4;
+      addresses.push({
+        node: i, lat: lat[i], lon: lon[i],
+        num: useCol ? r * 2 + 1 : c * 4 + 2 + (r % 2),
+        street: useCol ? colStreet(c) : rowStreet(r),
+        hood: hood(X[i], Y[i]),
+      });
+    }
+  }
+
+  // Base-map geometry.
+  const river = [];
+  for (let x = -W / 2 - 600; x <= W / 2 + 600; x += 60) river.push(toLL(x, riverY(x)));
+  const parkPolys = parks.map((p) => ({
+    name: p.name, center: toLL(p.x, p.y),
+    ring: Array.from({ length: 40 }, (_, k) => toLL(p.x + p.rx * 0.98 * Math.cos((k / 40) * 2 * Math.PI), p.y + p.ry * 0.98 * Math.sin((k / 40) * 2 * Math.PI))),
+  }));
+  const labels = [];
+  HOODS.forEach((row, ri) => row.forEach((name, ci) => labels.push({ name, ...toLL((ci - 1) * 2500, (1 - ri) * 1900 + (ri === 1 ? 300 : 0)) })));
+  const sw = toLL(-W / 2 - 900, -H / 2 - 900), ne = toLL(W / 2 + 900, H / 2 + 900);
+  return { graph, A, B, kind, addresses, river, parks: parkPolys, labels, bounds: [[sw.lat, sw.lon], [ne.lat, ne.lon]], hood: (ll) => hood((ll.lon - CENTER.lon) * M_LON, (ll.lat - CENTER.lat) * M_LAT) };
+}
+
+const town = buildTown();
+
+function nearestAddress(lat, lon) {
+  let best = town.addresses[0], bd = Infinity;
+  for (const a of town.addresses) {
+    const d = (a.lat - lat) ** 2 + ((a.lon - lon) * 0.766) ** 2;
+    if (d < bd) { bd = d; best = a; }
+  }
+  return best;
+}
+const fmtAddress = (a) => `${a.num} ${a.street}, ${a.hood}, ${TOWN}`;
+
+// ---------------------------------------------------------------- places of interest
+
+const NAMES = ['Rosa', 'Marco', 'Luca', 'Nonna', 'Bella', 'Sole', 'Verde', 'Porto', 'Aria', 'Gino', 'Mio', 'Kiku', 'Hana', 'Sora', 'Taj', 'Raja', 'Lotus', 'Saffron', 'Jade', 'Golden', 'Blue', 'Copper', 'Harbour', 'Lantern', 'Anchor', 'Mill', 'Quay', 'Driftwood', 'Tide', 'Ember', 'Juniper', 'Fox', 'Otter', 'Heron', 'Wren', 'Pepper', 'Basil', 'Olive', 'Fig', 'Clove'];
+const TYPES = [
+  { n: 22, tags: { amenity: 'restaurant', cuisine: 'italian' }, names: ['Trattoria {N}', 'Osteria {N}', 'Pasta {N}', "{N}'s Kitchen", 'Casa {N}'] },
+  { n: 14, tags: { amenity: 'restaurant', cuisine: 'pizza' }, names: ['Pizzeria {N}', '{N} Pizza Co.', 'Slice of {N}'] },
+  { n: 12, tags: { amenity: 'restaurant', cuisine: 'japanese' }, names: ['{N} Izakaya', 'Sushi {N}', '{N} Ramen Bar'] },
+  { n: 9, tags: { amenity: 'restaurant', cuisine: 'sushi' }, names: ['{N} Sushi', 'Maki {N}'] },
+  { n: 13, tags: { amenity: 'restaurant', cuisine: 'chinese' }, names: ['{N} Dragon', 'Golden {N}', '{N} Dumpling House'] },
+  { n: 13, tags: { amenity: 'restaurant', cuisine: 'indian' }, names: ['{N} Tandoor', 'Spice of {N}', '{N} Curry House'] },
+  { n: 9, tags: { amenity: 'restaurant', cuisine: 'thai' }, names: ['{N} Thai', 'Bangkok {N}'] },
+  { n: 9, tags: { amenity: 'restaurant', cuisine: 'mexican' }, names: ['Taqueria {N}', '{N} Cantina'] },
+  { n: 7, tags: { amenity: 'restaurant', cuisine: 'korean' }, names: ['{N} BBQ House', 'Seoul {N}'] },
+  { n: 7, tags: { amenity: 'restaurant', cuisine: 'vietnamese' }, names: ['Pho {N}', '{N} Banh Mi'] },
+  { n: 8, tags: { amenity: 'restaurant', cuisine: 'greek' }, names: ['{N} Taverna', 'Olive & {N}'] },
+  { n: 6, tags: { amenity: 'restaurant', cuisine: 'french' }, names: ['Bistro {N}', 'Chez {N}'] },
+  { n: 8, tags: { amenity: 'restaurant', cuisine: 'seafood' }, names: ['The {N} Oyster', '{N} Fish Bar'] },
+  { n: 5, tags: { amenity: 'restaurant', cuisine: 'steak_house' }, names: ['{N} Grill', 'The {N} Steakhouse'] },
+  { n: 6, tags: { amenity: 'restaurant', cuisine: 'vegan', 'diet:vegan': 'only' }, names: ['{N} Greens', 'Leaf & {N}'] },
+  { n: 12, tags: { amenity: 'fast_food', cuisine: 'burger' }, names: ['{N} Burgers', 'Smash {N}'] },
+  { n: 7, tags: { amenity: 'fast_food', cuisine: 'chicken' }, names: ['{N} Fried Chicken', 'Cluck {N}'] },
+  { n: 6, tags: { amenity: 'fast_food', cuisine: 'kebab' }, names: ['{N} Kebab', 'Grill {N}'] },
+  { n: 9, tags: { shop: 'bakery' }, names: ['{N} Bakery', 'Crumb & {N}', '{N} Bakehouse'] },
+  { n: 26, tags: { amenity: 'cafe' }, names: ['{N} Coffee', 'Café {N}', '{N} Roasters', 'The {N} Cup'] },
+  { n: 7, tags: { amenity: 'cafe', cuisine: 'bubble_tea' }, names: ['{N} Bubble Tea', 'Boba {N}'] },
+  { n: 6, tags: { amenity: 'ice_cream' }, names: ['{N} Gelato', 'Scoops {N}'] },
+  { n: 14, tags: { amenity: 'pub' }, names: ['The {N} Arms', 'The {N} & Crown', 'The Old {N}'] },
+  { n: 12, tags: { amenity: 'bar' }, names: ['{N} Bar', 'The {N} Room'] },
+  { n: 5, tags: { amenity: 'bar', bar: 'cocktail' }, names: ['{N} Cocktail Club', 'Velvet {N}'] },
+  { n: 3, tags: { amenity: 'cinema' }, names: ['{N} Picturehouse', 'The {N} Cinema'] },
+  { n: 3, tags: { amenity: 'bowling_alley' }, names: ['{N} Lanes', 'Strike {N}'] },
+  { n: 3, tags: { leisure: 'escape_game' }, names: ['Escape {N}', 'The {N} Puzzle Rooms'] },
+  { n: 3, tags: { leisure: 'amusement_arcade' }, names: ['{N} Arcade', 'Pixel {N}'] },
+  { n: 2, tags: { leisure: 'miniature_golf' }, names: ['{N} Crazy Golf'] },
+  { n: 6, tags: { leisure: 'sports_centre' }, names: ['{N} Leisure Centre', '{N} Climbing Wall'] },
+  { n: 2, tags: { amenity: 'nightclub' }, names: ['Club {N}'] },
+  { n: 4, tags: { tourism: 'museum' }, names: ['{N} Maritime Museum', 'Museum of {N}', '{N} House Museum'] },
+  { n: 5, tags: { tourism: 'gallery' }, names: ['{N} Gallery', 'The {N} Studio'] },
+  { n: 3, tags: { amenity: 'theatre' }, names: ['{N} Playhouse', 'The {N} Theatre'] },
+  { n: 3, tags: { amenity: 'library' }, names: ['{N} Library'] },
+  { n: 8, tags: { leisure: 'playground' }, names: ['{N} Playground'] },
+  { n: 4, tags: { tourism: 'viewpoint' }, names: ['{N} Lookout', '{N} Point'] },
+  { n: 3, tags: { shop: 'mall' }, names: ['{N} Shopping Centre', 'The {N} Arcade Mall'] },
+  { n: 5, tags: { shop: 'books' }, names: ['{N} Books', 'Chapter & {N}'] },
+  { n: 3, tags: { shop: 'games' }, names: ['{N} Board Games'] },
+  { n: 6, tags: { shop: 'clothes' }, names: ['{N} & Co.', '{N} Vintage'] },
+  { n: 2, tags: { amenity: 'marketplace' }, names: ['{N} Market'] },
+];
+const HOURS = ['Mo-Su 08:00-22:00', 'Mo-Fr 07:30-18:00; Sa-Su 09:00-17:00', 'Tu-Su 12:00-23:00', 'Mo-Su 11:00-23:30', 'Mo-Sa 10:00-19:00', 'We-Su 17:00-01:00'];
+
+function buildPoiElements() {
+  const rand = rng(77);
+  const pick = (arr) => arr[Math.floor(rand() * arr.length)];
+  // Busier along main roads and near the centre.
+  const busy = [];
+  for (let k = 0; k < town.A.length; k++) if (town.kind[k]) busy.push(town.A[k]);
+  const g = town.graph;
+  const els = [];
+  let nid = 1;
+  const used = new Set();
+  for (const t of TYPES) {
+    for (let i = 0; i < t.n; i++) {
+      let name;
+      for (let tries = 0; tries < 8; tries++) { name = pick(t.names).replace('{N}', pick(NAMES)); if (!used.has(name)) break; }
+      used.add(name);
+      const node = rand() < 0.6 ? pick(busy) : Math.floor(rand() * g.n);
+      if (!(g.adjStart[node + 1] > g.adjStart[node])) { i--; continue; }
+      const lat = g.lat[node] + (rand() - 0.5) * 0.0005;
+      const lon = g.lon[node] + (rand() - 0.5) * 0.0007;
+      const addr = nearestAddress(lat, lon);
+      els.push({
+        type: 'node', id: nid++, lat, lon,
+        tags: {
+          name, ...t.tags,
+          'addr:housenumber': String(addr.num), 'addr:street': addr.street, 'addr:suburb': addr.hood,
+          opening_hours: t.tags.leisure === 'playground' || t.tags.tourism === 'viewpoint' ? '24/7' : pick(HOURS),
+          ...(rand() < 0.4 ? { website: `${name.toLowerCase().replace(/[^a-z]+/g, '')}.example` } : {}),
+          ...(rand() < 0.3 ? { outdoor_seating: 'yes' } : {}),
+          ...(rand() < 0.5 ? { wheelchair: 'yes' } : {}),
+        },
+      });
+    }
+  }
+  // Parks are places too.
+  town.parks.forEach((p, i) => els.push({ type: 'way', id: 50000 + i, center: p.center, tags: { name: p.name, leisure: i === 1 ? 'garden' : 'park', opening_hours: '24/7' } }));
+  return els;
+}
+const poiElements = buildPoiElements();
+
+async function findPois(center, { radius, minResults = 12 } = {}) {
+  await new Promise((r) => setTimeout(r, 250));
+  const radii = radius ? [radius] : [800, 1800, 4000];
+  let pois = [], used = radii[0];
+  for (const r of radii) {
+    used = r;
+    const near = poiElements.filter((el) => {
+      const p = el.center || el;
+      return haversine(center.lat, center.lon, p.lat, p.lon) <= r;
+    });
+    pois = parsePois(near, center);
+    if (pois.length >= minResults) break;
+  }
+  return { pois, radius: used };
+}
+
+// ---------------------------------------------------------------- geocoding stand-ins
+
+async function searchAddress(q, { near, limit = 6 } = {}) {
+  q = q.trim().toLowerCase();
+  if (q.length < 2) return [];
+  const numMatch = q.match(/^(\d+)\s*/);
+  const num = numMatch ? Number(numMatch[1]) : null;
+  const words = q.replace(/^\d+\s*/, '').split(/[\s,]+/).filter((w) => w && w !== TOWN.toLowerCase());
+  if (!words.length) return [];
+  const hit = (s) => words.every((w) => s.toLowerCase().includes(w));
+  const results = [];
+  const byStreet = new Map();
+  for (const a of town.addresses) {
+    if (!hit(`${a.street} ${a.hood}`)) continue;
+    const key = `${a.street}|${a.hood}`;
+    const cur = byStreet.get(key);
+    const score = num != null ? Math.abs(a.num - num) : Math.abs(a.lon - CENTER.lon);
+    if (!cur || score < cur.score) byStreet.set(key, { a, score });
+  }
+  for (const { a } of byStreet.values()) {
+    results.push({ lat: a.lat, lon: a.lon, address: fmtAddress(a), title: `${a.num} ${a.street}`, subtitle: `${a.hood}, ${TOWN}` });
+  }
+  for (const el of poiElements) {
+    if (!hit(el.tags.name)) continue;
+    const p = el.center || el;
+    results.push({ lat: p.lat, lon: p.lon, address: `${el.tags.name}, ${el.tags['addr:suburb'] || town.hood(p)}, ${TOWN}`, title: el.tags.name, subtitle: `${el.tags['addr:street'] ? `${el.tags['addr:housenumber']} ${el.tags['addr:street']}, ` : ''}${TOWN}` });
+  }
+  if (near) results.sort((x, y) => haversine(near.lat, near.lon, x.lat, x.lon) - haversine(near.lat, near.lon, y.lat, y.lon));
+  return results.slice(0, limit);
+}
+
+async function reverseGeocode(lat, lon) {
+  const a = nearestAddress(lat, lon);
+  return { lat, lon, address: fmtAddress(a), title: `${a.num} ${a.street}`, subtitle: `${a.hood}, ${TOWN}` };
+}
+
+/** No GPS in the test town: hand back a random address instead. */
+async function currentPosition() {
+  const a = town.addresses[Math.floor(Math.random() * town.addresses.length)];
+  return { lat: a.lat, lon: a.lon };
+}
+
+async function loadNetwork(points, { onStatus = () => {} } = {}) {
+  onStatus('Reading the streets of Port Verity…');
+  await new Promise((r) => setTimeout(r, 350));
+  return { graph: town.graph, source: 'osm' };
+}
+
+// ---------------------------------------------------------------- local "server"
+
+const KEY = 'midway-test-v1';
+let memory = { users: {}, session: null };
+function load() {
+  try { const raw = localStorage.getItem(KEY); if (raw) memory = JSON.parse(raw); } catch { /* storage blocked: keep in memory */ }
+  return memory;
+}
+function save(db) {
+  memory = db;
+  try { localStorage.setItem(KEY, JSON.stringify(db)); } catch { /* in-memory only */ }
+}
+async function hash(pw, salt) {
+  const data = new TextEncoder().encode(`${salt}:${pw}`);
+  try {
+    const buf = await crypto.subtle.digest('SHA-256', data);
+    return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  } catch { return `${salt}:${pw.length}:${[...pw].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7)}`; }
+}
+const fail = (status, message) => Object.assign(new Error(message), { status });
+const newId = () => Math.random().toString(36).slice(2, 11);
+const pub = (u) => ({ id: u.id, email: u.email, name: u.name, home: u.home, places: u.places, history: u.history.slice(0, 50), settings: u.settings });
+function me() {
+  const db = load();
+  const u = db.session && db.users[db.session];
+  if (!u) throw fail(401, 'Please sign in');
+  return { db, u };
+}
+const clean = (p) => ({ address: String(p.address || '').slice(0, 300), nickname: String(p.nickname || '').trim().slice(0, 60), lat: Number(p.lat), lon: Number(p.lon) });
+
+const api = {
+  async me() { try { return { user: pub(me().u) }; } catch { return { user: null }; } },
+  async signup(email, password, name) {
+    const db = load();
+    const e = String(email).trim().toLowerCase();
+    if (db.users[e]) throw fail(409, 'An account with that email already exists — try signing in');
+    const salt = newId();
+    db.users[e] = { id: newId(), email: e, name: String(name || '').trim(), salt, hash: await hash(password, salt), home: null, places: [], history: [], settings: {} };
+    db.session = e;
+    save(db);
+    return { user: pub(db.users[e]) };
+  },
+  async login(email, password) {
+    const db = load();
+    const u = db.users[String(email).trim().toLowerCase()];
+    if (!u || (await hash(password, u.salt)) !== u.hash) throw fail(401, 'Email or password is incorrect');
+    db.session = u.email;
+    save(db);
+    return { user: pub(u) };
+  },
+  async logout() { const db = load(); db.session = null; save(db); return { ok: true }; },
+  async updateMe(patch) {
+    const { db, u } = me();
+    if ('name' in patch) u.name = patch.name;
+    if ('home' in patch) u.home = patch.home ? clean(patch.home) : null;
+    if (patch.settings) u.settings = { ...u.settings, ...patch.settings };
+    save(db);
+    return { user: pub(u) };
+  },
+  async addPlace(p) {
+    const { db, u } = me();
+    const place = { id: newId(), ...clean(p), active: p.active !== false };
+    u.places.push(place);
+    save(db);
+    return { place };
+  },
+  async updatePlace(id, patch) {
+    const { db, u } = me();
+    const place = u.places.find((x) => x.id === id);
+    if (!place) throw fail(404, 'Address not found');
+    if ('address' in patch || 'lat' in patch) Object.assign(place, clean({ ...place, ...patch }));
+    if ('nickname' in patch) place.nickname = String(patch.nickname || '').trim().slice(0, 60);
+    if ('active' in patch) place.active = !!patch.active;
+    save(db);
+    return { place };
+  },
+  async deletePlace(id) { const { db, u } = me(); u.places = u.places.filter((x) => x.id !== id); save(db); return { ok: true }; },
+  async addHistory(h) {
+    const { db, u } = me();
+    const entry = { id: newId(), at: Date.now(), name: h.name, category: h.category || '', address: h.address || '', lat: h.lat, lon: h.lon, people: h.people || [] };
+    u.history = [entry, ...u.history].slice(0, 50);
+    save(db);
+    return { entry };
+  },
+  async deleteHistory(id) { const { db, u } = me(); u.history = u.history.filter((x) => x.id !== id); save(db); return { ok: true }; },
+};
+
+/** A ready-made account: you plus three friends spread around town. */
+async function sampleLogin() {
+  const email = 'sample@midway.test', password = 'midway-sample';
+  const db = load();
+  if (!db.users[email]) {
+    const at = (x, y) => { const ll = toLL(x, y); const a = nearestAddress(ll.lat, ll.lon); return { address: fmtAddress(a), lat: a.lat, lon: a.lon }; };
+    await api.signup(email, password, 'Alex');
+    await api.updateMe({ home: at(-2700, 1100) });
+    for (const [nickname, x, y] of [['Sam', 2900, 1600], ['Priya', 2300, -2100], ['Leo', -1600, -1900]]) {
+      await api.addPlace({ ...at(x, y), nickname });
+    }
+  }
+  return api.login(email, password);
+}
+
+// ---------------------------------------------------------------- base map
+
+/** Draw the town (land, parks, river, streets, district names) under Leaflet's panes. */
+function addBasemap(map) {
+  const canvas = document.createElement('canvas');
+  canvas.className = 'basemap-canvas';
+  map.getContainer().prepend(canvas);
+  const ctx = canvas.getContext('2d');
+  const crs = L.CRS.EPSG3857;
+  const P = (ll) => crs.latLngToPoint(L.latLng(ll.lat, ll.lon), 0);
+  const g = town.graph;
+  const nodes = new Float64Array(g.n * 2);
+  for (let i = 0; i < g.n; i++) { const p = P({ lat: g.lat[i], lon: g.lon[i] }); nodes[i * 2] = p.x; nodes[i * 2 + 1] = p.y; }
+  const river = town.river.map(P);
+  const parks = town.parks.map((p) => ({ ...p, ring: p.ring.map(P), c: P(p.center) }));
+  const labels = town.labels.map((l) => ({ ...l, p: P(l) }));
+  let dpr = 1;
+  const css = () => {
+    const s = getComputedStyle(document.documentElement);
+    const v = (k) => s.getPropertyValue(k).trim();
+    return { land: v('--map-land'), park: v('--map-park'), water: v('--map-water'), road: v('--map-road'), casing: v('--map-casing'), major: v('--map-major'), label: v('--map-label'), halo: v('--map-halo') };
+  };
+  function resize() {
+    const size = map.getSize();
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = size.x * dpr; canvas.height = size.y * dpr;
+    canvas.style.width = `${size.x}px`; canvas.style.height = `${size.y}px`;
+    draw();
+  }
+  function draw() {
+    if (!map._loaded) return; // no view yet
+    const c = css();
+    const z = map.getZoom();
+    const s = 2 ** z;
+    const o = map.getPixelBounds().min;
+    const tx = (x) => x * s - o.x, ty = (y) => y * s - o.y;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = c.land;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.fillStyle = c.park;
+    for (const p of parks) {
+      ctx.beginPath();
+      p.ring.forEach((q, i) => (i ? ctx.lineTo(tx(q.x), ty(q.y)) : ctx.moveTo(tx(q.x), ty(q.y))));
+      ctx.fill();
+    }
+    ctx.strokeStyle = c.water;
+    ctx.lineWidth = Math.max(6, 120 / (156543 * Math.cos((CENTER.lat * Math.PI) / 180) / s));
+    ctx.beginPath();
+    river.forEach((q, i) => (i ? ctx.lineTo(tx(q.x), ty(q.y)) : ctx.moveTo(tx(q.x), ty(q.y))));
+    ctx.stroke();
+    const mpp = 156543 * Math.cos((CENTER.lat * Math.PI) / 180) / s; // metres per pixel
+    const minorW = Math.max(1, Math.min(7, 9 / mpp)), majorW = Math.max(2, Math.min(12, 16 / mpp));
+    const pass = (k, width, color) => {
+      ctx.beginPath();
+      for (let e = 0; e < town.A.length; e++) {
+        if (town.kind[e] !== k) continue;
+        const a = town.A[e], b = town.B[e];
+        ctx.moveTo(tx(nodes[a * 2]), ty(nodes[a * 2 + 1]));
+        ctx.lineTo(tx(nodes[b * 2]), ty(nodes[b * 2 + 1]));
+      }
+      ctx.strokeStyle = color; ctx.lineWidth = width; ctx.stroke();
+    };
+    if (z >= 15) pass(0, minorW + 1.5, c.casing);
+    pass(0, minorW, c.road);
+    pass(1, majorW + 2, c.casing);
+    pass(1, majorW, c.major);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const text = (str, x, y, size, weight) => {
+      ctx.font = `${weight} ${size}px ui-sans-serif, system-ui, sans-serif`;
+      ctx.lineWidth = 4; ctx.strokeStyle = c.halo; ctx.strokeText(str, x, y);
+      ctx.fillStyle = c.label; ctx.fillText(str, x, y);
+    };
+    if (z <= 15) for (const l of labels) text(l.name.toUpperCase(), tx(l.p.x), ty(l.p.y), 12, 700);
+    if (z >= 14) for (const p of parks) text(p.name, tx(p.c.x), ty(p.c.y), 11, 600);
+  }
+  map.on('move zoom viewreset', draw);
+  map.on('resize', resize);
+  new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
+  resize();
+  map.whenReady(resize);
+}
+
+const bounds = town.bounds;
+const townCenter = CENTER;
+
+__m["demo"] = { findPois, searchAddress, reverseGeocode, currentPosition, loadNetwork, api, sampleLogin, addBasemap, bounds, townCenter };
+})();
+// ---- test-mode wiring
+(() => {
+  const d = __m.demo;
+  __m.api = { api: d.api };
+  __m.geocode = { searchAddress: d.searchAddress, reverseGeocode: d.reverseGeocode, currentPosition: d.currentPosition };
+  __m.network = { ...__m.network, loadNetwork: d.loadNetwork };
+  __m.pois = { ...__m.pois, findPois: d.findPois };
+  const baseText = __m.share.shareText;
+  __m.share = { ...__m.share, shareText: (p, o) => baseText(p, o).split('\n').filter((l) => !l.startsWith('https://')).join('\n') };
+})();
+// ---- app
+(() => {
+// Midway — app controller: screens, map, panel views and the search flow.
+const { api } = __m["api"];
+const { searchAddress, reverseGeocode, currentPosition } = __m["geocode"];
+const { loadNetwork } = __m["network"];
+const { solveMeeting, roadDistanceTo } = __m["meet"];
+const { GrowthAnimation } = __m["growth"];
+const { TABS, findPois, groupPois } = __m["pois"];
+const { mapLinks, shareText, messagingLinks, nativeShare, copyText, calendarInvite, download } = __m["share"];
+// ---------------------------------------------------------------- constants
+
+const COLORS = ['#5b5bf0', '#ff6b6b', '#12b5a5', '#f5a524', '#d63fb0', '#2f9e44', '#1c9bd6', '#8b5cf6', '#e8590c', '#495057'];
+const SPEEDS = { walk: 1.35, bike: 4.2, transit: 6.5, drive: 9.5 }; // m/s, urban averages
+const TRAVEL_LABEL = { walk: 'walk', bike: 'bike', transit: 'by transit', drive: 'drive' };
+const ANIM_MS = { slow: 9000, normal: 6000, fast: 3200 };
+const RADII = [500, 1000, 2000, 5000];
+const DEFAULT_SETTINGS = { mode: 'fair', travel: 'transit', speed: 'normal', theme: 'auto' };
+
+// ---------------------------------------------------------------- state
+
+const state = {
+  user: null,
+  places: [],
+  settings: { ...DEFAULT_SETTINGS },
+  view: 'people',
+  search: null, // { people, graph, solution, source, reason, pois, grouped, radius, tab, group, place, area }
+  editingId: null,
+};
+
+let map, peopleLayer, resultLayer, poiLayer, anim, searchAbort, homeSearchCtl;
+
+// ---------------------------------------------------------------- helpers
+
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const isMobile = () => window.matchMedia('(max-width: 759px)').matches;
+
+function fmtDist(m) {
+  if (m < 950) return `${Math.max(10, Math.round(m / 10) * 10)} m`;
+  return `${(m / 1000).toFixed(m < 9500 ? 1 : 0)} km`;
+}
+function travelMinutes(m, mode = state.settings.travel) {
+  return Math.round(m / SPEEDS[mode] / 60 + (mode === 'transit' ? 6 : 0));
+}
+function fmtTime(min) {
+  if (min < 60) return `${Math.max(1, min)} min`;
+  const h = Math.floor(min / 60), r = min % 60;
+  return r ? `${h} h ${r} min` : `${h} h`;
+}
+function fmtTravel(m) {
+  return `${fmtTime(travelMinutes(m))} ${TRAVEL_LABEL[state.settings.travel]}`;
+}
+const initial = (name) => (name || '?').trim().charAt(0).toUpperCase() || '?';
+const shortAddr = (a) => (a || '').split(', ').slice(0, 2).join(', ');
+
+function toast(msg, { error = false, action, onAction, ms = 3800 } = {}) {
+  const el = document.createElement('div');
+  el.className = `toast${error ? ' error' : ''}`;
+  el.innerHTML = `<span>${esc(msg)}</span>`;
+  if (action) {
+    const b = document.createElement('button');
+    b.textContent = action;
+    b.onclick = () => { onAction?.(); el.remove(); };
+    el.appendChild(b);
+  }
+  $('#toasts').appendChild(el);
+  setTimeout(() => el.remove(), ms);
+}
+
+function showScreen(id) {
+  for (const s of $$('.screen')) s.hidden = s.id !== id;
+}
+
+function personColor(index) { return COLORS[index % COLORS.length]; }
+
+/** Everyone: you (home) first, then saved addresses. */
+function everyone() {
+  const list = [];
+  if (state.user?.home) {
+    list.push({ id: 'home', isHome: true, name: 'You', nickname: 'You', ...state.user.home, active: true, color: personColor(0) });
+  }
+  state.places.forEach((p, i) => list.push({
+    ...p, name: p.nickname || shortAddr(p.address) || `Friend ${i + 1}`, color: personColor(i + 1),
+  }));
+  return list;
+}
+const activePeople = () => everyone().filter((p) => p.active);
+
+// ---------------------------------------------------------------- address search widget
+
+function attachSearch(root, { near, onPick, placeholder }) {
+  const input = $('input', root);
+  const list = $('.suggestions', root);
+  if (placeholder) input.placeholder = placeholder;
+  let items = [];
+  let sel = -1;
+  let timer;
+  let ctrl;
+
+  const close = () => { list.hidden = true; sel = -1; };
+  const render = () => {
+    list.innerHTML = items.length
+      ? items.map((r, i) => `<li role="option" data-i="${i}" aria-selected="${i === sel}">
+          <div class="s-title">${esc(r.title)}</div><div class="s-sub">${esc(r.subtitle)}</div></li>`).join('')
+      : '<li class="s-empty">No matches — try adding a city or postcode</li>';
+    list.hidden = false;
+  };
+  const pick = (i) => {
+    const r = items[i];
+    if (!r) return;
+    close();
+    input.value = r.address;
+    onPick(r);
+  };
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    const q = input.value;
+    if (q.trim().length < 3) { close(); return; }
+    timer = setTimeout(async () => {
+      ctrl?.abort();
+      ctrl = new AbortController();
+      try {
+        items = await searchAddress(q, { near: near?.(), signal: ctrl.signal });
+        sel = items.length ? 0 : -1;
+        if (document.activeElement === input) render();
+      } catch (err) {
+        if (err.name !== 'AbortError') { items = []; render(); }
+      }
+    }, 320);
+  });
+  input.addEventListener('keydown', (e) => {
+    if (list.hidden) return;
+    if (e.key === 'ArrowDown') { sel = Math.min(items.length - 1, sel + 1); render(); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { sel = Math.max(0, sel - 1); render(); e.preventDefault(); }
+    else if (e.key === 'Enter') { if (sel >= 0) { pick(sel); e.preventDefault(); } }
+    else if (e.key === 'Escape') close();
+  });
+  input.addEventListener('blur', () => setTimeout(close, 150));
+  list.addEventListener('mousedown', (e) => {
+    const li = e.target.closest('li[data-i]');
+    if (li) { e.preventDefault(); pick(Number(li.dataset.i)); }
+  });
+  return { input, clear: () => { input.value = ''; close(); } };
+}
+
+// ---------------------------------------------------------------- auth
+
+let authMode = 'login';
+function setAuthMode(mode) {
+  authMode = mode;
+  for (const b of $$('[data-auth-mode]')) {
+    b.classList.toggle('active', b.dataset.authMode === mode);
+    b.setAttribute('aria-selected', String(b.dataset.authMode === mode));
+  }
+  for (const el of $$('[data-signup-only]')) el.hidden = mode !== 'signup';
+  $('#auth-submit').textContent = mode === 'signup' ? 'Create account' : 'Sign in';
+  $('#auth-form [name=password]').autocomplete = mode === 'signup' ? 'new-password' : 'current-password';
+  $('#auth-error').hidden = true;
+}
+
+function initAuth() {
+  for (const b of $$('[data-auth-mode]')) b.onclick = () => setAuthMode(b.dataset.authMode);
+  $('#toggle-password').onclick = () => {
+    const pw = $('#auth-form [name=password]');
+    pw.type = pw.type === 'password' ? 'text' : 'password';
+  };
+  $('#auth-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    const email = f.email.value.trim();
+    const password = f.password.value;
+    const err = $('#auth-error');
+    err.hidden = true;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { err.textContent = 'Enter a valid email address'; err.hidden = false; return; }
+    if (password.length < 6) { err.textContent = 'Password must be at least 6 characters'; err.hidden = false; return; }
+    const btn = $('#auth-submit');
+    btn.disabled = true;
+    try {
+      const { user } = authMode === 'signup'
+        ? await api.signup(email, password, f.name.value)
+        : await api.login(email, password);
+      f.reset();
+      onSignedIn(user);
+    } catch (ex) {
+      err.textContent = ex.message;
+      err.hidden = false;
+      if (ex.status === 409) setTimeout(() => setAuthMode('login'), 50);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
+function onSignedIn(user) {
+  state.user = user;
+  state.places = user.places || [];
+  state.settings = { ...DEFAULT_SETTINGS, ...(user.settings || {}) };
+  applyTheme();
+  if (!user.home) showHomeScreen(false);
+  else enterMain();
+}
+
+// ---------------------------------------------------------------- home address
+
+function showHomeScreen(cancellable) {
+  showScreen('screen-home');
+  $('#home-cancel').hidden = !cancellable;
+  $('.step', $('#screen-home')).hidden = cancellable;
+  homeSearchCtl.clear();
+  setTimeout(() => homeSearchCtl.input.focus(), 50);
+}
+
+async function saveHome(loc) {
+  try {
+    const { user } = await api.updateMe({ home: { address: loc.address, lat: loc.lat, lon: loc.lon } });
+    state.user = user;
+    toast('Home saved');
+    enterMain(true);
+  } catch (err) {
+    toast(err.message, { error: true });
+  }
+}
+
+function initHome() {
+  homeSearchCtl = attachSearch($('#home-search'), { near: () => null, onPick: saveHome });
+  $('#home-locate').onclick = async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.textContent = 'Locating…';
+    try {
+      const pos = await currentPosition();
+      const loc = await reverseGeocode(pos.lat, pos.lon);
+      await saveHome(loc);
+    } catch (err) {
+      toast(err.message, { error: true });
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '🎲 Pick a random address for me';
+    }
+  };
+  $('#home-cancel').onclick = () => enterMain();
+}
+
+// ---------------------------------------------------------------- map
+
+function initMap() {
+  map = L.map('map', { zoomControl: false, zoomAnimation: false, minZoom: 12, maxZoom: 18, maxBounds: __m.demo.bounds, maxBoundsViscosity: 0.9 });
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+  __m.demo.addBasemap(map);
+  map.attributionControl.setPrefix(false).addAttribution('Test town: Port Verity (made up)');
+  peopleLayer = L.layerGroup().addTo(map);
+  resultLayer = L.layerGroup().addTo(map);
+  poiLayer = L.layerGroup().addTo(map);
+
+  // Click the map to add an address there.
+  map.on('click', async (e) => {
+    if (state.view !== 'people') return;
+    const { lat, lng } = e.latlng;
+    const popup = L.popup({ className: 'map-popup' }).setLatLng(e.latlng)
+      .setContent('<div class="muted small">Looking up address…</div>').openOn(map);
+    const loc = await reverseGeocode(lat, lng);
+    if (!map.hasLayer(popup)) return;
+    const div = document.createElement('div');
+    div.innerHTML = `<div style="font-weight:600;max-width:220px">${esc(shortAddr(loc.address))}</div>
+      <button class="btn btn-primary">＋ Add this address</button>`;
+    $('button', div).onclick = () => { map.closePopup(popup); addPlace({ ...loc, lat, lon: lng }); };
+    popup.setContent(div);
+  });
+}
+
+function pinIcon(person) {
+  return L.divIcon({
+    className: 'pin',
+    html: `<div class="pin-dot" style="background:${person.color}"><span>${esc(initial(person.name))}</span></div>`,
+    iconSize: [34, 34],
+    iconAnchor: [17, 40],
+    tooltipAnchor: [0, -40],
+  });
+}
+
+function drawPeople() {
+  peopleLayer.clearLayers();
+  for (const p of everyone()) {
+    if (!p.active && state.view !== 'people') continue;
+    const m = L.marker([p.lat, p.lon], { icon: pinIcon(p), draggable: state.view === 'people', opacity: p.active ? 1 : 0.45, riseOnHover: true })
+      .bindTooltip(esc(p.name), { permanent: true, direction: 'top', className: 'label', offset: [0, 0] })
+      .addTo(peopleLayer);
+    m.on('dragend', () => moveAddress(p, m.getLatLng()));
+  }
+}
+
+async function moveAddress(p, ll) {
+  const loc = await reverseGeocode(ll.lat, ll.lng);
+  const patch = { address: loc.address, lat: ll.lat, lon: ll.lng };
+  try {
+    if (p.isHome) {
+      const { user } = await api.updateMe({ home: patch });
+      state.user = user;
+    } else {
+      const { place } = await api.updatePlace(p.id, patch);
+      Object.assign(state.places.find((x) => x.id === p.id), place);
+    }
+    toast(`Moved ${p.isHome ? 'your home' : p.name}`);
+  } catch (err) { toast(err.message, { error: true }); }
+  render();
+}
+
+/** Fit the map to points, leaving room for the panel. */
+function fitTo(latlngs, { maxZoom = 16, animate = true } = {}) {
+  if (!latlngs.length) return;
+  const panel = $('#panel');
+  const hidden = panel.classList.contains('away');
+  let tl = [50, state.view === 'searching' ? 130 : 90], br = [50, 50];
+  if (!hidden) {
+    if (isMobile()) br = [40, panel.offsetHeight + 30];
+    else tl = [panel.offsetWidth + 60, 90];
+  }
+  const b = L.latLngBounds(latlngs);
+  if (latlngs.length === 1 || b.getNorthEast().equals(b.getSouthWest())) {
+    map.setView(latlngs[0], Math.min(maxZoom, 15), { animate });
+    return;
+  }
+  map.fitBounds(b, { paddingTopLeft: tl, paddingBottomRight: br, maxZoom, animate });
+}
+
+// ---------------------------------------------------------------- main screen & panel
+
+function enterMain(recentre = false) {
+  showScreen('screen-main');
+  if (!map) initMap();
+  setTimeout(() => {
+    map.invalidateSize();
+    if (recentre || !state.mapCentred) {
+      map.setView([state.user.home.lat, state.user.home.lon], 14, { animate: false });
+      state.mapCentred = true;
+    }
+  }, 0);
+  setView('people');
+}
+
+function setView(view, { pop = false } = {}) {
+  state.view = view;
+  const panel = $('#panel');
+  panel.classList.remove('away', 'mini', 'tall', 'half');
+  if (view === 'searching') panel.classList.add('away');
+  if (view === 'group' && isMobile()) panel.classList.add('half');
+  anim?.canvas.classList.toggle('dim', ['group', 'place', 'share'].includes(view));
+  if (pop) { panel.classList.remove('pop'); void panel.offsetWidth; panel.classList.add('pop'); }
+  render();
+}
+
+function render() {
+  const body = $('#panel-body');
+  const views = { people: renderPeople, results: renderResults, group: renderGroup, place: renderPlace, share: renderShare };
+  if (views[state.view]) {
+    body.innerHTML = views[state.view]();
+    afterRender[state.view]?.();
+    body.scrollTop = 0;
+  }
+  drawPeople();
+}
+
+const afterRender = {};
+
+// ------------------------------------------------ people view
+
+function renderPeople() {
+  const all = everyone();
+  const active = all.filter((p) => p.active).length;
+  const rows = all.map((p) => {
+    const editing = state.editingId === p.id;
+    return `<li class="person${p.active ? '' : ' inactive'}" data-id="${esc(p.id)}">
+      <div class="avatar" style="background:${p.color};color:${p.color}"><span>${esc(initial(p.name))}</span></div>
+      <div class="person-main" data-action="focus">
+        <div class="person-name">${esc(p.isHome ? `You${state.user.name ? ` (${state.user.name})` : ''}` : p.name)}</div>
+        <div class="person-addr" title="${esc(p.address)}">${esc(p.isHome ? `Home · ${shortAddr(p.address)}` : (p.nickname ? shortAddr(p.address) : p.address))}</div>
+        ${editing ? `<form class="edit-inline" data-action="save-nick"><input name="nick" value="${esc(p.nickname || '')}" maxlength="60" placeholder="Nickname"><button class="btn btn-sm btn-primary" style="margin:0">Save</button></form>` : ''}
+      </div>
+      <div class="person-actions">
+        ${p.isHome
+          ? '<button class="icon-btn" data-action="edit-home" title="Change home address" aria-label="Change home address">✎</button>'
+          : `<button class="icon-btn" data-action="edit" title="Edit nickname" aria-label="Edit nickname">✎</button>
+             <button class="icon-btn" data-action="delete" title="Remove" aria-label="Remove address">🗑</button>
+             <label class="switch" title="${p.active ? 'Included' : 'Not included'} in this search">
+               <input type="checkbox" data-action="toggle" ${p.active ? 'checked' : ''} aria-label="Include ${esc(p.name)}"><span></span></label>`}
+      </div>
+    </li>`;
+  }).join('');
+  return `
+    <div class="panel-title"><h2>Who's coming?</h2><span class="muted small">${active} of ${all.length} included</span></div>
+    <ul class="people">${rows}</ul>
+    <div class="add-box">
+      <div class="search" id="add-search">
+        <input type="search" placeholder="Add a friend's address…" autocomplete="off" aria-label="Friend's address">
+        <ul class="suggestions" role="listbox" hidden></ul>
+      </div>
+      <div class="add-row">
+        <input id="add-nick" maxlength="60" placeholder="Nickname (optional) — e.g. Sam" aria-label="Nickname">
+      </div>
+      <p class="hint">Tip: you can also tap anywhere on the map to add that spot, and drag pins to fine-tune.</p>
+    </div>
+    <div class="find-wrap">
+      <button class="btn btn-primary btn-block btn-lg" data-action="find" ${active < 2 ? 'disabled' : ''}>✨ Find places</button>
+      ${active < 2 ? '<p class="hint" style="text-align:center">Add at least one friend to find a meeting spot.</p>' : ''}
+    </div>`;
+}
+
+afterRender.people = () => {
+  attachSearch($('#add-search'), {
+    near: () => state.user.home,
+    onPick: (r) => addPlace({ ...r, nickname: $('#add-nick').value }),
+  });
+  const nick = $('.edit-inline input');
+  if (nick) { nick.focus(); nick.select(); }
+};
+
+async function addPlace(loc) {
+  try {
+    const { place } = await api.addPlace({ address: loc.address, lat: loc.lat, lon: loc.lon, nickname: loc.nickname || '' });
+    state.places.push(place);
+    render();
+    toast(`Added ${place.nickname || shortAddr(place.address)}`);
+    fitTo(activePeople().map((p) => [p.lat, p.lon]), { maxZoom: 15 });
+  } catch (err) { toast(err.message, { error: true }); }
+}
+
+async function deletePlace(id) {
+  const idx = state.places.findIndex((p) => p.id === id);
+  const place = state.places[idx];
+  if (!place) return;
+  state.places.splice(idx, 1);
+  render();
+  try {
+    await api.deletePlace(id);
+    toast(`Removed ${place.nickname || shortAddr(place.address)}`, {
+      action: 'Undo',
+      onAction: async () => {
+        const { place: restored } = await api.addPlace(place);
+        state.places.splice(idx, 0, restored);
+        render();
+      },
+    });
+  } catch (err) {
+    state.places.splice(idx, 0, place);
+    render();
+    toast(err.message, { error: true });
+  }
+}
+
+async function patchPlace(id, patch) {
+  const p = state.places.find((x) => x.id === id);
+  const before = { ...p };
+  Object.assign(p, patch);
+  render();
+  try { await api.updatePlace(id, patch); }
+  catch (err) { Object.assign(p, before); render(); toast(err.message, { error: true }); }
+}
+
+// ------------------------------------------------ search flow
+
+function setStatus(text, { skip = false, spinner = true, cancel = true } = {}) {
+  const chip = $('#search-status');
+  chip.hidden = !text;
+  if (!text) return;
+  $('.status-text', chip).textContent = text;
+  $('.spinner', chip).hidden = !spinner;
+  $('#btn-skip').hidden = !skip;
+  $('#btn-cancel-search').hidden = !cancel;
+  $('#btn-cancel-search').textContent = spinner ? 'Cancel' : 'Close';
+}
+
+function clearSearchVisuals() {
+  anim?.destroy();
+  anim = null;
+  resultLayer.clearLayers();
+  poiLayer.clearLayers();
+}
+
+function cancelSearch() {
+  searchAbort?.abort();
+  searchAbort = null;
+  clearSearchVisuals();
+  setStatus('');
+  state.search = null;
+  setView('people');
+  fitTo(activePeople().map((p) => [p.lat, p.lon]), { maxZoom: 15 });
+}
+
+async function findPlaces({ replay = false } = {}) {
+  const prev = replay ? state.search : null;
+  const people = prev ? prev.people : activePeople();
+  if (people.length < 2) return;
+  searchAbort?.abort();
+  const ctrl = new AbortController();
+  searchAbort = ctrl;
+  clearSearchVisuals();
+  setView('searching');
+  fitTo(people.map((p) => [p.lat, p.lon]), { maxZoom: 16, animate: false });
+
+  try {
+    let net, solution;
+    if (prev) {
+      net = { graph: prev.graph, source: prev.source, reason: prev.reason };
+      solution = prev.solution;
+    } else {
+      setStatus('Downloading streets…');
+      net = await loadNetwork(people, { signal: ctrl.signal, onStatus: (s) => setStatus(s) });
+      if (ctrl.signal.aborted) return;
+      setStatus('Working out routes…');
+      await new Promise((r) => setTimeout(r, 30));
+      solution = solveMeeting(net.graph, people, { mode: state.settings.mode });
+    }
+    if (ctrl.signal.aborted) return;
+
+    const search = state.search = {
+      people, graph: net.graph, solution, source: net.source, reason: net.reason,
+      pois: prev?.pois || null, grouped: prev?.grouped || null, radius: prev?.radius || null, tab: prev?.tab || null,
+      group: null, place: null, area: prev?.area || null, poiError: prev?.poiError || null,
+      poiDist: prev?.poiDist || new Map(), sort: prev?.sort,
+    };
+
+    // Start fetching places and the area name while routes animate.
+    const poisPromise = prev?.pois ? Promise.resolve() : loadPois(search, ctrl.signal);
+    if (!search.area) {
+      reverseGeocode(solution.meet.lat, solution.meet.lon, { signal: ctrl.signal })
+        .then((r) => { search.area = r.address; if (state.view === 'results') render(); })
+        .catch(() => {});
+    }
+
+    anim = new GrowthAnimation(map, net.graph, solution, people.map((p) => p.color));
+    setStatus('Routes branching out…', { skip: true });
+    const done = await anim.play({
+      duration: ANIM_MS[state.settings.speed] || ANIM_MS.normal,
+      onProgress: (r) => setStatus(`Routes branching out · ${fmtDist(r)} from each address`, { skip: true }),
+    });
+    if (!done || ctrl.signal.aborted) return;
+
+    L.marker([solution.meet.lat, solution.meet.lon], {
+      icon: L.divIcon({ className: '', html: '<div class="meet-pin"></div>', iconSize: [26, 26], iconAnchor: [13, 13] }),
+      zIndexOffset: 1000,
+    }).bindTooltip('Meeting point', { permanent: true, direction: 'top', className: 'label', offset: [0, -14] }).addTo(resultLayer);
+
+    setStatus('You meet here! Finding places nearby…');
+    await poisPromise;
+    if (ctrl.signal.aborted) return;
+    setStatus('');
+    setView('results', { pop: true });
+    fitTo([...people.map((p) => [p.lat, p.lon]), [solution.meet.lat, solution.meet.lon]], { maxZoom: 16 });
+  } catch (err) {
+    if (ctrl.signal.aborted) return;
+    console.error(err);
+    clearSearchVisuals();
+    setStatus('');
+    setView('people');
+    toast(err.message || 'Something went wrong', { error: true });
+  }
+}
+
+async function loadPois(search, signal, radius) {
+  search.poiError = null;
+  try {
+    const { pois, radius: used } = await findPois(search.solution.meet, { radius, signal });
+    search.pois = pois;
+    search.radius = used;
+    search.grouped = groupPois(pois);
+    search.tab = search.tab && search.grouped[search.tab].length ? search.tab
+      : (TABS.find((t) => search.grouped[t.id].length) || TABS[0]).id;
+  } catch (err) {
+    if (signal?.aborted) throw err;
+    search.pois = [];
+    search.grouped = groupPois([]);
+    search.radius = radius || 800;
+    search.tab = TABS[0].id;
+    search.poiError = 'Places could not be loaded right now.';
+  }
+}
+
+/** Road distances from every person to a POI (cached). */
+function distancesTo(poi) {
+  const s = state.search;
+  if (!s.poiDist.has(poi.id)) {
+    s.poiDist.set(poi.id, s.solution.people.map((person) => roadDistanceTo(s.graph, person, poi)));
+  }
+  return s.poiDist.get(poi.id);
+}
+
+// ------------------------------------------------ results view
+
+function renderResults() {
+  const s = state.search;
+  const { solution } = s;
+  const maxReach = Math.max(...solution.people.map((p) => p.reach), 1);
+  const travel = s.people.map((p, i) => {
+    const d = solution.people[i].reach;
+    return `<div class="travel"><span class="dot" style="background:${p.color}"></span>
+      <span><b>${esc(p.name)}</b> · ${fmtDist(d)}</span><span class="muted">≈ ${fmtTravel(d)}</span>
+      <span class="bar"><i style="width:${Math.max(4, (d / maxReach) * 100)}%;background:${p.color}"></i></span></div>`;
+  }).join('');
+
+  const total = s.pois.length;
+  const tabs = TABS.map((t) => {
+    const n = s.grouped[t.id].reduce((a, g) => a + g.items.length, 0);
+    return `<button class="tab${t.id === s.tab ? ' active' : ''}" data-action="tab" data-tab="${t.id}" ${n ? '' : 'disabled'}>
+      <span>${t.icon}</span>${t.label}<span class="count">${n}</span></button>`;
+  }).join('');
+
+  const groups = s.grouped[s.tab] || [];
+  const tabMeta = TABS.find((t) => t.id === s.tab);
+  const tabCount = groups.reduce((a, g) => a + g.items.length, 0);
+  const grid = groups.length
+    ? `<div class="groups">
+        ${groups.length > 1 ? `<button class="group-btn all" data-action="group" data-group="*"><span>All ${esc(tabMeta.label.toLowerCase())}</span><span class="n">${tabCount}</span></button>` : ''}
+        ${groups.map((g) => `<button class="group-btn" data-action="group" data-group="${esc(g.group)}"><span>${esc(g.group)}</span><span class="n">${g.items.length}</span></button>`).join('')}
+      </div>`
+    : `<div class="empty"><span class="big">🧭</span>${s.poiError ? esc(s.poiError) : 'Nothing found nearby.'}<br>Try a wider search radius.</div>`;
+
+  const radiusChips = RADII.map((r) => `<button class="chip${r === s.radius ? ' active' : ''}" data-action="radius" data-r="${r}">${fmtDist(r)}</button>`).join('');
+
+  return `
+    <div class="result-head">
+      <div class="meet-badge">📍</div>
+      <div>
+        <div class="eyebrow">${state.settings.mode === 'fair' ? 'Fairest meeting point' : 'Least total travel'}</div>
+        <h2>${esc(s.area ? shortAddr(s.area) : 'Your meeting point')}</h2>
+        <div class="muted small">${total} place${total === 1 ? '' : 's'} within ${fmtDist(s.radius)}</div>
+      </div>
+    </div>
+    <div class="travel-grid">${travel}</div>
+    ${s.source === 'synthetic' ? `<div class="notice">ℹ️ ${esc(s.reason)} Distances are estimates.</div>` : ''}
+    <div class="tabs" role="tablist">${tabs}</div>
+    ${grid}
+    <div class="radius-row"><span>Search within</span><div class="chips">${radiusChips}</div></div>
+    <div class="row-actions">
+      <button class="btn btn-ghost" data-action="surprise" ${total ? '' : 'disabled'}>🎲 Surprise me</button>
+      <button class="btn btn-ghost" data-action="replay">↻ Replay</button>
+      <button class="btn btn-ghost" data-action="edit-people">✎ Edit people</button>
+    </div>`;
+}
+
+// ------------------------------------------------ group (category) view
+
+function groupItems() {
+  const s = state.search;
+  const groups = s.grouped[s.tab] || [];
+  const items = s.group === '*' ? groups.flatMap((g) => g.items) : (groups.find((g) => g.group === s.group)?.items || []);
+  const enriched = items.map((p) => {
+    const ds = distancesTo(p);
+    return { ...p, ds, worst: Math.max(...ds) };
+  });
+  if (s.sort === 'fair') enriched.sort((a, b) => a.worst - b.worst);
+  else enriched.sort((a, b) => a.fromCenter - b.fromCenter);
+  return enriched;
+}
+
+function renderGroup() {
+  const s = state.search;
+  const items = groupItems();
+  const title = s.group === '*' ? `All ${TABS.find((t) => t.id === s.tab).label.toLowerCase()}` : s.group;
+  drawPoiMarkers(items);
+  return `
+    <button class="back" data-action="back-results">‹ All categories</button>
+    <div class="panel-title"><h2>${esc(title)}</h2><span class="muted small">${items.length} place${items.length === 1 ? '' : 's'}</span></div>
+    <div class="sortbar">
+      <button class="chip${s.sort !== 'fair' ? ' active' : ''}" data-action="sort" data-sort="near">Closest to meeting point</button>
+      <button class="chip${s.sort === 'fair' ? ' active' : ''}" data-action="sort" data-sort="fair">Fairest for everyone</button>
+    </div>
+    <ul class="poi-list">
+      ${items.map((p, i) => `<li class="poi" data-action="place" data-id="${esc(p.id)}" data-i="${i}">
+        <span class="poi-num">${i + 1}</span>
+        <div><div class="poi-name">${esc(p.name)}</div>
+          <div class="poi-meta">${esc([s.group === '*' ? p.group : '', p.address].filter(Boolean).join(' · ') || 'Near the meeting point')}</div></div>
+        <div class="poi-dist">${fmtDist(p.fromCenter)} away<br><span title="Longest trip for anyone">max ${fmtTime(travelMinutes(p.worst))}</span></div>
+      </li>`).join('')}
+    </ul>`;
+}
+
+afterRender.group = () => {
+  for (const li of $$('.poi')) {
+    li.addEventListener('mouseenter', () => highlightPoi(li.dataset.id, true));
+    li.addEventListener('mouseleave', () => highlightPoi(li.dataset.id, false));
+  }
+};
+
+const poiMarkers = new Map();
+function drawPoiMarkers(items) {
+  poiLayer.clearLayers();
+  poiMarkers.clear();
+  items.forEach((p, i) => {
+    const m = L.marker([p.lat, p.lon], {
+      icon: L.divIcon({ className: '', html: `<div class="poi-pin" data-poi="${esc(p.id)}">${i + 1}</div>`, iconSize: [28, 28], iconAnchor: [14, 14] }),
+      riseOnHover: true,
+    }).bindTooltip(esc(p.name), { permanent: items.length <= 25, direction: 'right', className: 'label', offset: [14, 0] })
+      .addTo(poiLayer);
+    m.on('click', () => openPlace(p.id));
+    m.on('mouseover', () => $(`.poi[data-id="${CSS.escape(p.id)}"]`)?.classList.add('hl'));
+    m.on('mouseout', () => $(`.poi[data-id="${CSS.escape(p.id)}"]`)?.classList.remove('hl'));
+    poiMarkers.set(p.id, m);
+  });
+  const s = state.search;
+  requestAnimationFrame(() => fitTo([...items.map((p) => [p.lat, p.lon]), [s.solution.meet.lat, s.solution.meet.lon]], { maxZoom: 17 }));
+}
+
+function highlightPoi(id, on) {
+  const m = poiMarkers.get(id);
+  const el = m?.getElement()?.querySelector('.poi-pin');
+  el?.classList.toggle('hl', on);
+  if (on) m?.setZIndexOffset(1000); else m?.setZIndexOffset(0);
+}
+
+function openPlace(id) {
+  const s = state.search;
+  s.place = s.pois.find((p) => p.id === id);
+  if (!s.place) return;
+  setView('place');
+}
+
+// ------------------------------------------------ place detail view
+
+function renderPlace() {
+  const s = state.search;
+  const p = s.place;
+  const ds = distancesTo(p);
+  // Show only this place, plus dashed lines from everyone.
+  poiLayer.clearLayers();
+  L.marker([p.lat, p.lon], {
+    icon: L.divIcon({ className: '', html: '<div class="poi-pin hl">★</div>', iconSize: [28, 28], iconAnchor: [14, 14] }),
+    zIndexOffset: 1200,
+  }).bindTooltip(esc(p.name), { permanent: true, direction: 'right', className: 'label', offset: [14, 0] }).addTo(poiLayer);
+  s.people.forEach((person) => {
+    L.polyline([[person.lat, person.lon], [p.lat, p.lon]], { color: person.color, weight: 3, opacity: 0.75, dashArray: '6 8' }).addTo(poiLayer);
+  });
+  requestAnimationFrame(() => fitTo([...s.people.map((x) => [x.lat, x.lon]), [p.lat, p.lon]], { maxZoom: 16 }));
+
+  const pills = [p.group, p.cuisine && p.cuisine.toLowerCase() !== p.group.toLowerCase() ? p.cuisine.replace(/_/g, ' ').replace(/;/g, ', ') : '',
+    p.outdoor ? 'Outdoor seating' : '', p.vegan ? 'Vegan options' : p.vegetarian ? 'Vegetarian options' : '',
+    p.wheelchair === 'yes' ? '♿ Accessible' : ''].filter(Boolean);
+  const links = mapLinks(p);
+  const website = p.website && /^https?:\/\//i.test(p.website) ? p.website : p.website ? `https://${p.website}` : '';
+  return `
+    <button class="back" data-action="back-group">‹ ${esc(s.group === '*' ? 'Back to list' : s.group)}</button>
+    <h2>${esc(p.name)}</h2>
+    <div class="tagline-row">${pills.map((x) => `<span class="pill">${esc(x)}</span>`).join('')}</div>
+    <ul class="detail-list">
+      <li><span>📍</span><span>${esc(p.address || 'Address not listed')} · ${fmtDist(p.fromCenter)} from the meeting point</span></li>
+      ${p.hours ? `<li><span>🕒</span><span>${esc(p.hours)}</span></li>` : ''}
+      ${p.phone ? `<li><span>📞</span><a href="tel:${esc(p.phone.replace(/\s/g, ''))}">${esc(p.phone)}</a></li>` : ''}
+      ${website ? `<li><span>🌐</span><a href="${esc(website)}" target="_blank" rel="noopener">${esc(website.replace(/^https?:\/\//, '').replace(/\/$/, ''))}</a></li>` : ''}
+    </ul>
+    <h3 style="margin-top:14px">Getting there</h3>
+    <div class="travel-grid">
+      ${s.people.map((person, i) => `<div class="travel"><span class="dot" style="background:${person.color}"></span>
+        <span><b>${esc(person.name)}</b> · ${fmtDist(ds[i])}</span><span class="muted">≈ ${fmtTravel(ds[i])}</span></div>`).join('')}
+    </div>
+    <button class="btn btn-primary btn-block btn-lg" data-action="choose">📤 Send location</button>
+    <div class="row-actions">
+    </div>`;
+}
+
+// ------------------------------------------------ share view
+
+function shareContext() {
+  const s = state.search;
+  return s?.place || state.sharePlace;
+}
+
+function renderShare() {
+  const p = shareContext();
+  const when = state.shareWhen ? new Date(state.shareWhen) : null;
+  const text = state.shareText ?? shareText(p, { when });
+  state.shareText = text;
+  const msg = messagingLinks(text, `Meet up at ${p.name}?`);
+  const links = mapLinks(p);
+  const canShare = !!navigator.share;
+  return `
+    <button class="back" data-action="${state.search?.place ? 'back-place' : 'back-people'}">‹ Back</button>
+    <div class="eyebrow">Send location</div>
+    <h2>${esc(p.name)}</h2>
+    <p class="muted small" style="margin:4px 0 12px">${esc(p.address || `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`)}</p>
+    <label class="field"><span>When? <em>(optional)</em></span><input type="datetime-local" id="share-when" value="${esc(state.shareWhen || '')}"></label>
+    <label class="field"><span>Message</span><textarea id="share-text">${esc(text)}</textarea></label>
+    <div class="share-grid">
+      ${canShare ? '<button class="share-btn" data-action="native-share"><span class="ico">📤</span>Share…</button>' : ''}
+      <a class="share-btn" href="${msg.whatsapp}" target="_blank" rel="noopener" data-share><span class="ico">💬</span>WhatsApp</a>
+      <a class="share-btn" href="${msg.sms}" data-share><span class="ico">✉️</span>Messages</a>
+      <a class="share-btn" href="${msg.email}" data-share><span class="ico">📧</span>Email</a>
+      <a class="share-btn" href="${msg.telegram}" target="_blank" rel="noopener" data-share><span class="ico">✈️</span>Telegram</a>
+      <button class="share-btn" data-action="copy"><span class="ico">📋</span>Copy</button>
+    </div>`;
+}
+
+afterRender.share = () => {
+  const ta = $('#share-text');
+  ta.addEventListener('input', () => { state.shareText = ta.value; updateShareLinks(); });
+  $('#share-when').addEventListener('change', (e) => {
+    state.shareWhen = e.target.value;
+    state.shareText = shareText(shareContext(), { when: e.target.value ? new Date(e.target.value) : null });
+    ta.value = state.shareText;
+    updateShareLinks();
+  });
+};
+
+function updateShareLinks() {
+  const p = shareContext();
+  const msg = messagingLinks(state.shareText, `Meet up at ${p.name}?`);
+  const map_ = { WhatsApp: msg.whatsapp, Messages: msg.sms, Email: msg.email, Telegram: msg.telegram };
+  for (const a of $$('[data-share]')) {
+    const label = a.textContent.trim();
+    if (map_[label]) a.href = map_[label];
+  }
+}
+
+async function enterShare() {
+  const s = state.search;
+  state.shareText = null;
+  state.shareWhen = '';
+  setView('share');
+  try {
+    const { entry } = await api.addHistory({
+      name: s.place.name, category: s.place.group, address: s.place.address,
+      lat: s.place.lat, lon: s.place.lon, people: s.people.map((p) => p.name),
+    });
+    state.user.history = [entry, ...(state.user.history || [])];
+    renderHistory();
+  } catch { /* history is a nice-to-have */ }
+}
+
+// ------------------------------------------------ panel interactions
+
+function initPanel() {
+  const body = $('#panel-body');
+  body.addEventListener('click', async (e) => {
+    const el = e.target.closest('[data-action]');
+    if (!el) return;
+    const action = el.dataset.action;
+    const li = el.closest('[data-id]');
+    const id = li?.dataset.id;
+    const s = state.search;
+    switch (action) {
+      case 'find': findPlaces(); break;
+      case 'focus': {
+        const p = everyone().find((x) => x.id === id);
+        if (p) map.flyTo([p.lat, p.lon], Math.max(map.getZoom(), 15), { duration: 0.6 });
+        break;
+      }
+      case 'edit': state.editingId = state.editingId === id ? null : id; render(); break;
+      case 'edit-home': showHomeScreen(true); break;
+      case 'delete': deletePlace(id); break;
+      case 'toggle': patchPlace(id, { active: el.checked }); break;
+      case 'tab': s.tab = el.dataset.tab; render(); break;
+      case 'group': s.group = el.dataset.group; s.sort = s.sort || 'near'; setView('group'); break;
+      case 'radius': {
+        const r = Number(el.dataset.r);
+        el.textContent = '…';
+        const ctrl = new AbortController();
+        searchAbort = ctrl;
+        await loadPois(s, ctrl.signal, r).catch(() => {});
+        s.poiDist.clear();
+        render();
+        break;
+      }
+      case 'surprise': {
+        const pool = s.pois;
+        const pick = pool[Math.floor(Math.random() * pool.length)];
+        s.tab = pick.tab; s.group = pick.group; s.place = pick;
+        setView('place');
+        toast(`How about ${pick.name}?`);
+        break;
+      }
+      case 'replay': findPlaces({ replay: true }); break;
+      case 'edit-people': cancelSearch(); break;
+      case 'back-results':
+        poiLayer.clearLayers();
+        setView('results');
+        fitTo([...s.people.map((p) => [p.lat, p.lon]), [s.solution.meet.lat, s.solution.meet.lon]], { maxZoom: 16 });
+        break;
+      case 'sort': s.sort = el.dataset.sort; render(); break;
+      case 'place': openPlace(id); break;
+      case 'back-group': setView('group'); break;
+      case 'choose': enterShare(); break;
+      case 'back-place': setView('place'); break;
+      case 'back-people': state.sharePlace = null; poiLayer.clearLayers(); setView('people'); break;
+      case 'native-share': {
+        const ok = await nativeShare(shareContext(), state.shareText);
+        if (!ok && await copyText(state.shareText)) toast('Copied to clipboard');
+        break;
+      }
+      case 'copy': if (await copyText(state.shareText)) toast('Copied — paste it to your group chat'); break;
+      case 'calendar': {
+        const p = shareContext();
+        const start = state.shareWhen ? new Date(state.shareWhen) : nextHalfHour();
+        download(`meetup-${p.name.replace(/[^\w]+/g, '-').toLowerCase()}.ics`, calendarInvite(p, start));
+        if (!state.shareWhen) toast('Invite set for the next half hour — edit it in your calendar');
+        break;
+      }
+      default: break;
+    }
+  });
+  body.addEventListener('submit', (e) => {
+    const form = e.target.closest('[data-action="save-nick"]');
+    if (!form) return;
+    e.preventDefault();
+    const id = form.closest('[data-id]').dataset.id;
+    state.editingId = null;
+    patchPlace(id, { nickname: form.nick.value });
+  });
+
+  $('#panel-handle').onclick = () => {
+    const panel = $('#panel');
+    if (panel.classList.contains('mini')) panel.classList.remove('mini');
+    else if (panel.classList.contains('half')) { panel.classList.remove('half'); panel.classList.add('tall'); }
+    else panel.classList.add('mini');
+  };
+  $('#btn-skip').onclick = () => anim?.skip();
+  $('#btn-cancel-search').onclick = cancelSearch;
+  $('#btn-recenter').onclick = () => {
+    const pts = state.search ? state.search.people : activePeople();
+    if (state.view === 'people' && pts.length < 2) map.flyTo([state.user.home.lat, state.user.home.lon], 15, { duration: 0.6 });
+    else fitTo(pts.map((p) => [p.lat, p.lon]), { maxZoom: 16 });
+  };
+}
+
+function nextHalfHour() {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() < 30 ? 30 : 60, 0, 0);
+  return d;
+}
+
+// ---------------------------------------------------------------- drawer / settings
+
+function applyTheme() {
+  const t = state.settings.theme;
+  if (t === 'auto') {
+    document.documentElement.removeAttribute('data-theme');
+    document.documentElement.toggleAttribute('data-dark-tiles', window.matchMedia('(prefers-color-scheme: dark)').matches);
+  } else {
+    document.documentElement.setAttribute('data-theme', t);
+    document.documentElement.removeAttribute('data-dark-tiles');
+  }
+}
+
+function syncSettingsUI() {
+  for (const [id, key] of [['#set-mode', 'mode'], ['#set-travel', 'travel'], ['#set-speed', 'speed'], ['#set-theme', 'theme']]) {
+    for (const b of $$('.seg', $(id))) b.classList.toggle('active', b.dataset.value === state.settings[key]);
+  }
+  $('#mode-hint').textContent = state.settings.mode === 'fair'
+    ? 'Picks the spot where the longest trip is as short as possible — nobody gets stuck with a trek.'
+    : 'Picks the spot where everyone’s trips add up to the least travel overall.';
+}
+
+function renderHistory() {
+  const list = $('#history-list');
+  const h = state.user?.history || [];
+  list.innerHTML = h.length
+    ? h.map((x) => `<li data-hid="${esc(x.id)}"><div><div class="h-name">${esc(x.name)}</div>
+        <div class="h-sub">${esc([x.category, new Date(x.at).toLocaleDateString()].filter(Boolean).join(' · '))}${x.people?.length ? ` · ${esc(x.people.join(', '))}` : ''}</div></div>
+        <button class="icon-btn" data-del="${esc(x.id)}" aria-label="Remove">✕</button></li>`).join('')
+    : '<li class="muted small" style="background:none;cursor:default;padding:0">Places you send will show up here.</li>';
+}
+
+function openDrawer(open) {
+  $('#drawer').hidden = !open;
+  $('#drawer-backdrop').hidden = !open;
+  if (open) {
+    $('#drawer-name').textContent = state.user.name || 'Your account';
+    $('#drawer-email').textContent = state.user.email;
+    $('#drawer-home').textContent = state.user.home?.address || 'Not set';
+    syncSettingsUI();
+    renderHistory();
+  }
+}
+
+async function saveSettings(patch) {
+  const prevMode = state.settings.mode;
+  state.settings = { ...state.settings, ...patch };
+  applyTheme();
+  syncSettingsUI();
+  if (state.search && ['results', 'group', 'place'].includes(state.view)) {
+    if (patch.mode && patch.mode !== prevMode) toast('Meeting rule changed — run Find places again to use it', { action: 'Run now', onAction: () => { openDrawer(false); findPlaces(); } });
+    render();
+  }
+  try { await api.updateMe({ settings: state.settings }); } catch { /* keep local */ }
+}
+
+function initDrawer() {
+  $('#btn-menu').onclick = () => openDrawer(true);
+  $('#drawer-close').onclick = () => openDrawer(false);
+  $('#drawer-backdrop').onclick = () => openDrawer(false);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#drawer').hidden) openDrawer(false); });
+  for (const [id, key] of [['#set-mode', 'mode'], ['#set-travel', 'travel'], ['#set-speed', 'speed'], ['#set-theme', 'theme']]) {
+    $(id).addEventListener('click', (e) => {
+      const b = e.target.closest('.seg');
+      if (b) saveSettings({ [key]: b.dataset.value });
+    });
+  }
+  $('#btn-edit-home').onclick = () => { openDrawer(false); showHomeScreen(true); };
+  $('#btn-logout').onclick = async () => {
+    try { await api.logout(); } catch { /* ignore */ }
+    openDrawer(false);
+    searchAbort?.abort();
+    clearSearchVisuals();
+    setStatus('');
+    Object.assign(state, { user: null, places: [], search: null, mapCentred: false, view: 'people' });
+    showScreen('screen-auth');
+    setAuthMode('login');
+  };
+  $('#history-list').addEventListener('click', async (e) => {
+    const del = e.target.closest('[data-del]');
+    if (del) {
+      e.stopPropagation();
+      const id = del.dataset.del;
+      state.user.history = state.user.history.filter((h) => h.id !== id);
+      renderHistory();
+      api.deleteHistory(id).catch(() => {});
+      return;
+    }
+    const li = e.target.closest('[data-hid]');
+    if (!li) return;
+    const h = state.user.history.find((x) => x.id === li.dataset.hid);
+    openDrawer(false);
+    searchAbort?.abort();
+    clearSearchVisuals();
+    state.search = null;
+    state.sharePlace = h;
+    state.shareText = null;
+    state.shareWhen = '';
+    L.marker([h.lat, h.lon], {
+      icon: L.divIcon({ className: '', html: '<div class="poi-pin hl">★</div>', iconSize: [28, 28], iconAnchor: [14, 14] }),
+    }).bindTooltip(esc(h.name), { permanent: true, direction: 'right', className: 'label', offset: [14, 0] }).addTo(poiLayer);
+    setView('share');
+    map.flyTo([h.lat, h.lon], 16, { duration: 0.8 });
+  });
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+}
+
+// ---------------------------------------------------------------- boot
+
+async function boot() {
+  initAuth();
+  initHome();
+  initPanel();
+  initDrawer();
+  window.addEventListener('resize', () => map?.invalidateSize());
+  try {
+    const { user } = await api.me();
+    if (!user) throw new Error('signed out');
+    onSignedIn(user);
+  } catch {
+    showScreen('screen-auth');
+    setAuthMode('login');
+  }
+}
+
+window.__midway = { onSignedIn };
+boot();
+
+__m["app"] = {  };
+})();
+document.getElementById('demo-login').addEventListener('click', async (e) => {
+  e.currentTarget.disabled = true;
+  try { const { user } = await __m.demo.sampleLogin(); window.__midway.onSignedIn(user); }
+  finally { e.currentTarget.disabled = false; }
+});
+
+</script>

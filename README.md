@@ -19,6 +19,10 @@ npm start            # http://localhost:3000
 
 Requires Node 18+. The only dependency is Leaflet, which is served from `node_modules`. Data is stored in `data/db.json`; set `DATA_FILE` to change where. Set `PORT` to change the port.
 
+## Test version (no server, no internet)
+
+`node scripts/build-test.mjs` builds `dist/midway-test.html`, a single page that runs the same app code in a made-up town called Port Verity. The town has generated streets, a river with bridges, parks and about 380 places. Accounts and addresses are saved in the browser. Open the page and press **Try it with a sample group** to sign in to a ready-made account with three friends. The test-mode stand-ins live in `public/js/demo.js`.
+
 ## Quality-of-life extras
 
 - Toggle friends in or out of a search without deleting them. Rename them inline, and undo a delete.
