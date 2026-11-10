@@ -64,13 +64,11 @@ export class GrowthAnimation {
     map.getContainer().appendChild(this.canvas);
     this.ctx = this.canvas.getContext('2d');
     this.resize = this.resize.bind(this);
-    this.redraw = () => this.draw();
-    this.hide = () => { this.canvas.style.opacity = '0'; };
-    this.show = () => { this.canvas.style.opacity = ''; this.draw(); };
+    this.redraw = () => { this.clearTransform(); this.draw(); };
+    this.onZoomAnim = (e) => this.followZoom(e.center, e.zoom);
     map.on('resize', this.resize);
-    map.on('move', this.redraw);
-    map.on('zoomstart', this.hide);
-    map.on('zoomend', this.show);
+    map.on('move zoom viewreset', this.redraw);
+    map.on('zoomanim', this.onZoomAnim);
     this.resize();
   }
 
@@ -87,6 +85,27 @@ export class GrowthAnimation {
     this.wash.width = size.x;
     this.wash.height = size.y;
     this.draw();
+  }
+
+  /** During an animated zoom, transform the current picture to where the map is heading. */
+  followZoom(center, zoom) {
+    const map = this.map;
+    const scale = map.getZoomScale(zoom, map.getZoom());
+    const half = map.getSize().divideBy(2);
+    const from = map.getPixelBounds().min;                     // current top-left, world px
+    const to = map.project(center, zoom).subtract(half);         // final top-left, world px at new zoom
+    // Same timing as Leaflet's own zoom animation, so it scales with the map
+    // instead of blinking out while zooming.
+    this.canvas.classList.add('zooming');
+    L.DomUtil.setTransform(this.canvas, from.multiplyBy(scale).subtract(to), scale);
+    this.zooming = true;
+  }
+
+  clearTransform() {
+    if (!this.zooming) return;
+    this.zooming = false;
+    this.canvas.classList.remove('zooming');
+    this.canvas.style.transform = '';
   }
 
   /** Animate until all frontiers meet. Resolves true if completed, false if cancelled. */
@@ -214,9 +233,8 @@ export class GrowthAnimation {
     cancelAnimationFrame(this.raf);
     this.resolve?.(false);
     this.map.off('resize', this.resize);
-    this.map.off('move', this.redraw);
-    this.map.off('zoomstart', this.hide);
-    this.map.off('zoomend', this.show);
+    this.map.off('move zoom viewreset', this.redraw);
+    this.map.off('zoomanim', this.onZoomAnim);
     this.canvas.remove();
   }
 }

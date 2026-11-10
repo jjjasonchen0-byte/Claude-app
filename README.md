@@ -24,7 +24,7 @@ Requires Node 18+. The only dependency is Leaflet, which is served from `node_mo
 
 ## Test version (no server, no internet)
 
-`node scripts/build-test.mjs` builds `dist/meet-test.html`, a single page that runs the same app code in a made-up town called Port Verity. The town is about 22 × 16 km and randomly laid out: districts at different angles, curving streets, a tangled old town with diagonal lanes, suburbs with long blocks and dead ends, boulevards, a river with bridges, a bay, irregular lakes and parks, about 1,900 places, and street names that appear as you zoom in. It's drawn as map tiles, so panning, scroll-wheel zoom and pinch zoom behave like a normal map. Open the page and press **Try a sample group** to start with three friends already added. The test-mode stand-ins live in `public/js/demo.js`.
+`node scripts/build-test.mjs` builds `dist/meet-test.html`, a single page that runs the same app code on a made-up island about 220 × 170 km across. Its coastal city, Port Verity (about 22 × 16 km), has districts at different angles, curving streets, a tangled old town, suburbs with dead ends, boulevards, a river with bridges, lakes and parks. Around it are 13 market towns and about 30 villages with their own streets, winding country lanes, A-roads and motorways routed between the towns, forests, lakes and a second river. In total that's about 90,000 street corners and 3,100 places. Street, district, town and forest names appear as you zoom. It's drawn as map tiles, so panning, scroll-wheel zoom and pinch zoom behave like a normal map, and the island is built just after the page appears.
 
 ## Extras
 

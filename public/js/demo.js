@@ -10,9 +10,10 @@
 import { fromEdgeList, rng } from './network.js';
 import { parsePois } from './pois.js';
 import { haversine } from './geo.js';
+import { dijkstra } from './meet.js';
 
 const TOWN = 'Port Verity';
-const CENTER = { lat: 40.0, lon: -40.0 }; // fictional town in open sea
+const CENTER = { lat: 40.0, lon: -40.0 }; // a fictional island in the open Atlantic
 const M_LAT = 111320;
 const M_LON = 111320 * Math.cos((CENTER.lat * Math.PI) / 180);
 const toLL = (x, y) => ({ lat: CENTER.lat + y / M_LAT, lon: CENTER.lon + x / M_LON });
@@ -41,7 +42,9 @@ function buildTown() {
   const rand = rng(20261110);
   const cols = Math.round(W / S), rows = Math.round(H / S);
   const riverY = (x) => 1100 * Math.sin(x / 4200 + 0.3) + 430 * Math.sin(x / 1500 + 1.1) + 170 * Math.sin(x / 610) + 55 * Math.sin(x / 240 + 2);
-  const coastY = (x) => -H / 2 + 2300 + 650 * Math.sin(x / 3000 + 1) + 300 * Math.sin(x / 1100 + 2) + 120 * Math.sin(x / 430 + 0.5) + 45 * Math.sin(x / 170);
+  const far = (x) => { const t = Math.min(1, Math.max(0, (Math.abs(x) - 16000) / 24000)); return t * t * (3 - 2 * t); };
+  const coastY = (x) => -H / 2 + 2300 + 650 * Math.sin(x / 3000 + 1) + 300 * Math.sin(x / 1100 + 2) + 120 * Math.sin(x / 430 + 0.5) + 45 * Math.sin(x / 170)
+    + far(x) * (4200 * Math.sin(x / 19000 + 0.7) + 1800 * Math.sin(x / 7300 + 1.9) - 1500);
 
   // Irregular "blob" outlines for parks and lakes: an ellipse with wobbles.
   const blobR = (e, ang) => 1 + 0.16 * Math.sin(3 * ang + e.p1) + 0.09 * Math.sin(5 * ang + e.p2) + 0.05 * Math.sin(8 * ang + e.p3);
@@ -185,7 +188,6 @@ function buildTown() {
 
   const lat = new Float64Array(n), lon = new Float64Array(n);
   for (let i = 0; i < n; i++) { const ll = toLL(X[i], Y[i]); lat[i] = ll.lat; lon[i] = ll.lon; }
-  const graph = fromEdgeList(lat, lon, A, B, false);
 
   // Addresses: every street corner gets a house number on a street it's on.
   const addresses = [];
@@ -207,11 +209,6 @@ function buildTown() {
     const ang = (j / m) * 2 * Math.PI, rr = blobR(e, ang) * k;
     return toLL(e.x + e.rx * rr * Math.cos(ang), e.y + e.ry * rr * Math.sin(ang));
   });
-  const river = [];
-  for (let x = -W / 2 - 6000; x <= W / 2 + 6000; x += 50) river.push(toLL(x, riverY(x)));
-  const sea = [];
-  for (let x = -W / 2 - 60000; x <= W / 2 + 60000; x += 150) sea.push(toLL(x, coastY(x)));
-  sea.push(toLL(W / 2 + 60000, -H / 2 - 60000), toLL(-W / 2 - 60000, -H / 2 - 60000));
 
   // Labels.
   const angle = (ax, ay, bx, by) => {
@@ -253,11 +250,11 @@ function buildTown() {
   // Generous pan limits so the map can sit above a half-height sheet on phones.
   const sw = toLL(-W / 2 - 6000, -H / 2 - 7000), ne = toLL(W / 2 + 6000, H / 2 + 5000);
   return {
-    graph, A, B, kind, ename, eflag, addresses, river, sea,
+    X, Y, A, B, kind, ename, eflag, addresses, riverY, coastY, blobR,
     lakes: lakes.map((l) => ({ ...l, ring: ring(l) })),
     parks: parks.map((p) => ({ name: p.name, center: toLL(p.x, p.y), ring: ring(p, 0.97) })),
     labels: {
-      town: [{ name: TOWN, ...toLL(0, H / 2 + 1100) }], bay: [bayLabel], hood: hoodLabels, street: streetLabels,
+      city: [{ name: TOWN, ...toLL(0, H / 2 + 1100) }], bay: [bayLabel], hood: hoodLabels, street: streetLabels,
       water: waterLabels.filter((l) => l !== bayLabel), park: parks.map((p) => ({ name: p.name, ...toLL(p.x, p.y) })),
     },
     bounds: [[sw.lat, sw.lon], [ne.lat, ne.lon]],
@@ -265,16 +262,341 @@ function buildTown() {
   };
 }
 
-const town = buildTown();
+// ---------------------------------------------------------------- the region around the city
 
-// Spatial index so "nearest address" stays fast in a big town.
-const CELL = 300;
-const addrIndex = new Map();
-for (const a of town.addresses) {
-  const k = `${Math.floor(a.x / CELL)},${Math.floor(a.y / CELL)}`;
-  if (!addrIndex.has(k)) addrIndex.set(k, []);
-  addrIndex.get(k).push(a);
+const RX0 = -110000, RX1 = 110000, RY0 = -40000, RY1 = 130000; // about 220 × 170 km
+const SETTLEMENT_NAMES = ['Ashcombe', 'Bramley', 'Calder', 'Dunmore', 'Elmstead', 'Fenwick', 'Glenhaven', 'Hartwell', 'Ivybridge', 'Kelso', 'Larkhill', 'Marston', 'Northam', 'Oakhurst', 'Pembury', 'Quenby', 'Redfield', 'Selsey', 'Thornbury', 'Upwood', 'Westerley', 'Yarnton', 'Alderley', 'Brockwell', 'Coldharbour', 'Downley', 'Eastleigh', 'Foxholes', 'Greystone', 'Hollins', 'Kingsmere', 'Littlecote', 'Millhaven', 'Netherby', 'Overton', 'Pinewood', 'Rushden', 'Stonebridge', 'Tilford', 'Wexcombe', 'Amberley', 'Burwell', 'Cranbrook', 'Ditchling', 'Easton'];
+const FOREST_NAMES = ['Ashdown Forest', 'Bracken Wood', 'Cold Ash Woods', 'Deepdene Forest', 'Elder Wood', 'Fernhill Forest', 'Gallows Wood', 'Hazelhurst', 'Ironwood', 'Kingswood', 'Long Copse', 'Moorland Forest', 'Nettlebed Wood', 'Oakhanger Woods'];
+const LAKE_NAMES = ['Lake Calder', 'Silver Mere', 'Swanwater', 'Long Water', 'Kestrel Mere', 'Blackwater', 'Linnet Lake', 'Stillwater', 'Moor Pool', 'Teal Lake', 'Glass Lake', 'Reedmere', 'Coot Pond', 'Otter Lake'];
+
+function buildRegion(city) {
+  const rand = rng(424242);
+  const { riverY, coastY, blobR } = city;
+  const xs = Array.from(city.X), ys = Array.from(city.Y);
+  const A = city.A.slice(), B = city.B.slice(), kind = city.kind.slice(), ename = city.ename.slice(), eflag = city.eflag.slice();
+  const addNode = (x, y) => { xs.push(x); ys.push(y); return xs.length - 1; };
+  const link = (a, b, k, name = '', flag = false) => { A.push(a); B.push(b); kind.push(k); ename.push(name); eflag.push(flag ? 1 : 0); };
+  const pick = (arr) => arr[Math.floor(rand() * arr.length)];
+
+  // A second river, the Ash, flows south into the Vere east of the city.
+  const ashX = (y) => 38000 + 3200 * Math.sin(y / 9000 + 0.4) + 1300 * Math.sin(y / 2700 + 1.3) + 400 * Math.sin(y / 900);
+  const inVere = (x, y) => Math.abs(y - riverY(x)) < 70;
+  const inAsh = (x, y) => y > riverY(x) && Math.abs(x - ashX(y)) < 55;
+  const blob = (e, x, y, k = 1) => {
+    const dx = (x - e.x) / e.rx, dy = (y - e.y) / e.ry;
+    if (dx > 1.4 * k || dx < -1.4 * k || dy > 1.4 * k || dy < -1.4 * k) return false;
+    return dx * dx + dy * dy < (blobR(e, Math.atan2(dy, dx)) * k) ** 2;
+  };
+  const wobble = (e) => Object.assign(e, { p1: rand() * 6.28, p2: rand() * 6.28, p3: rand() * 6.28 });
+  const inCityZone = (x, y, m = 0) => Math.abs(x) < W / 2 + m && y < H / 2 + m && y > -H / 2 - 4000;
+  const lakes = [];
+  // The region is an island: a rounded, wobbly outline, cut by the city's coast in the south.
+  const IC = { x: 0, y: 44000, ax: 108000, ay: 84000, p: 3.2 };
+  const ip = [rand() * 6.28, rand() * 6.28, rand() * 6.28, rand() * 6.28];
+  const edgeR = (phi) => 1 + 0.05 * Math.sin(3 * phi + ip[0]) + 0.035 * Math.sin(7 * phi + ip[1]) + 0.018 * Math.sin(13 * phi + ip[2]) + 0.008 * Math.sin(29 * phi + ip[3]);
+  const islandNorm = (x, y) => {
+    const u = (x - IC.x) / IC.ax, v = (y - IC.y) / IC.ay;
+    return [(Math.abs(u) ** IC.p + Math.abs(v) ** IC.p) ** (1 / IC.p), Math.atan2(v, u)];
+  };
+  const onIsland = (x, y, m = 0) => {
+    const [r, phi] = islandNorm(x, y);
+    return r < edgeR(phi) - m / IC.ay;
+  };
+  const isSea = (x, y) => y < coastY(x) || !onIsland(x, y);
+  const isRiver = (x, y) => inVere(x, y) || inAsh(x, y);
+  const isWater = (x, y) => isSea(x, y) || isRiver(x, y) || lakes.some((l) => blob(l, x, y));
+  const randLand = (m) => {
+    for (let t = 0; t < 200; t++) {
+      const x = RX0 + 4000 + rand() * (RX1 - RX0 - 8000), y = RY0 + rand() * (RY1 - RY0 - 4000);
+      if (y > coastY(x) + m && onIsland(x, y, m) && !isRiver(x, y) && !inCityZone(x, y, m)) return [x, y];
+    }
+    return null;
+  };
+
+  // Lakes and forests.
+  for (let t = 0; lakes.length < LAKE_NAMES.length && t < 400; t++) {
+    const p = randLand(3000);
+    if (!p) continue;
+    const l = wobble({ x: p[0], y: p[1], rx: 500 + rand() * 1800, ry: 350 + rand() * 1100 });
+    if (Math.abs(l.y - riverY(l.x)) < 3000 || Math.abs(l.x - ashX(l.y)) < 3000) continue;
+    if (lakes.some((o) => Math.hypot(o.x - l.x, o.y - l.y) < 9000)) continue;
+    l.name = LAKE_NAMES[lakes.length];
+    lakes.push(l);
+  }
+  const forests = [];
+  for (let t = 0; forests.length < 75 && t < 600; t++) {
+    const p = randLand(2500);
+    if (!p) continue;
+    const f = wobble({ x: p[0], y: p[1], rx: 900 + rand() * 4200, ry: 700 + rand() * 3000 });
+    if (lakes.some((l) => blob(l, f.x, f.y, 1.5))) continue;
+    forests.push(f);
+  }
+  forests.sort((a, b) => b.rx * b.ry - a.rx * a.ry);
+  forests.slice(0, FOREST_NAMES.length).forEach((f, i) => { f.name = FOREST_NAMES[i]; });
+
+  // Market towns and villages, each a small street grid at its own angle.
+  const names = SETTLEMENT_NAMES.slice().sort(() => rand() - 0.5);
+  const settlements = [];
+  const plan = [...Array(13).fill('town'), ...Array(32).fill('village')];
+  for (const type of plan) {
+    for (let t = 0; t < 400; t++) {
+      const R = type === 'town' ? 1300 + rand() * 1700 : 350 + rand() * 450;
+      const p = randLand(R + 4000);
+      if (!p) continue;
+      const [x, y] = p;
+      if (isWater(x, y) || Math.abs(y - riverY(x)) < R + 300 || Math.abs(x - ashX(y)) < R + 300) continue;
+      if (lakes.some((l) => blob(l, x, y, 1 + (R + 600) / Math.min(l.rx, l.ry)))) continue;
+      if (settlements.some((s) => Math.hypot(s.x - x, s.y - y) < (s.type === 'town' && type === 'town' ? 16000 : s.R + R + 5000))) continue;
+      settlements.push(wobble({ name: names[settlements.length], type, x, y, R, rx: R, ry: R, a: (rand() - 0.5) * 1.4, nodes: [] }));
+      break;
+    }
+  }
+  const nodeStreet = new Map(); // node -> { street, num, hood, city }
+  const ROAD_KINDS = ['Street', 'Road', 'Close', 'Way', 'Gardens', 'Drive'];
+  settlements.forEach((s, si) => {
+    const sp = s.type === 'town' ? 135 : 120;
+    const n = Math.ceil((s.R * 1.35) / sp);
+    const ca = Math.cos(s.a), sa = Math.sin(s.a);
+    const grid = new Map();
+    const ph = rand() * 6.28;
+    for (let j = -n; j <= n; j++) {
+      for (let i = -n; i <= n; i++) {
+        let lx = i * sp, ly = j * sp;
+        lx += 28 * Math.sin(ly / 420 + ph) + (rand() - 0.5) * 22;
+        ly += 22 * Math.sin(lx / 510 + ph) + (rand() - 0.5) * 22;
+        const x = s.x + ca * lx - sa * ly, y = s.y + sa * lx + ca * ly;
+        if (!blob(s, x, y) || isWater(x, y)) continue;
+        const id = addNode(x, y);
+        grid.set(`${i},${j}`, id);
+        s.nodes.push(id);
+      }
+    }
+    const rowName = (j) => (j === 0 ? 'High Street' : `${ROW_NAMES[(j + n + si * 7) % ROW_NAMES.length]} ${ROAD_KINDS[(j + si) % ROAD_KINDS.length]}`);
+    const colName = (i) => (i === 0 ? (s.type === 'town' ? 'Station Road' : 'Church Lane') : `${COL_NAMES[(i + n + si * 5) % COL_NAMES.length]} Lane`);
+    const keepP = s.type === 'town' ? 0.88 : 0.8;
+    for (let j = -n; j <= n; j++) {
+      for (let i = -n; i <= n; i++) {
+        const a = grid.get(`${i},${j}`);
+        if (a === undefined) continue;
+        const right = grid.get(`${i + 1},${j}`), up = grid.get(`${i},${j + 1}`);
+        if (right !== undefined && !isWater((xs[a] + xs[right]) / 2, (ys[a] + ys[right]) / 2) && (j === 0 || rand() < keepP)) {
+          link(a, right, j === 0 ? 1 : 0, rowName(j), ((i % 4) + 4) % 4 === 2);
+          if (!nodeStreet.has(a)) nodeStreet.set(a, { street: rowName(j), num: (i + n) * 4 + 2 });
+          if (!nodeStreet.has(right)) nodeStreet.set(right, { street: rowName(j), num: (i + n + 1) * 4 + 2 });
+        }
+        if (up !== undefined && !isWater((xs[a] + xs[up]) / 2, (ys[a] + ys[up]) / 2) && (i === 0 || rand() < keepP)) {
+          link(a, up, i === 0 ? 1 : 0, colName(i), ((j % 4) + 4) % 4 === 2);
+          if (!nodeStreet.has(a)) nodeStreet.set(a, { street: colName(i), num: (j + n) * 2 + 1 });
+          if (!nodeStreet.has(up)) nodeStreet.set(up, { street: colName(i), num: (j + n + 1) * 2 + 1 });
+        }
+      }
+    }
+  });
+
+  // Country roads: a loose network of lanes, A-roads and motorways that
+  // links the city, towns and villages. Lanes wiggle and only bridge rivers sometimes.
+  const G = 2600;
+  const gcols = Math.ceil((RX1 - RX0) / G), grows = Math.ceil((RY1 - RY0) / G);
+  const jx = new Float64Array((gcols + 1) * (grows + 1)), jy = new Float64Array(jx.length);
+  const jstate = new Int32Array(jx.length); // >=0 node, -1 none, -2 city, -3-k settlement k
+  const gid = (r, c) => r * (gcols + 1) + c;
+  for (let r = 0; r <= grows; r++) {
+    for (let c = 0; c <= gcols; c++) {
+      const x = RX0 + c * G + (rand() - 0.5) * 1400, y = RY0 + r * G + (rand() - 0.5) * 1400;
+      const k = gid(r, c);
+      jx[k] = x; jy[k] = y;
+      if (inCityZone(x, y, 1200) && !isSea(x, y)) { jstate[k] = -2; continue; }
+      if (isWater(x, y)) { jstate[k] = -1; continue; }
+      const s = settlements.findIndex((q) => Math.hypot(q.x - x, q.y - y) < q.R + 500);
+      jstate[k] = s >= 0 ? -3 - s : addNode(x, y);
+    }
+  }
+  const nearestOf = (list, x, y) => {
+    let best = -1, bd = Infinity;
+    for (const v of list) {
+      const d = (xs[v] - x) ** 2 + (ys[v] - y) ** 2;
+      if (d < bd) { bd = d; best = v; }
+    }
+    return best;
+  };
+  const cityEdgeNodes = city.addresses.filter((a) => Math.abs(a.x) > W / 2 - 1500 || a.y > H / 2 - 1500 || Math.abs(a.x) > W / 2 - 4000).map((a) => a.node);
+  // Every country road starts as a lane; A-roads and motorways are picked later
+  // along the lanes that actually join the towns.
+  const roadOf = (r, c) => [1, `${ROW_NAMES[(r * 3 + c * 7) % ROW_NAMES.length]} Lane`];
+  const lane = (a, b, k, name) => {
+    const ax = xs[a], ay = ys[a], bx = xs[b], by = ys[b];
+    const len = Math.hypot(bx - ax, by - ay);
+    if (len < 1) return false;
+    const m = Math.max(1, Math.round(len / 320));
+    const nx = -(by - ay) / len, ny = (bx - ax) / len;
+    const curve = k === 3 ? 0.06 : 0.2;
+    const a1 = (rand() - 0.5) * curve * len, a2 = (rand() - 0.5) * curve * 0.4 * len;
+    const pts = [];
+    let crosses = false;
+    for (let i = 0; i <= m * 2; i++) {
+      const t = i / (m * 2), off = a1 * Math.sin(Math.PI * t) + a2 * Math.sin(2 * Math.PI * t);
+      const x = ax + (bx - ax) * t + nx * off, y = ay + (by - ay) * t + ny * off;
+      if (i > 0 && i < m * 2 && (isSea(x, y) || lakes.some((l) => blob(l, x, y)))) return false;
+      if (isRiver(x, y)) crosses = true;
+      if (i % 2 === 0) pts.push([x, y]);
+    }
+    if (crosses && k < 2 && rand() > 0.5) return false; // only some lanes get a bridge
+    let prev = a;
+    for (let i = 1; i < pts.length; i++) {
+      const v = i === pts.length - 1 ? b : addNode(pts[i][0], pts[i][1]);
+      link(prev, v, crosses ? Math.max(k, 1) : k, name, i === Math.floor(pts.length / 2));
+      prev = v;
+    }
+    return true;
+  };
+  const target = (state, x, y) => {
+    if (state >= 0) return state;
+    if (state === -2) return nearestOf(cityEdgeNodes, x, y);
+    if (state <= -3) return nearestOf(settlements[-3 - state].nodes, x, y);
+    return -1;
+  };
+  const junctionNames = new Map();
+  for (let r = 0; r <= grows; r++) {
+    for (let c = 0; c <= gcols; c++) {
+      const k = gid(r, c);
+      for (const [r2, c2, horizontal] of [[r, c + 1, true], [r + 1, c, false]]) {
+        if (r2 > grows || c2 > gcols) continue;
+        const k2 = gid(r2, c2);
+        const sa = jstate[k], sb = jstate[k2];
+        if (sa === -1 || sb === -1) continue;
+        if (sa < 0 && sb < 0) continue; // both inside a settlement / the city
+        const [kindK, name] = roadOf(r, c);
+        if (sa >= 0 && sb >= 0 && kindK === 1 && rand() > 0.8) continue;
+        const a = target(sa, jx[k2], jy[k2]), b = target(sb, jx[k], jy[k]);
+        if (a < 0 || b < 0 || a === b) continue;
+        if (lane(a, b, kindK, name)) {
+          if (sa >= 0 && !junctionNames.has(sa)) junctionNames.set(sa, name);
+          if (sb >= 0 && !junctionNames.has(sb)) junctionNames.set(sb, name);
+        }
+      }
+      // An occasional diagonal lane.
+      if (r < grows && c < gcols && rand() < 0.1) {
+        const k2 = gid(r + 1, c + 1);
+        if (jstate[k] >= 0 && jstate[k2] >= 0) lane(jstate[k], jstate[k2], 1, `${ROW_NAMES[(r + c * 11) % ROW_NAMES.length]} Lane`);
+      }
+    }
+  }
+
+  // Graph and addresses.
+  const n = xs.length;
+  const lat = new Float64Array(n), lon = new Float64Array(n);
+  for (let i = 0; i < n; i++) { const ll = toLL(xs[i], ys[i]); lat[i] = ll.lat; lon[i] = ll.lon; }
+  const graph = fromEdgeList(lat, lon, A, B, false);
+
+  // Road hierarchy: A-roads join the city to each town and each town to its
+  // two nearest neighbours; motorways run from the city towards the far
+  // corners. They follow the winding lanes, so they look like real roads.
+  const n0 = city.X.length;
+  const KEY = 1 << 20;
+  const edgeAt = new Map();
+  for (let e = 0; e < A.length; e++) edgeAt.set(Math.min(A[e], B[e]) * KEY + Math.max(A[e], B[e]), e);
+  const upgrade = (parent, to, k, name) => {
+    for (let v = to; parent[v] >= 0; v = parent[v]) {
+      const u = parent[v];
+      if (u < n0 && v < n0) continue; // leave the city's own streets alone
+      const e = edgeAt.get(Math.min(u, v) * KEY + Math.max(u, v));
+      if (e !== undefined && kind[e] < k) { kind[e] = k; ename[e] = name; }
+    }
+  };
+  const nearestNodeTo = (list, x, y) => nearestOf(list, x, y);
+  const towns = settlements.filter((t) => t.type === 'town' && t.nodes.length);
+  const townNode = new Map(towns.map((t) => [t, nearestNodeTo(t.nodes, t.x, t.y)]));
+  const cityGate = nearestNodeTo(cityEdgeNodes, 0, H / 2);
+  const fromCity = dijkstra(graph, cityGate);
+  let road = 10;
+  const motorways = [
+    ['M1', towns.reduce((a, b) => (b.y > a.y ? b : a))],
+    ['M5', towns.reduce((a, b) => (b.x < a.x ? b : a))],
+    ['M11', towns.reduce((a, b) => (b.x > a.x ? b : a))],
+  ];
+  for (const t of towns) upgrade(fromCity.parent, townNode.get(t), 2, `A${road++}`);
+  for (const t of towns) {
+    const near = towns.filter((o) => o !== t).sort((a, b) => Math.hypot(a.x - t.x, a.y - t.y) - Math.hypot(b.x - t.x, b.y - t.y)).slice(0, 2);
+    const from = dijkstra(graph, townNode.get(t));
+    for (const o of near) upgrade(from.parent, townNode.get(o), 2, `A${road++}`);
+  }
+  for (const [name, t] of motorways) upgrade(fromCity.parent, townNode.get(t), 3, name);
+
+  const addresses = city.addresses.slice();
+  settlements.forEach((s) => {
+    for (const v of s.nodes) {
+      const st = nodeStreet.get(v);
+      if (st) addresses.push({ node: v, lat: lat[v], lon: lon[v], x: xs[v], y: ys[v], num: st.num, street: st.street, hood: s.name, city: s.name });
+    }
+  });
+  const nearestSettlement = (x, y) => settlements.reduce((best, s) => (Math.hypot(s.x - x, s.y - y) < Math.hypot(best.x - x, best.y - y) ? s : best));
+  for (const [v, street] of junctionNames) {
+    const s = nearestSettlement(xs[v], ys[v]);
+    addresses.push({ node: v, lat: lat[v], lon: lon[v], x: xs[v], y: ys[v], num: 1 + (v % 40), street, hood: `near ${s.name}`, city: s.name });
+  }
+
+  // Map shapes and labels.
+  const ring = (e, k = 1, m = 56) => Array.from({ length: m }, (_, j) => {
+    const ang = (j / m) * 2 * Math.PI, rr = blobR(e, ang) * k;
+    return toLL(e.x + e.rx * rr * Math.cos(ang), e.y + e.ry * rr * Math.sin(ang));
+  });
+  const land = [];
+  for (let j = 0; j < 1600; j++) {
+    const phi = (j / 1600) * 2 * Math.PI, c = Math.cos(phi), sn = Math.sin(phi);
+    const rho = edgeR(phi) / (Math.abs(c) ** IC.p + Math.abs(sn) ** IC.p) ** (1 / IC.p);
+    const x = IC.x + IC.ax * rho * c;
+    land.push(toLL(x, Math.max(IC.y + IC.ay * rho * sn, coastY(x))));
+  }
+  const vere = [], ash = [];
+  for (let x = RX0 - 20000; x <= RX1 + 20000; x += 100) vere.push(toLL(x, riverY(x)));
+  for (let y = riverY(38000) - 300; y <= RY1 + 20000; y += 100) ash.push(toLL(ashX(y), y));
+  const angle = (ax, ay, bx, by) => {
+    let d = (Math.atan2(-(by - ay), bx - ax) * 180) / Math.PI;
+    if (d > 90) d -= 180;
+    if (d <= -90) d += 180;
+    return Math.round(d);
+  };
+  const riverLabels = [
+    ...[-80000, -45000, 25000, 70000].map((x) => ({ name: 'River Vere', ...toLL(x, riverY(x)), angle: angle(x - 80, riverY(x - 80), x + 80, riverY(x + 80)) })),
+    ...[20000, 55000, 95000].map((y) => ({ name: 'River Ash', ...toLL(ashX(y), y), angle: angle(ashX(y - 80), y - 80, ashX(y + 80), y + 80) })),
+  ];
+
+  const sw = toLL(RX0 - 8000, RY0 - 5000), ne = toLL(RX1 + 8000, RY1 + 8000);
+  return {
+    graph, A, B, kind, ename, eflag, addresses, settlements,
+    land, rivers: [{ pts: vere, width: 130 }, { pts: ash, width: 110 }],
+    lakes: [...city.lakes, ...lakes.map((l) => ({ name: l.name, ring: ring(l) }))],
+    parks: city.parks,
+    forests: forests.map((f) => ({ name: f.name, center: toLL(f.x, f.y), ring: ring(f) })),
+    labels: {
+      ...city.labels,
+      water: [...city.labels.water, ...riverLabels, ...lakes.map((l) => ({ name: l.name, ...toLL(l.x, l.y) }))],
+      town: settlements.filter((s) => s.type === 'town').map((s) => ({ name: s.name, ...toLL(s.x, s.y) })),
+      village: settlements.filter((s) => s.type === 'village').map((s) => ({ name: s.name, ...toLL(s.x, s.y) })),
+      forest: forests.filter((f) => f.name).map((f) => ({ name: f.name, ...toLL(f.x, f.y) })),
+    },
+    bounds: [[sw.lat, sw.lon], [ne.lat, ne.lon]],
+    hood: city.hood,
+  };
 }
+
+// Built on first use so the page itself appears straight away.
+let town = null, addrIndex = null, poiElements = null;
+const CELL = 300;
+function ensure() {
+  if (town) return;
+  town = buildRegion(buildTown());
+  addrIndex = new Map();
+  for (const a of town.addresses) {
+    const k = `${Math.floor(a.x / CELL)},${Math.floor(a.y / CELL)}`;
+    if (!addrIndex.has(k)) addrIndex.set(k, []);
+    addrIndex.get(k).push(a);
+  }
+  poiElements = buildPoiElements();
+}
+export const warm = ensure;
+export function getBounds() { ensure(); return town.bounds; }
+
 function nearestAddress(lat, lon) {
   const x = (lon - CENTER.lon) * M_LON, y = (lat - CENTER.lat) * M_LAT;
   const cx = Math.floor(x / CELL), cy = Math.floor(y / CELL);
@@ -293,7 +615,7 @@ function nearestAddress(lat, lon) {
   }
   return best || town.addresses[0];
 }
-const fmtAddress = (a) => `${a.num} ${a.street}, ${a.hood}, ${TOWN}`;
+const fmtAddress = (a) => (a.city ? `${a.num} ${a.street}, ${a.hood}` : `${a.num} ${a.street}, ${a.hood}, ${TOWN}`);
 
 // ---------------------------------------------------------------- places of interest
 
@@ -368,7 +690,7 @@ function buildPoiElements() {
         type: 'node', id: nid++, lat, lon,
         tags: {
           name, ...t.tags,
-          'addr:housenumber': String(addr.num), 'addr:street': addr.street, 'addr:suburb': addr.hood,
+          'addr:housenumber': String(addr.num), 'addr:street': addr.street, 'addr:suburb': addr.hood, 'addr:city': addr.city || TOWN,
           opening_hours: t.tags.leisure === 'playground' || t.tags.tourism === 'viewpoint' ? '24/7' : pick(HOURS),
           ...(rand() < 0.4 ? { website: `${name.toLowerCase().replace(/[^a-z]+/g, '')}.example` } : {}),
           ...(rand() < 0.3 ? { outdoor_seating: 'yes' } : {}),
@@ -377,15 +699,36 @@ function buildPoiElements() {
       });
     }
   }
-  // Parks are places too.
+  // Towns get a high street's worth of places; villages a pub, a café, a shop or two.
+  const weighted = TYPES.flatMap((t) => Array(t.n).fill(t));
+  const villageTypes = TYPES.filter((t) => ['pub', 'cafe'].includes(t.tags.amenity) || t.tags.shop === 'bakery' || t.tags.cuisine === 'italian' || t.tags.cuisine === 'indian' || t.tags.leisure === 'playground');
+  for (const s of town.settlements) {
+    const count = s.type === 'town' ? Math.round(20 + (s.R / 1000) * 30) : 2 + Math.floor(rand() * 5);
+    for (let i = 0; i < count && s.nodes.length; i++) {
+      const t = s.type === 'town' ? pick(weighted) : pick(villageTypes);
+      const node = pick(s.nodes);
+      const lat = g.lat[node] + (rand() - 0.5) * 0.0004, lon = g.lon[node] + (rand() - 0.5) * 0.0005;
+      const addr = nearestAddress(lat, lon);
+      els.push({
+        type: 'node', id: nid++, lat, lon,
+        tags: {
+          name: pick(t.names).replace('{N}', pick(NAMES)), ...t.tags,
+          'addr:housenumber': String(addr.num), 'addr:street': addr.street, 'addr:suburb': s.name, 'addr:city': s.name,
+          opening_hours: pick(HOURS), ...(rand() < 0.4 ? { outdoor_seating: 'yes' } : {}),
+        },
+      });
+    }
+  }
+  // Parks and forests are places too.
   town.parks.forEach((p, i) => els.push({ type: 'way', id: 50000 + i, center: p.center, tags: { name: p.name, leisure: i === 1 ? 'garden' : 'park', opening_hours: '24/7' } }));
+  town.forests.forEach((f, i) => { if (f.name) els.push({ type: 'way', id: 60000 + i, center: f.center, tags: { name: f.name, leisure: 'nature_reserve', opening_hours: '24/7' } }); });
   return els;
 }
-const poiElements = buildPoiElements();
 
 export async function findPois(center, { radius, minResults = 12 } = {}) {
+  ensure();
   await new Promise((r) => setTimeout(r, 250));
-  const radii = radius ? [radius] : [800, 1800, 4000];
+  const radii = radius ? [radius] : [800, 1800, 4000, 9000]; // the last step helps out in the countryside
   let pois = [], used = radii[0];
   for (const r of radii) {
     used = r;
@@ -402,6 +745,7 @@ export async function findPois(center, { radius, minResults = 12 } = {}) {
 // ---------------------------------------------------------------- geocoding stand-ins
 
 export async function searchAddress(q, { near, limit = 6 } = {}) {
+  ensure();
   q = q.trim().toLowerCase();
   if (q.length < 2) return [];
   const numMatch = q.match(/^(\d+)\s*/);
@@ -410,6 +754,12 @@ export async function searchAddress(q, { near, limit = 6 } = {}) {
   if (!words.length) return [];
   const hit = (s) => words.every((w) => s.toLowerCase().includes(w));
   const results = [];
+  const places = [];
+  for (const s of town.settlements) {
+    if (num != null || !hit(s.name) || !s.nodes.length) continue;
+    const a = nearestAddress(toLL(s.x, s.y).lat, toLL(s.x, s.y).lon);
+    places.push({ lat: a.lat, lon: a.lon, address: fmtAddress(a), title: s.name, subtitle: s.type === 'town' ? 'Town' : 'Village' });
+  }
   const byStreet = new Map();
   for (const a of town.addresses) {
     if (!hit(`${a.street} ${a.hood}`)) continue;
@@ -419,29 +769,33 @@ export async function searchAddress(q, { near, limit = 6 } = {}) {
     if (!cur || score < cur.score) byStreet.set(key, { a, score });
   }
   for (const { a } of byStreet.values()) {
-    results.push({ lat: a.lat, lon: a.lon, address: fmtAddress(a), title: `${a.num} ${a.street}`, subtitle: `${a.hood}, ${TOWN}` });
+    results.push({ lat: a.lat, lon: a.lon, address: fmtAddress(a), title: `${a.num} ${a.street}`, subtitle: a.city ? a.hood : `${a.hood}, ${TOWN}` });
   }
   for (const el of poiElements) {
     if (!hit(el.tags.name)) continue;
     const p = el.center || el;
-    results.push({ lat: p.lat, lon: p.lon, address: `${el.tags.name}, ${el.tags['addr:suburb'] || town.hood(p)}, ${TOWN}`, title: el.tags.name, subtitle: `${el.tags['addr:street'] ? `${el.tags['addr:housenumber']} ${el.tags['addr:street']}, ` : ''}${TOWN}` });
+    const where = el.tags['addr:city'] && el.tags['addr:city'] !== TOWN ? el.tags['addr:city'] : `${el.tags['addr:suburb'] || town.hood(p)}, ${TOWN}`;
+    results.push({ lat: p.lat, lon: p.lon, address: `${el.tags.name}, ${where}`, title: el.tags.name, subtitle: `${el.tags['addr:street'] ? `${el.tags['addr:housenumber']} ${el.tags['addr:street']}, ` : ''}${el.tags['addr:city'] || TOWN}` });
   }
   if (near) results.sort((x, y) => haversine(near.lat, near.lon, x.lat, x.lon) - haversine(near.lat, near.lon, y.lat, y.lon));
-  return results.slice(0, limit);
+  return [...places, ...results].slice(0, limit);
 }
 
 export async function reverseGeocode(lat, lon) {
+  ensure();
   const a = nearestAddress(lat, lon);
   return { lat, lon, address: fmtAddress(a), title: `${a.num} ${a.street}`, subtitle: `${a.hood}, ${TOWN}` };
 }
 
 /** No GPS in the test town: hand back a random address instead. */
 export async function currentPosition() {
+  ensure();
   const a = town.addresses[Math.floor(Math.random() * town.addresses.length)];
   return { lat: a.lat, lon: a.lon };
 }
 
 export async function loadNetwork(points, { onStatus = () => {} } = {}) {
+  ensure();
   onStatus('Reading the streets of Port Verity…');
   await new Promise((r) => setTimeout(r, 350));
   return { graph: town.graph, source: 'osm' };
@@ -536,6 +890,7 @@ export const api = {
 
 /** A ready-made group: you plus three friends spread around town. */
 export function sampleGroup() {
+  ensure();
   const at = (x, y) => { const ll = toLL(x, y); const a = nearestAddress(ll.lat, ll.lon); return { address: fmtAddress(a), lat: a.lat, lon: a.lon }; };
   return {
     home: at(-3600, 2600),
@@ -551,6 +906,7 @@ export function sampleGroup() {
  * sit in their own pane and appear as you zoom in.
  */
 export function addBasemap(map) {
+  ensure();
   const crs = L.CRS.EPSG3857;
   const P0 = (p) => crs.latLngToPoint(L.latLng(p.lat, p.lon), 0);
   const g = town.graph;
@@ -563,7 +919,7 @@ export function addBasemap(map) {
     if (nx[v] < minX) minX = nx[v]; if (nx[v] > maxX) maxX = nx[v];
     if (ny[v] < minY) minY = ny[v]; if (ny[v] > maxY) maxY = ny[v];
   }
-  const cell = (maxX - minX) / 160;
+  const cell = (maxX - minX) / 420;
   const buckets = new Map();
   for (let e = 0; e < town.A.length; e++) {
     const a = town.A[e], b = town.B[e];
@@ -577,12 +933,14 @@ export function addBasemap(map) {
   }
   const seen = new Int32Array(town.A.length);
   let stamp = 0;
-  const sea = town.sea.map(P0), river = town.river.map(P0);
+  const land = town.land.map(P0);
+  const rivers = town.rivers.map((r) => ({ pts: r.pts.map(P0), width: r.width }));
   const lakes = town.lakes.map((l) => l.ring.map(P0)), parks = town.parks.map((p) => p.ring.map(P0));
+  const forests = town.forests.map((f) => f.ring.map(P0));
   const colors = () => {
     const s = getComputedStyle(document.documentElement);
     const v = (k) => s.getPropertyValue(k).trim();
-    return { land: v('--map-land'), park: v('--map-park'), water: v('--map-water'), road: v('--map-road'), casing: v('--map-casing'), major: v('--map-major'), majorCasing: v('--map-major-casing'), label: v('--map-label'), halo: v('--map-halo'), font: s.getPropertyValue('--font') };
+    return { land: v('--map-land'), park: v('--map-park'), water: v('--map-water'), road: v('--map-road'), casing: v('--map-casing'), major: v('--map-major'), majorCasing: v('--map-major-casing'), motorway: v('--map-motorway'), motorwayCasing: v('--map-motorway-casing'), forest: v('--map-forest'), label: v('--map-label'), halo: v('--map-halo'), font: s.getPropertyValue('--font') };
   };
   const mppAt0 = 156543.03 * Math.cos((CENTER.lat * Math.PI) / 180);
 
@@ -595,7 +953,7 @@ export function addBasemap(map) {
     const X = (x) => x * s - ox, Y = (y) => y * s - oy;
     const c = colors();
     const mpp = mppAt0 / s;
-    ctx.fillStyle = c.land;
+    ctx.fillStyle = c.water;
     ctx.fillRect(0, 0, 256, 256);
     const fill = (pts, color) => {
       ctx.beginPath();
@@ -604,22 +962,25 @@ export function addBasemap(map) {
       ctx.fillStyle = color;
       ctx.fill();
     };
+    fill(land, c.land);
+    forests.forEach((f) => fill(f, c.forest));
     parks.forEach((p) => fill(p, c.park));
-    fill(sea, c.water);
     lakes.forEach((l) => fill(l, c.water));
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.beginPath();
-    river.forEach((p, i) => (i ? ctx.lineTo(X(p.x), Y(p.y)) : ctx.moveTo(X(p.x), Y(p.y))));
-    ctx.strokeStyle = c.water;
-    ctx.lineWidth = Math.max(2.5, 130 / mpp);
-    ctx.stroke();
+    for (const r of rivers) {
+      ctx.beginPath();
+      r.pts.forEach((p, i) => (i ? ctx.lineTo(X(p.x), Y(p.y)) : ctx.moveTo(X(p.x), Y(p.y))));
+      ctx.strokeStyle = c.water;
+      ctx.lineWidth = Math.max(z < 10 ? 1.5 : 2.5, r.width / mpp);
+      ctx.stroke();
+    }
 
     const pad = 14 / s;
     const x0 = ox / s - pad, x1 = (ox + 256) / s + pad, y0 = oy / s - pad, y1 = (oy + 256) / s + pad;
     if (x1 < minX || x0 > maxX || y1 < minY || y0 > maxY) return;
     stamp++;
-    const byKind = [[], [], []];
+    const byKind = [[], [], [], []];
     for (let bx = Math.max(0, Math.floor((x0 - minX) / cell)); bx <= Math.floor((x1 - minX) / cell); bx++) {
       for (let by = Math.max(0, Math.floor((y0 - minY) / cell)); by <= Math.floor((y1 - minY) / cell); by++) {
         for (const e of buckets.get(bx * 65536 + by) || []) {
@@ -642,17 +1003,22 @@ export function addBasemap(map) {
       ctx.stroke();
     };
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-    const w0 = clamp(10 / mpp, 0.7, 9), w1 = clamp(15 / mpp, 1.5, 13), w2 = clamp(22 / mpp, 2.2, 18);
+    const w0 = clamp(10 / mpp, 0.7, 9), w1 = clamp(15 / mpp, z < 10 ? 0.6 : 1.3, 13), w2 = clamp(22 / mpp, z < 10 ? 1.1 : 2, 18), w3 = clamp(30 / mpp, 1.8, 22);
     if (z >= 13) {
       if (z >= 15) stroke(byKind[0], w0 + 1.6, c.casing);
       ctx.globalAlpha = z >= 14 ? 1 : 0.75;
       stroke(byKind[0], w0, c.road);
       ctx.globalAlpha = 1;
     }
-    stroke(byKind[1], w1 + 2, c.casing);
-    stroke(byKind[1], w1, c.road);
-    stroke(byKind[2], w2 + 2, c.majorCasing);
+    // Far out, lanes are drawn faintly with no outline so the map stays calm.
+    if (z >= 10) stroke(byKind[1], w1 + 2, c.casing);
+    ctx.globalAlpha = z >= 10 ? 1 : 0.8;
+    stroke(byKind[1], w1, z >= 10 ? c.road : c.casing);
+    ctx.globalAlpha = 1;
+    stroke(byKind[2], w2 + (z >= 10 ? 2 : 1), c.majorCasing);
     stroke(byKind[2], w2, c.major);
+    stroke(byKind[3], w3 + 2, c.motorwayCasing);
+    stroke(byKind[3], w3, c.motorway);
 
     // Side-street names, written along the street, once you're zoomed right in.
     if (z >= 17) {
@@ -705,7 +1071,10 @@ export function addBasemap(map) {
     icon: L.divIcon({ className: `map-label ${cls}`, iconSize: [0, 0], html: `<span style="transform:translate(-50%,-50%) rotate(${l.angle || 0}deg)">${l.name}</span>` }),
   });
   const groups = Object.fromEntries(Object.entries(town.labels).map(([k, list]) => [k, L.layerGroup(list.map((l) => label(l, k)))]));
-  const visible = { town: (z) => z < 12.25, bay: () => true, hood: (z) => z >= 12.25 && z < 15.5, water: (z) => z >= 12, park: (z) => z >= 13.5, street: (z) => z >= 15.5 };
+  const visible = {
+    city: (z) => z < 12.25, bay: (z) => z >= 9, hood: (z) => z >= 12.25 && z < 15.5, water: (z) => z >= 10.5, park: (z) => z >= 13.5,
+    street: (z) => z >= 15.5, town: (z) => z >= 8 && z < 14, village: (z) => z >= 10.5 && z < 15, forest: (z) => z >= 10.5 && z < 13.5,
+  };
   const update = () => {
     const z = map.getZoom();
     for (const [k, grp] of Object.entries(groups)) {
@@ -720,5 +1089,4 @@ export function addBasemap(map) {
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', redraw);
 }
 
-export const bounds = town.bounds;
 export const townCenter = CENTER;
