@@ -3,11 +3,11 @@
 Find somewhere that's roughly as close for everyone in a group, with a press of a button.
 
 1. **Enter where you're starting from.** No account is needed. The map centres on your address.
-2. **Add the people you're meeting**, each with an optional name. You can type an address, tap the map, or drag a dot.
-3. Press **Find a place to meet.** Routes grow along the real streets from every address at the same rate (an invisible circle measured along the roads). Each person gets a main route and a few alternatives, and every step of every route moves towards the meeting point, the spot where everyone's routes arrive together.
+2. **Add the people you're meeting**, each with an optional name. You can type an address, tap the map, or drag a dot. Everyone has their own **way of travelling** (public transport, walk, bike or drive): tap the pill next to a name to change it. It's remembered.
+3. Press **Find a place to meet.** Routes grow along the real streets from every address, each at that person's travel speed, so the meeting point is fair in **travel time**: someone driving is asked to go further than someone walking. Each person gets a main route and a few alternatives, and every step of every route moves towards the meeting point, the spot where everyone's routes arrive together.
 4. A panel lists what's nearby in tabs (Food, Drinks, Fun, Culture, Outdoors, Shopping). Each tab has listings with counts, e.g. `Italian 4`.
 5. Pick a listing to **show those places on the map** as numbered, labelled pins you can click.
-6. Open a place to see **real directions for everyone**: public transport (lines in their official colours, times, changes, walking legs, with *Leave now* or *Arrive by*), walking, cycling or driving. Each route is drawn on the map; tap a person for the step-by-step journey or to open it in Google Maps or Apple Maps. You can also open the meeting point itself.
+6. Open a place to see **real directions for everyone, each in their own way of travelling**: public transport (lines in their official colours, times, changes, walking legs, with *Leave now* or *Arrive by*), walking, cycling or driving. Each route is drawn on the map; tap a person for the step-by-step journey or to open it in Google Maps or Apple Maps. The Transit / Walk / Bike / Drive bar sets everyone at once. You can also open the meeting point itself.
 7. Choose one and **send the location** by share sheet, WhatsApp, Messages, Email, Telegram, copy, a calendar invite, or Google/Apple Maps.
 
 **Profiles are optional.** Without one, everything is saved in the browser. Signing in or creating a profile (menu → *Sign in or create a profile*) keeps your people and past meetups on every device, and anything you set up as a guest moves into the profile.
@@ -56,7 +56,7 @@ The browser asks the Meet server for directions (`/api/directions`, `/api/travel
 - **Two ways to pick the meeting point** (in the menu):
   - *Fairest*: the longest trip is as short as possible.
   - *Least travel*: everyone's trips add up to the least overall.
-- Travel time and distance for each person, by walking, bike, transit or car.
+- Travel time and distance for each person in their own mode. The menu sets the default mode for people you add.
 - Sort a category by *nearest* to the meeting point or *fairest* for everyone.
 - Search radius from 500 m to 5 km. The search also widens automatically when little is nearby.
 - Surprise me, Replay, and Skip animation.

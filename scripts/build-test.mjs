@@ -45,7 +45,7 @@ app = replaceOnce(app, "const DEFAULT_SETTINGS = { mode: 'fair', travel: 'transi
 // Directions in the test town come from its own streets, not the real routing services.
 app = app.replace(/ {2}map\.attributionControl\.addAttribution\(`Routes[^\n]*\n/, '');
 app = app.replace(/ {2}const handoff = `[^\n]*\n/, "  const handoff = '';\n");
-app = replaceOnce(app, '    <p class="footnote attrib"><a href="${att.url}" target="_blank" rel="noopener">${esc(att.text)}</a></p>',
+app = replaceOnce(app, '    <p class="footnote attrib">${credits}</p>',
   '    <p class="footnote attrib">Test town: routes follow its own streets. The real app uses live routing and public transport.</p>', 'routing attribution');
 if (app.includes('addAttribution(`Routes') || app.includes('links.google}" target="_blank" rel="noopener">Google Maps</a><a')) throw new Error('build-test: real-service links left in test build');
 

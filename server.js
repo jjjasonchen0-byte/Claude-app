@@ -138,6 +138,8 @@ function publicUser(u) {
 }
 
 // Validate and clean an address object coming from the client.
+const TRAVEL_MODES = ['transit', 'walk', 'bike', 'drive'];
+
 function cleanPlace(p, { requireAddress = true } = {}) {
   const lat = Number(p?.lat);
   const lon = Number(p?.lon);
@@ -151,6 +153,7 @@ function cleanPlace(p, { requireAddress = true } = {}) {
     nickname: String(p.nickname || '').trim().slice(0, 60),
     lat: Math.round(lat * 1e6) / 1e6,
     lon: Math.round(lon * 1e6) / 1e6,
+    ...(TRAVEL_MODES.includes(p.mode) ? { mode: p.mode } : {}), // how this person travels
   };
 }
 
@@ -231,6 +234,7 @@ route('PATCH', '/api/places/:id', async (req, res, { id }) => {
   if ('lat' in body || 'lon' in body || 'address' in body) Object.assign(place, cleanPlace({ ...place, ...body }));
   if ('nickname' in body) place.nickname = String(body.nickname || '').trim().slice(0, 60);
   if ('active' in body) place.active = !!body.active;
+  if ('mode' in body) { if (TRAVEL_MODES.includes(body.mode)) place.mode = body.mode; else delete place.mode; }
   store.save();
   send(res, 200, { place });
 });

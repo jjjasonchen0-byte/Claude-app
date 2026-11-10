@@ -127,8 +127,11 @@ export function corridorMask(g, src, targets, k = 1.45, slack = 400) {
  * @param people [{lat, lon}]
  * @param opts { mode: 'fair' | 'total', k }
  */
-export function solveMeeting(g, people, { mode = 'fair', corridors = [1.12, 1.3, 1.6] } = {}) {
+export function solveMeeting(g, people, { mode = 'fair', corridors = [1.12, 1.3, 1.6], speeds = null } = {}) {
   if (people.length < 2) throw new Error('Need at least two addresses');
+  // With speeds (m/s per person), fairness is measured in travel time, so
+  // someone driving is asked to go further than someone walking.
+  const w = people.map((_, i) => (speeds?.[i] > 0 ? 1 / speeds[i] : 1));
   const { comp, largest } = components(g);
   const cLat = people.reduce((s, p) => s + p.lat, 0) / people.length;
   const cLon = people.reduce((s, p) => s + p.lon, 0) / people.length;
@@ -150,11 +153,12 @@ export function solveMeeting(g, people, { mode = 'fair', corridors = [1.12, 1.3,
     let best = -1, bestKey = Infinity, bestTie = Infinity;
     for (let v = 0; v < g.n; v++) {
       let mx = 0, sum = 0, ok = true;
-      for (const s of searches) {
-        const d = s.dist[v];
+      for (let i = 0; i < searches.length; i++) {
+        const d = searches[i].dist[v];
         if (d === Infinity) { ok = false; break; }
-        if (d > mx) mx = d;
-        sum += d;
+        const c = d * w[i];
+        if (c > mx) mx = c;
+        sum += c;
       }
       if (!ok) continue;
       const key = mode === 'total' ? sum : mx;
@@ -178,7 +182,8 @@ export function solveMeeting(g, people, { mode = 'fair', corridors = [1.12, 1.3,
   if (meet < 0) throw new Error('Could not connect everyone on the road network');
 
   const reach = searches.map((s) => s.dist[meet]);
-  const radius = Math.max(...reach);
+  const cost = reach.map((d, i) => d * w[i]); // seconds when speeds are given, else metres
+  const radius = Math.max(...cost);
   return {
     meetNode: meet,
     meet: { lat: g.lat[meet], lon: g.lon[meet] },
@@ -189,6 +194,8 @@ export function solveMeeting(g, people, { mode = 'fair', corridors = [1.12, 1.3,
       node: snapped[i].node,
       gap: snapped[i].gap,
       reach: reach[i],
+      cost: cost[i],
+      speed: speeds?.[i] > 0 ? speeds[i] : null,
       dist: searches[i].dist,
       parent: searches[i].parent,
     })),

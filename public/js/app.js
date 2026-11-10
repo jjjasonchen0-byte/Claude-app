@@ -13,7 +13,6 @@ import { MODES, ATTRIBUTION, getDirections, getTravelTimes, navLinks, vehicleNam
 
 const COLORS = ['#007aff', '#ff9500', '#34c759', '#af52de', '#ff3b30', '#30b0c7', '#5856d6', '#ff2d55', '#a2845e', '#8e8e93'];
 const SPEEDS = { walk: 1.35, bike: 4.2, transit: 6.5, drive: 9.5 }; // m/s, urban averages
-const TRAVEL_LABEL = { walk: 'walk', bike: 'bike', transit: 'transit', drive: 'drive' };
 const ANIM_MS = { slow: 9000, normal: 6000, fast: 3200 };
 const RADII = [500, 1000, 2000, 5000];
 const DEFAULT_SETTINGS = { mode: 'fair', travel: 'transit', speed: 'normal', theme: 'auto' };
@@ -76,12 +75,14 @@ function fmtTime(min) {
   const h = Math.floor(min / 60), r = min % 60;
   return r ? `${h} h ${r} min` : `${h} h`;
 }
-const fmtTravel = (m) => `${fmtTime(travelMinutes(m))} ${TRAVEL_LABEL[state.settings.travel]}`;
 const initial = (name) => (name || '?').trim().charAt(0).toUpperCase() || '?';
 const shortAddr = (a) => (a || '').split(', ').slice(0, 2).join(', ');
 
 function toast(msg, { error = false, action, onAction, ms = 3600 } = {}) {
+  // The same message again replaces the one already showing.
+  for (const t of $$('.toast')) if (t.dataset.msg === msg) t.remove();
   const el = document.createElement('div');
+  el.dataset.msg = msg;
   el.className = `toast${error ? ' error' : ''}`;
   el.innerHTML = `<span>${esc(msg)}</span>`;
   if (action) {
@@ -101,9 +102,9 @@ function showScreen(id) {
 /** Everyone: you first, then saved addresses. */
 function everyone() {
   const list = [];
-  if (state.user?.home) list.push({ id: 'home', isHome: true, name: 'You', ...state.user.home, active: true, color: COLORS[0] });
+  if (state.user?.home) list.push({ id: 'home', isHome: true, name: 'You', ...state.user.home, mode: state.user.home.mode || state.settings.travel, active: true, color: COLORS[0] });
   state.places.forEach((p, i) => list.push({
-    ...p, name: p.nickname || shortAddr(p.address) || `Friend ${i + 1}`, color: COLORS[(i + 1) % COLORS.length],
+    ...p, mode: p.mode || state.settings.travel, name: p.nickname || shortAddr(p.address) || `Friend ${i + 1}`, color: COLORS[(i + 1) % COLORS.length],
   }));
   return list;
 }
@@ -247,7 +248,7 @@ function showHomeScreen(cancellable) {
 
 async function saveHome(loc) {
   try {
-    const { user } = await api.updateMe({ home: { address: loc.address, lat: loc.lat, lon: loc.lon } });
+    const { user } = await api.updateMe({ home: { address: loc.address, lat: loc.lat, lon: loc.lon, mode: state.user?.home?.mode || state.settings.travel } });
     state.user = user;
     enterMain(true);
   } catch (err) {
@@ -334,7 +335,7 @@ async function moveAddress(p, ll) {
   const patch = { address: loc.address, lat: ll.lat, lon: ll.lng };
   try {
     if (p.isHome) {
-      state.user = (await api.updateMe({ home: patch })).user;
+      state.user = (await api.updateMe({ home: { ...state.user.home, ...patch } })).user;
     } else {
       const { place } = await api.updatePlace(p.id, patch);
       Object.assign(state.places.find((x) => x.id === p.id), place);
@@ -453,6 +454,7 @@ function enterMain(recentre = false) {
 
 function setView(view, { pop = false } = {}) {
   state.view = view;
+  state.modeMenu = null;
   const panel = $('#panel');
   panel.classList.toggle('away', view === 'searching');
   anim?.canvas.classList.toggle('dim', ['group', 'place', 'share'].includes(view));
@@ -486,7 +488,7 @@ function renderPeople() {
       <div class="cell">
         <span class="avatar" style="--c:${p.color}">${esc(initial(p.name))}</span>
         <div class="cell-main" data-action="focus" style="cursor:pointer">
-          <span class="cell-title">${esc(p.isHome ? (state.user.name ? `You (${state.user.name})` : 'You') : p.name)}</span>
+          <span class="title-row"><span class="cell-title">${esc(p.isHome ? (state.user.name ? `You (${state.user.name})` : 'You') : p.name)}</span>${modePill(p)}</span>
           <span class="cell-sub" title="${esc(p.address)}">${esc(shortAddr(p.address))}</span>
           ${editing ? `<form class="edit-inline" data-action="save-nick"><input id="nick-${esc(p.id)}" name="nick" value="${esc(p.nickname || '')}" maxlength="60" placeholder="Name"><button class="btn btn-primary">Save</button></form>` : ''}
         </div>
@@ -499,6 +501,7 @@ function renderPeople() {
                  <input type="checkbox" data-action="toggle" ${p.active ? 'checked' : ''} aria-label="Include ${esc(p.name)}"><span></span></label>`}
         </div>
       </div>
+      ${modePicker(p)}
     </li>`;
   }).join('');
   return `
@@ -528,7 +531,7 @@ afterRender.people = () => {
 
 async function addPlace(loc) {
   try {
-    const { place } = await api.addPlace({ address: loc.address, lat: loc.lat, lon: loc.lon, nickname: loc.nickname || '' });
+    const { place } = await api.addPlace({ address: loc.address, lat: loc.lat, lon: loc.lon, nickname: loc.nickname || '', mode: state.settings.travel });
     state.places.push(place);
     render();
     toast(`Added ${place.nickname || shortAddr(place.address)}`);
@@ -622,7 +625,7 @@ async function findPlaces({ replay = false } = {}) {
       if (ctrl.signal.aborted) return;
       setStatus('Working out routes…');
       await new Promise((r) => setTimeout(r, 30));
-      solution = solveMeeting(net.graph, people, { mode: state.settings.mode });
+      solution = solveMeeting(net.graph, people, { mode: state.settings.mode, speeds: people.map((p) => SPEEDS[p.mode] || SPEEDS.transit) });
     }
     if (ctrl.signal.aborted) return;
 
@@ -644,7 +647,7 @@ async function findPlaces({ replay = false } = {}) {
     anim = new GrowthAnimation(map, net.graph, solution, people.map((p) => p.color));
     const done = await anim.play({
       duration: ANIM_MS[state.settings.speed] || ANIM_MS.normal,
-      onProgress: (r) => setStatus(`Routes spreading · ${fmtDist(r)}`, { skip: true }),
+      onProgress: (r) => setStatus(`Routes spreading · ${fmtTime(Math.max(1, Math.round(r / 60)))}`, { skip: true }),
     });
     if (!done || ctrl.signal.aborted) return;
 
@@ -695,31 +698,87 @@ function distancesTo(poi) {
   return s.poiDist.get(poi.id);
 }
 
+const modeLabel = (m) => MODES.find((x) => x.id === m)?.label || 'Transit';
+const CARET = '<svg class="caret" viewBox="0 0 10 6" width="8" height="5" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+/** "Transit ▾" pill next to a person's name; opens a picker just for them. */
+const modePill = (person) => `<button class="mode-pill" data-action="mode-menu" data-id="${esc(person.id)}" aria-expanded="${state.modeMenu === person.id}" aria-label="${esc(person.name)} travels by ${modeLabel(person.mode).toLowerCase()}. Change">${glyph(person.mode, 12)}<span>${modeLabel(person.mode)}</span>${CARET}</button>`;
+const modePicker = (person) => (state.modeMenu === person.id ? `<div class="mode-picker" role="group" aria-label="How ${esc(person.name)} travels">
+  ${MODES.map((m) => `<button class="mode-opt${m.id === person.mode ? ' active' : ''}" data-action="set-mode" data-id="${esc(person.id)}" data-mode="${m.id}" aria-pressed="${m.id === person.mode}">${glyph(m.id, 18)}<span>${m.label}</span></button>`).join('')}
+</div>` : '');
+
+/** Change one person's travel mode (saved with them). Returns true if anything changed. */
+function applyMode(id, mode) {
+  let changed = false;
+  if (id === 'home') {
+    if (state.user.home && state.user.home.mode !== mode) { state.user.home = { ...state.user.home, mode }; changed = true; }
+  } else {
+    const p = state.places.find((x) => x.id === id);
+    if (p && p.mode !== mode) { p.mode = mode; changed = true; }
+  }
+  for (const p of state.search?.people || []) if (p.id === id && p.mode !== mode) { p.mode = mode; changed = true; }
+  if (changed) (id === 'home' ? api.updateMe({ home: state.user.home }) : api.updatePlace(id, { mode })).catch((err) => toast(err.message, { error: true }));
+  return changed;
+}
+
+function afterModeChange() {
+  if (state.search && ['results', 'group', 'place'].includes(state.view)) {
+    toast('The meeting point was picked for the old ways of travelling', { action: 'Update it', onAction: () => findPlaces(), ms: 6000 });
+  }
+}
+
+function setPersonMode(id, mode) {
+  state.modeMenu = null;
+  const changed = applyMode(id, mode);
+  render({ keepScroll: true });
+  if (changed) afterModeChange();
+}
+
+/** The Transit / Walk / Bike / Drive bar: everyone travels the same way. */
+function setEveryoneMode(mode) {
+  state.modeMenu = null;
+  const ids = new Set([...activePeople().map((p) => p.id), ...(state.search?.people || []).map((p) => p.id)]);
+  let changed = false;
+  for (const id of ids) changed = applyMode(id, mode) || changed;
+  saveSettings({ travel: mode });
+  render({ keepScroll: true });
+  if (changed) afterModeChange();
+}
+
 const clock = (iso) => (iso ? new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '');
 const mins = (sec) => fmtTime(Math.max(1, Math.round(sec / 60)));
 
 /** One person's travel time: real when known (seconds), otherwise an estimate from road distance. */
 const tripRow = (person, d, sec) => `<li class="trip"><div class="cell"><span class="avatar sm" style="--c:${person.color}">${esc(initial(person.name))}</span>
-  <span class="cell-main cell-title">${esc(person.name)}</span><span class="cell-end"><b>${sec != null ? mins(sec) : `≈ ${fmtTime(travelMinutes(d))}`}</b>${fmtDist(d)}</span></div></li>`;
+  <span class="cell-main"><span class="title-row"><span class="cell-title">${esc(person.name)}</span>${modePill(person)}</span></span>
+  <span class="cell-end"><b>${sec != null ? mins(sec) : `≈ ${fmtTime(travelMinutes(d, person.mode))}`}</b>${fmtDist(d)}</span></div>${modePicker(person)}</li>`;
 
-const modeSwitch = (action) => `<div class="segmented modes" role="tablist" aria-label="How everyone travels">
-  ${MODES.map((m) => `<button class="seg${m.id === state.settings.travel ? ' active' : ''}" data-action="${action}" data-mode="${m.id}" aria-selected="${m.id === state.settings.travel}">${glyph(m.id, 15)}<span>${m.label}</span></button>`).join('')}
-</div>`;
+/** Everyone-at-once bar; shows the shared mode, or nothing selected when people differ. */
+function modeSwitch(action) {
+  const people = state.search?.people || activePeople();
+  const common = people.length && people.every((p) => p.mode === people[0].mode) ? people[0].mode : null;
+  return `<div class="segmented modes" role="group" aria-label="Set how everyone travels">
+  ${MODES.map((m) => `<button class="seg${m.id === common ? ' active' : ''}" data-action="${action}" data-mode="${m.id}" aria-pressed="${m.id === common}">${glyph(m.id, 15)}<span>${m.label}</span></button>`).join('')}
+</div>${common ? '' : '<p class="footnote mixed-note">Everyone travels their own way. Tap a mode above to set everyone, or a person\'s pill to change just them.</p>'}`;
+}
 
-/** Real travel times from everyone to the meeting point, in the chosen mode. */
+/** Real travel times from everyone to the meeting point, each in their own mode. */
 function loadMeetTimes() {
   const s = state.search;
-  const mode = state.settings.travel;
-  const key = `${mode}|${s.solution.meet.lat},${s.solution.meet.lon}`;
+  const meet = s.solution.meet;
+  const key = `${s.people.map((p) => p.mode).join(',')}|${meet.lat},${meet.lon}`;
   if (s.meetTimes?.key === key) return;
   const mt = s.meetTimes = { key, values: s.people.map(() => null) };
   const refresh = () => { if (state.search === s && s.meetTimes === mt && state.view === 'results') render({ keepScroll: true }); };
-  if (mode === 'transit') {
-    s.people.forEach((person, i) => getDirections('transit', person, s.solution.meet)
-      .then((d) => { mt.values[i] = d.duration; refresh(); }).catch(() => {}));
-  } else {
-    getTravelTimes(mode, s.people, [s.solution.meet])
-      .then((t) => { t.durations.forEach((row, i) => { mt.values[i] = row[0]; }); refresh(); }).catch(() => {});
+  s.people.forEach((person, i) => {
+    if (person.mode !== 'transit') return;
+    getDirections('transit', person, meet).then((d) => { mt.values[i] = d.duration; refresh(); }).catch(() => {});
+  });
+  for (const mode of ['walk', 'bike', 'drive']) {
+    const idx = s.people.map((p, i) => (p.mode === mode ? i : -1)).filter((i) => i >= 0);
+    if (!idx.length) continue;
+    getTravelTimes(mode, idx.map((i) => s.people[i]), [meet])
+      .then((t) => { t.durations.forEach((row, k) => { mt.values[idx[k]] = row[0]; }); refresh(); }).catch(() => {});
   }
 }
 
@@ -779,29 +838,36 @@ function groupItems() {
   const times = loadGroupTimes(items);
   const enriched = items.map((p, idx) => {
     const ds = distancesTo(p);
-    const real = times && s.people.every((_, pi) => times[pi]?.[idx] != null);
-    const worstMin = real ? Math.round(Math.max(...s.people.map((_, pi) => times[pi][idx])) / 60) : travelMinutes(Math.max(...ds));
-    return { ...p, ds, worstMin, real };
+    let real = true;
+    const per = s.people.map((person, pi) => {
+      const sec = times?.[pi]?.[idx];
+      if (sec != null) return sec / 60;
+      real = false;
+      return travelMinutes(ds[pi], person.mode);
+    });
+    return { ...p, ds, worstMin: Math.round(Math.max(...per)), real };
   });
   if (s.sort === 'fair') enriched.sort((a, b) => a.worstMin - b.worstMin);
   else enriched.sort((a, b) => a.fromCenter - b.fromCenter);
   return enriched;
 }
 
-/** Real walk / bike / drive times from everyone to each place in the list (one request). */
+/** Real walk / bike / drive times from each person (in their mode) to each place: one request per mode. */
 function loadGroupTimes(items) {
   const s = state.search;
-  const mode = state.settings.travel;
-  if (mode === 'transit' || !items.length) return null;
+  if (!items.length) return null;
   const list = items.slice(0, 80);
-  const key = `${mode}|${list.map((p) => p.id).join(',')}`;
+  const key = `${s.people.map((p) => p.mode).join(',')}|${list.map((p) => p.id).join(',')}`;
   if (s.groupTimes?.key === key) return s.groupTimes.durations;
-  const gt = s.groupTimes = { key, durations: null };
-  getTravelTimes(mode, s.people, list).then((t) => {
-    gt.durations = t.durations;
-    if (state.search === s && s.groupTimes === gt && state.view === 'group') render({ keepScroll: true });
-  }).catch(() => {});
-  return null;
+  const gt = s.groupTimes = { key, durations: s.people.map(() => null) };
+  const refresh = () => { if (state.search === s && s.groupTimes === gt && state.view === 'group') render({ keepScroll: true }); };
+  for (const mode of ['walk', 'bike', 'drive']) {
+    const idx = s.people.map((p, i) => (p.mode === mode ? i : -1)).filter((i) => i >= 0);
+    if (!idx.length) continue;
+    getTravelTimes(mode, idx.map((i) => s.people[i]), list)
+      .then((t) => { t.durations.forEach((row, k) => { gt.durations[idx[k]] = row; }); refresh(); }).catch(() => {});
+  }
+  return gt.durations;
 }
 
 function renderGroup() {
@@ -887,16 +953,18 @@ function renderPlace() {
   const tags = [p.group, p.outdoor ? 'Outdoor seating' : '', p.vegan ? 'Vegan options' : p.vegetarian ? 'Vegetarian options' : '', p.wheelchair === 'yes' ? 'Step-free' : ''].filter(Boolean);
   const links = mapLinks(p);
   const website = p.website && /^https?:\/\//i.test(p.website) ? p.website : p.website ? `https://${p.website}` : '';
-  const mode = state.settings.travel;
   const when = state.when || { type: 'now' };
-  const att = mode === 'transit' ? ATTRIBUTION.transit : ATTRIBUTION.routing;
+  const anyTransit = s.people.some((x) => x.mode === 'transit');
+  const anyRoad = s.people.some((x) => x.mode !== 'transit');
+  const credits = [anyTransit && ATTRIBUTION.transit, anyRoad && ATTRIBUTION.routing].filter(Boolean)
+    .map((a) => `<a href="${a.url}" target="_blank" rel="noopener">${esc(a.text)}</a>`).join(' · ');
   return `
     ${p.id === 'meet' ? backBtn('back-results', 'Places') : backBtn('back-group', s.group === '*' ? 'Back' : s.group)}
     <div class="place-head">${tile(p.tab, 'xl')}<div style="min-width:0"><h2>${esc(p.name)}</h2><div class="footnote">${esc(tags.join(' · '))}</div></div></div>
     <button class="btn btn-primary btn-block btn-lg" data-action="choose">Send location</button>
     <div class="section-title">Getting there</div>
     ${modeSwitch('dir-mode')}
-    ${mode === 'transit' ? `<div class="when-row">
+    ${anyTransit ? `<div class="when-row">
       <select id="dir-when-type" aria-label="When">
         <option value="now"${when.type === 'now' ? ' selected' : ''}>Leave now</option>
         <option value="arrive"${when.type === 'arrive' ? ' selected' : ''}>Arrive by…</option>
@@ -904,7 +972,7 @@ function renderPlace() {
       ${when.type === 'arrive' ? `<input type="datetime-local" id="dir-when-time" value="${esc(when.time || '')}" aria-label="Arrive by">` : ''}
     </div>` : ''}
     <ul class="group icons dirs">${s.people.map((person, i) => dirRow(person, i, ds[i])).join('')}</ul>
-    <p class="footnote attrib"><a href="${att.url}" target="_blank" rel="noopener">${esc(att.text)}</a></p>
+    <p class="footnote attrib">${credits}</p>
     <div class="section-title">Details</div>
     <ul class="group kv">
       <li><div class="cell"><span class="k">Address</span><span class="v">${esc(p.address || 'Not listed')}${p.id === 'meet' ? '' : `<br><span class="footnote">${fmtDist(p.fromCenter)} from the meeting point</span>`}</span></div></li>
@@ -936,17 +1004,17 @@ afterRender.place = () => {
 function loadPlaceDirections() {
   const s = state.search;
   const p = s.place;
-  const mode = state.settings.travel;
-  const when = mode === 'transit' ? state.when || { type: 'now' } : { type: 'now' };
-  const key = [p.id, mode, when.type, when.time || ''].join('|');
+  const modes = s.people.map((x) => x.mode);
+  const when = modes.includes('transit') ? state.when || { type: 'now' } : { type: 'now' };
+  const key = [p.id, modes.join(','), when.type, when.time || ''].join('|');
   if (state.dir?.key === key) return;
   const prev = state.dir;
-  const dir = state.dir = { key, mode, results: s.people.map(() => ({ status: 'loading' })), expanded: prev?.key?.startsWith(`${p.id}|`) ? prev.expanded : -1, fitted: false };
+  const dir = state.dir = { key, results: s.people.map(() => ({ status: 'loading' })), expanded: prev?.key?.startsWith(`${p.id}|`) ? prev.expanded : -1, fitted: false };
   const opts = when.type === 'arrive' && when.time ? { time: new Date(when.time), arriveBy: true } : {};
   s.people.forEach((person, i) => {
-    getDirections(mode, person, p, opts)
+    getDirections(person.mode, person, p, person.mode === 'transit' ? opts : {})
       .then((data) => { dir.results[i] = { status: 'ok', data, option: 0 }; })
-      .catch((err) => { dir.results[i] = { status: 'error', message: friendlyError(err, mode) }; })
+      .catch((err) => { dir.results[i] = { status: 'error', message: friendlyError(err, person.mode) }; })
       .finally(() => {
         if (state.dir !== dir || state.view !== 'place') return;
         drawDirections();
@@ -1013,7 +1081,7 @@ function dirRow(person, i, d) {
     end = '<span class="spinner" aria-label="Loading"></span>';
   } else if (r.status === 'error') {
     sub = esc(r.message);
-    end = `<b>≈ ${fmtTime(travelMinutes(d, dir.mode))}</b>estimate`;
+    end = `<b>≈ ${fmtTime(travelMinutes(d, person.mode))}</b>estimate`;
   } else if (r.data.options) {
     const o = currentOption(r);
     const legs = o.legs.filter((l) => !isWalkLeg(l) || l.duration >= 180);
@@ -1021,26 +1089,27 @@ function dirRow(person, i, d) {
     end = `<b>${mins(o.duration)}</b>`;
   } else {
     const arrive = new Date(Date.now() + r.data.duration * 1000).toISOString();
-    sub = `${fmtDist(r.data.distance)} by ${MODES.find((m) => m.id === r.data.mode).label.toLowerCase()}<span class="times">Arrive about ${clock(arrive)} if you leave now</span>`;
+    sub = `${fmtDist(r.data.distance)}<span class="times">Arrive about ${clock(arrive)} if you leave now</span>`;
     end = `<b>${mins(r.data.duration)}</b>`;
   }
   return `<li class="dir${open ? ' open' : ''}">
-    <button class="cell cell-btn" data-action="dir-toggle" data-pi="${i}" aria-expanded="${open}">
+    <div class="cell cell-btn" role="button" tabindex="0" data-action="dir-toggle" data-pi="${i}" aria-expanded="${open}">
       <span class="avatar sm" style="--c:${person.color}">${esc(initial(person.name))}</span>
-      <span class="cell-main"><span class="cell-title">${esc(person.name)}</span><span class="cell-sub">${sub}</span></span>
+      <span class="cell-main"><span class="title-row"><span class="cell-title">${esc(person.name)}</span>${modePill(person)}</span><span class="cell-sub">${sub}</span></span>
       <span class="cell-end">${end}</span>${CHEV}
-    </button>
+    </div>
+    ${modePicker(person)}
     ${open ? itinerary(person, i, r) : ''}
   </li>`;
 }
 
 function itinerary(person, i, r) {
   const p = state.search.place;
-  const links = navLinks(state.dir.mode, person, p);
+  const links = navLinks(person.mode, person, p);
   const handoff = `<div class="handoff"><a class="btn btn-tinted btn-sm" href="${links.google}" target="_blank" rel="noopener">Google Maps</a><a class="btn btn-tinted btn-sm" href="${links.apple}" target="_blank" rel="noopener">Apple Maps</a></div>`;
   if (r.status !== 'ok') return `<div class="itin">${handoff}</div>`;
   if (!r.data.options) {
-    return `<div class="itin"><p class="footnote">${fmtDist(r.data.distance)} · about ${mins(r.data.duration)}${state.dir.mode === 'drive' ? ' without traffic' : ''}.</p>${handoff}</div>`;
+    return `<div class="itin"><p class="footnote">${fmtDist(r.data.distance)} · about ${mins(r.data.duration)}${person.mode === 'drive' ? ' without traffic' : ''}.</p>${handoff}</div>`;
   }
   const opts = r.data.options;
   const o = currentOption(r);
@@ -1181,8 +1250,13 @@ function initPanel() {
       case 'back-group': s.markersKey = null; setView('group'); break;
       case 'trip-mode':
       case 'dir-mode':
-        if (el.dataset.mode !== state.settings.travel) saveSettings({ travel: el.dataset.mode });
+        setEveryoneMode(el.dataset.mode);
         break;
+      case 'mode-menu':
+        state.modeMenu = state.modeMenu === el.dataset.id ? null : el.dataset.id;
+        render({ keepScroll: true });
+        break;
+      case 'set-mode': setPersonMode(el.dataset.id, el.dataset.mode); break;
       case 'dir-toggle': {
         const i = Number(el.dataset.pi);
         state.dir.expanded = state.dir.expanded === i ? -1 : i;
@@ -1215,6 +1289,10 @@ function initPanel() {
       }
       default: break;
     }
+  });
+  body.addEventListener('keydown', (e) => {
+    const t = e.target;
+    if ((e.key === 'Enter' || e.key === ' ') && t.getAttribute?.('role') === 'button' && t.tagName !== 'BUTTON') { e.preventDefault(); t.click(); }
   });
   body.addEventListener('submit', (e) => {
     const form = e.target.closest('[data-action="save-nick"]');

@@ -170,12 +170,27 @@ try {
   assert.ok(await page.locator('.dirs .legs .leg').count() >= 4, 'journey shows its legs');
   await page.waitForTimeout(500);
   await shot('07-place');
-  // Switch to cycling: real route, no badges.
+  // Everyone cycles: real routes, no line badges, every pill says Bike.
   await page.click('.modes [data-mode=bike]');
-  await page.waitForFunction(() => !document.querySelector('.dirs .line-badge') && /km by bike/.test(document.querySelector('.dirs').textContent));
+  await page.waitForFunction(() => !document.querySelector('.dirs .line-badge') && [...document.querySelectorAll('.dirs .mode-pill')].every((b) => /Bike/.test(b.textContent)));
   await shot('07b-place-bike');
+  // Back to public transport for everyone, then just Sam on a bike.
   await page.click('.modes [data-mode=transit]');
-  await page.waitForSelector('.dirs .line-badge');
+  await page.waitForFunction(() => document.querySelectorAll('.dirs .line-badge').length >= 3);
+  const samRow = page.locator('.dirs > li', { hasText: 'Sam' });
+  await samRow.locator('.mode-pill').click();
+  await samRow.locator('.mode-picker [data-mode=bike]').click();
+  await page.waitForFunction(() => {
+    const rows = [...document.querySelectorAll('.dirs > li')];
+    const sam = rows.find((r) => r.textContent.includes('Sam'));
+    const others = rows.filter((r) => r !== sam);
+    return sam && /Bike/.test(sam.querySelector('.mode-pill').textContent) && !sam.querySelector('.line-badge') && !sam.querySelector('.spinner')
+      && others.every((r) => r.querySelector('.line-badge'));
+  });
+  assert.equal(await page.locator('.modes .seg.active').count(), 0, 'mixed modes: the everyone bar shows no single mode');
+  assert.ok(await page.locator('.mixed-note').isVisible());
+  await page.waitForTimeout(400);
+  await shot('07c-place-mixed');
   await page.click('[data-action=choose]');
   await page.waitForSelector('#share-text');
   const text = await page.inputValue('#share-text');
@@ -201,6 +216,7 @@ try {
   await page.reload();
   await page.waitForSelector('.person');
   assert.equal(await page.locator('.person').count(), 3, 'addresses persisted on the server');
+  assert.match(await page.locator('.person', { hasText: 'Sam' }).locator('.mode-pill').textContent(), /Bike/, "Sam's travel mode is remembered");
   await page.click('#btn-menu');
   assert.equal(await page.textContent('#drawer-email'), 'alex@example.com');
   assert.equal(await page.locator('#history-list [data-hid]').count(), 1, 'history moved into the profile');

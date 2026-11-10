@@ -34,6 +34,17 @@ test('fair mode minimises the longest trip; total mode minimises the sum', () =>
   assert.ok(sum(total) <= sum(fair) + 1e-6, 'total should have smaller sum');
 });
 
+test('with travel speeds, the meeting point is fair in time: drivers go further than walkers', () => {
+  const g = lineGraph();
+  const walker = { lat: 51.5, lon: -0.1 };
+  const driver = { lat: 51.5, lon: -0.1 + 100 * 0.00015 };
+  const r = solveMeeting(g, [walker, driver], { speeds: [1.35, 9.5] });
+  const [w, d] = r.people;
+  assert.ok(w.reach < d.reach / 4, `walker ${w.reach} m vs driver ${d.reach} m`);
+  assert.ok(Math.abs(w.cost - d.cost) < 15, `times ${w.cost}s vs ${d.cost}s`);
+  assert.equal(r.radius, Math.max(w.cost, d.cost));
+});
+
 test('three friends on a synthetic network all reach the meeting point', () => {
   const people = [
     { lat: 40.70, lon: -74.02 }, { lat: 40.76, lon: -73.97 }, { lat: 40.69, lon: -73.94 },

@@ -37,26 +37,29 @@ export class GrowthAnimation {
     const toMeet = dijkstra(graph, solution.meetNode).dist;
     this.layers = solution.people.map((person) => {
       const routes = routeBundle(graph, person, solution.meetNode, toMeet);
-      // Everyone's routes arrive together when the shared radius reaches this
-      // person's distance, so the "same rate" circle still holds.
-      const arrive = person.reach;
+      // The shared radius is travel time when people have speeds (distance
+      // otherwise): each person's routes grow at their own pace and everyone
+      // arrives together when it reaches the meeting point.
+      const k = person.speed ? 1 / person.speed : 1;
+      const arrive = person.cost ?? person.reach;
+      const gap = person.gap * k;
       const segs = [];
       const seen = new Set();
       const door = proj(person.lat, person.lon);
       const first = pt(routes[0].path[0]);
-      segs.push({ a: door, b: first, d0: 0, d1: person.gap, best: true });
+      segs.push({ a: door, b: first, d0: 0, d1: gap, best: true });
       routes.forEach((route, ri) => {
-        const scale = route.length > 0 ? (arrive - person.gap) / route.length : 0;
+        const scale = route.length > 0 ? (arrive - gap) / route.length : 0;
         let along = 0;
         for (let i = 1; i < route.path.length; i++) {
           const u = route.path[i - 1], v = route.path[i];
           const len = edgeLength(graph, u, v);
           const key = Math.min(u, v) * 1048576 + Math.max(u, v);
-          const d0 = person.gap + along * scale;
+          const d0 = gap + along * scale;
           along += len;
           if (seen.has(key)) continue; // shared with a route already drawn
           seen.add(key);
-          segs.push({ a: pt(u), b: pt(v), d0, d1: person.gap + along * scale, best: ri === 0 });
+          segs.push({ a: pt(u), b: pt(v), d0, d1: gap + along * scale, best: ri === 0 });
         }
       });
       segs.sort((x, y) => x.d0 - y.d0);

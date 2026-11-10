@@ -829,7 +829,7 @@ function me() {
   if (!u) throw fail(401, 'Please sign in');
   return { db, u };
 }
-const clean = (p) => ({ address: String(p.address || '').slice(0, 300), nickname: String(p.nickname || '').trim().slice(0, 60), lat: Number(p.lat), lon: Number(p.lon) });
+const clean = (p) => ({ address: String(p.address || '').slice(0, 300), nickname: String(p.nickname || '').trim().slice(0, 60), lat: Number(p.lat), lon: Number(p.lon), ...(['transit', 'walk', 'bike', 'drive'].includes(p.mode) ? { mode: p.mode } : {}) });
 
 export const api = {
   async me() { try { return { user: pub(me().u) }; } catch { return { user: null }; } },
@@ -874,6 +874,7 @@ export const api = {
     if ('address' in patch || 'lat' in patch) Object.assign(place, clean({ ...place, ...patch }));
     if ('nickname' in patch) place.nickname = String(patch.nickname || '').trim().slice(0, 60);
     if ('active' in patch) place.active = !!patch.active;
+    if ('mode' in patch) { if (['transit', 'walk', 'bike', 'drive'].includes(patch.mode)) place.mode = patch.mode; else delete place.mode; }
     save(db);
     return { place };
   },
@@ -925,8 +926,8 @@ export function sampleGroup() {
   ensure();
   const at = (x, y) => { const ll = toLL(x, y); const a = nearestAddress(ll.lat, ll.lon); return { address: fmtAddress(a), lat: a.lat, lon: a.lon }; };
   return {
-    home: at(-3600, 2600),
-    friends: [['Sam', 3400, 3300], ['Priya', 2600, -2800], ['Leo', -2800, -2400]].map(([nickname, x, y]) => ({ ...at(x, y), nickname })),
+    home: { ...at(-3600, 2600), mode: 'walk' },
+    friends: [['Sam', 3400, 3300, 'bike'], ['Priya', 2600, -2800, 'walk'], ['Leo', -2800, -2400, 'drive']].map(([nickname, x, y, mode]) => ({ ...at(x, y), nickname, mode })),
   };
 }
 

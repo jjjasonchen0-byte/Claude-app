@@ -19,11 +19,13 @@ function save(data) {
 }
 
 const newId = () => Math.random().toString(36).slice(2, 11);
+const MODES = ['transit', 'walk', 'bike', 'drive'];
 const clean = (p) => ({
   address: String(p.address || '').slice(0, 300),
   nickname: String(p.nickname || '').trim().slice(0, 60),
   lat: Number(p.lat),
   lon: Number(p.lon),
+  ...(MODES.includes(p.mode) ? { mode: p.mode } : {}),
 });
 const view = (d) => ({ ...d, history: d.history.slice(0, 50) });
 
@@ -57,6 +59,7 @@ export const guest = {
     if ('address' in patch || 'lat' in patch || 'lon' in patch) Object.assign(place, clean({ ...place, ...patch }));
     if ('nickname' in patch) place.nickname = String(patch.nickname || '').trim().slice(0, 60);
     if ('active' in patch) place.active = !!patch.active;
+    if ('mode' in patch) { if (MODES.includes(patch.mode)) place.mode = patch.mode; else delete place.mode; }
     save(d);
     return { place };
   },
