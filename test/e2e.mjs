@@ -85,6 +85,22 @@ await ctx.route('https://photon.komoot.io/**', (r) => {
   const hit = Object.values(ADDRESSES).filter((a) => a.name.toLowerCase().includes(q.split(' ')[0]) || q.includes(a.name.toLowerCase().split(' ')[1]));
   return r.fulfill({ json: { features: hit.map(feature) } });
 });
+// Directions: the server would call FOSSGIS OSRM and Transitous; stand in with
+// real (trimmed) London responses, normalised exactly as the server does.
+const { normalizeOsrm, normalizeOsrmTable, normalizeTransit } = await import('../public/js/directions.js');
+const fx = (n) => JSON.parse(fs.readFileSync(new URL(`./fixtures/${n}`, import.meta.url), 'utf8'));
+let transitCalls = 0;
+await ctx.route('**/api/directions?**', (r) => {
+  const mode = new URL(r.request().url()).searchParams.get('mode');
+  if (mode === 'transit') transitCalls++;
+  return r.fulfill({ json: mode === 'transit' ? normalizeTransit(fx('transitous-plan.json')) : normalizeOsrm(fx('osrm-route.json'), mode) });
+});
+await ctx.route('**/api/traveltimes?**', (r) => {
+  const q = new URL(r.request().url()).searchParams;
+  const n = q.get('from').split(';').length, m = q.get('to').split(';').length;
+  const t = normalizeOsrmTable(fx('osrm-table.json'));
+  return r.fulfill({ json: { durations: Array.from({ length: n }, (_, i) => Array.from({ length: m }, (_, j) => t.durations[i % 2][j % 2] + j * 30)), distances: [] } });
+});
 await ctx.route(/overpass/, async (r) => {
   const q = new URLSearchParams(r.request().postData()).get('data');
   await new Promise((res) => setTimeout(res, 150));
@@ -146,7 +162,20 @@ try {
   await page.locator('.poi').first().click();
   await page.waitForSelector('[data-action=choose]');
   await page.waitForTimeout(600);
+  // Real directions: public transport by default, with line badges and an expandable journey.
+  await page.waitForFunction(() => document.querySelectorAll('.dirs .line-badge').length >= 3);
+  assert.ok(transitCalls >= 3, 'asked for public transport for everyone');
+  await page.locator('.dirs [data-action=dir-toggle]').first().click();
+  await page.waitForSelector('.dirs .legs .leg.ride');
+  assert.ok(await page.locator('.dirs .legs .leg').count() >= 4, 'journey shows its legs');
+  await page.waitForTimeout(500);
   await shot('07-place');
+  // Switch to cycling: real route, no badges.
+  await page.click('.modes [data-mode=bike]');
+  await page.waitForFunction(() => !document.querySelector('.dirs .line-badge') && /km by bike/.test(document.querySelector('.dirs').textContent));
+  await shot('07b-place-bike');
+  await page.click('.modes [data-mode=transit]');
+  await page.waitForSelector('.dirs .line-badge');
   await page.click('[data-action=choose]');
   await page.waitForSelector('#share-text');
   const text = await page.inputValue('#share-text');

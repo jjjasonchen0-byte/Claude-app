@@ -7,7 +7,8 @@ Find somewhere that's roughly as close for everyone in a group, with a press of 
 3. Press **Find a place to meet.** Routes grow along the real streets from every address at the same rate (an invisible circle measured along the roads). Each person gets a main route and a few alternatives, and every step of every route moves towards the meeting point, the spot where everyone's routes arrive together.
 4. A panel lists what's nearby in tabs (Food, Drinks, Fun, Culture, Outdoors, Shopping). Each tab has listings with counts, e.g. `Italian 4`.
 5. Pick a listing to **show those places on the map** as numbered, labelled pins you can click.
-6. Choose one and **send the location** by share sheet, WhatsApp, Messages, Email, Telegram, copy, a calendar invite, or Google/Apple Maps.
+6. Open a place to see **real directions for everyone**: public transport (lines in their official colours, times, changes, walking legs, with *Leave now* or *Arrive by*), walking, cycling or driving. Each route is drawn on the map; tap a person for the step-by-step journey or to open it in Google Maps or Apple Maps. You can also open the meeting point itself.
+7. Choose one and **send the location** by share sheet, WhatsApp, Messages, Email, Telegram, copy, a calendar invite, or Google/Apple Maps.
 
 **Profiles are optional.** Without one, everything is saved in the browser. Signing in or creating a profile (menu → *Sign in or create a profile*) keeps your people and past meetups on every device, and anything you set up as a guest moves into the profile.
 
@@ -17,10 +18,32 @@ The look follows Apple's design language: system font, frosted-glass panels, ins
 
 ```bash
 npm install
-npm start            # http://localhost:3000
+MEET_CONTACT="you@example.com" npm start      # http://localhost:3000
 ```
 
 Requires Node 18+. The only dependency is Leaflet, which is served from `node_modules`. Profiles are stored in `data/db.json`; set `DATA_FILE` to change where. Set `PORT` to change the port.
+
+To use it on your phone, deploy it anywhere that runs Node or Docker (for example Render, Railway or Fly.io) and open the HTTPS address it gives you; your phone's location button needs HTTPS. A `Dockerfile` is included:
+
+```bash
+docker build -t meet . && docker run -p 3000:3000 -e MEET_CONTACT="you@example.com" -v meet-data:/app/data meet
+```
+
+### Real-world data and the rules that come with it
+
+Everything comes from free, open services. Each asks for light, fair use:
+
+| What | Service | Notes |
+| --- | --- | --- |
+| Map tiles | OpenStreetMap | [Tile usage policy](https://operations.osmfoundation.org/policies/tiles/). For heavy use, switch to a commercial tile provider |
+| Address search | Photon (komoot), Nominatim fallback | Called from the browser |
+| Streets and places | Overpass API (overpass-api.de, with two mirrors) | Called from the browser. Public Overpass servers sometimes refuse cloud servers or are busy; the app then falls back to approximate streets and lets you open the meeting point directly |
+| Walk / bike / drive directions | [FOSSGIS OSRM](https://routing.openstreetmap.de/about.html) | Relayed and cached by the Meet server |
+| Public transport | [Transitous](https://transitous.org/api/) (MOTIS 2) | Relayed and cached by the Meet server |
+
+**Transitous has conditions you need to meet:** the app must be **open source** (published under an open-source licence), **non-commercial**, light on their servers (the server caps public-transport searches at `TRANSIT_DAILY_LIMIT`, default 600 a day, below their ~720/day guideline), it must identify itself with a way to contact you (set `MEET_CONTACT` to a website or email address; it goes in the `User-Agent`), and it must credit them visibly (the app links to their data sources on the map and under each set of directions). Consider [donating](https://transitous.org/donate/) if you use it a lot.
+
+The browser asks the Meet server for directions (`/api/directions`, `/api/traveltimes`), which trims the responses for phones (a public-transport answer drops from about 150 KB to about 35 KB), caches them and rate-limits each visitor. If there's no server, the browser calls the services directly.
 
 ## Test version (no server, no internet)
 
@@ -50,13 +73,14 @@ Requires Node 18+. The only dependency is Leaflet, which is served from `node_mo
 | `public/js/meet.js` | Runs Dijkstra from every address, each limited to a "towards the others" corridor that widens automatically if roads don't connect. The meeting point is the node that minimises the longest (or total) road distance. `routeBundle` then finds up to four different routes per person in which every step moves closer to the meeting point |
 | `public/js/growth.js` | Canvas animation: each person's routes grow at one shared rate (an invisible circle measured along the roads), a main route plus faint alternatives, with nothing branching away from the meeting point. When everyone arrives the alternatives fade and the main routes stay. It scales with the map while zooming |
 | `public/js/pois.js` | Fetches places near the meeting point from Overpass and groups them into tabs and listings |
+| `public/js/directions.js` | Real directions: request URLs and response normalisers for FOSSGIS OSRM (walk, bike, drive, and travel-time tables) and Transitous (public transport itineraries with lines, colours, times and walking legs), a polyline decoder, and the browser client that uses the Meet server or calls the services directly |
 | `public/js/share.js` | Share text, messaging links, map links and the `.ics` invite |
 
-Map data © OpenStreetMap contributors. Tiles, geocoding (Photon / Nominatim) and Overpass use the free public instances, which suit personal use. For real traffic, use your own instances or a commercial provider, as their usage policies ask.
+Map data © OpenStreetMap contributors. Routing by FOSSGIS OSRM. Public transport by Transitous and [its data sources](https://transitous.org/sources/).
 
 ## Tests
 
 ```bash
-npm test                                   # solver unit tests
+npm test                                   # solver and directions unit tests (directions use trimmed real London responses)
 NODE_PATH=$(npm root -g) npm run test:e2e  # full browser walkthrough (Playwright; map services mocked)
 ```

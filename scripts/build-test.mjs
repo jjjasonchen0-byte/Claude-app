@@ -35,12 +35,19 @@ if (app.includes('tile.openstreetmap.org')) throw new Error('build-test: tile la
 app = replaceOnce(app, 'map.attributionControl.setPrefix(false);', "map.attributionControl.setPrefix(false).addAttribution('Port Verity is a made-up test town');", 'attribution');
 // The town is fictional, so links to real map apps and calendar files are left out.
 for (const [from, label] of [
-  ['      <a class="btn btn-tinted" href="${links.googleDirections}" target="_blank" rel="noopener">Directions</a>\n', 'directions link'],
   ['      <a class="btn btn-tinted" href="${links.osm}" target="_blank" rel="noopener">Open in maps</a>\n', 'open in maps link'],
   ['      <button class="btn btn-tinted" data-action="calendar">Calendar</button>\n', 'calendar button'],
   ['      <a class="btn btn-tinted" href="${links.google}" target="_blank" rel="noopener">Google Maps</a>\n', 'google maps button'],
   ['      <a class="btn btn-tinted" href="${links.apple}" target="_blank" rel="noopener">Apple Maps</a>\n', 'apple maps button'],
 ]) app = replaceOnce(app, from, '', label);
+// The test town has no timetables, so start on walking directions.
+app = replaceOnce(app, "const DEFAULT_SETTINGS = { mode: 'fair', travel: 'transit',", "const DEFAULT_SETTINGS = { mode: 'fair', travel: 'walk',", 'default travel mode');
+// Directions in the test town come from its own streets, not the real routing services.
+app = app.replace(/ {2}map\.attributionControl\.addAttribution\(`Routes[^\n]*\n/, '');
+app = app.replace(/ {2}const handoff = `[^\n]*\n/, "  const handoff = '';\n");
+app = replaceOnce(app, '    <p class="footnote attrib"><a href="${att.url}" target="_blank" rel="noopener">${esc(att.text)}</a></p>',
+  '    <p class="footnote attrib">Test town: routes follow its own streets. The real app uses live routing and public transport.</p>', 'routing attribution');
+if (app.includes('addAttribution(`Routes') || app.includes('links.google}" target="_blank" rel="noopener">Google Maps</a><a')) throw new Error('build-test: real-service links left in test build');
 
 // ---- page markup
 const html = read('public/index.html');
@@ -84,6 +91,7 @@ const modules = [
   ['growth', 'public/js/growth.js'],
   ['pois', 'public/js/pois.js'],
   ['share', 'public/js/share.js'],
+  ['directions', 'public/js/directions.js'],
   ['demo', 'public/js/demo.js'],
   ['guest', 'public/js/guest.js'],
 ];
@@ -96,6 +104,7 @@ js += `// ---- test-mode wiring: local stand-ins for the server and map services
   __m.geocode = { searchAddress: d.searchAddress, reverseGeocode: d.reverseGeocode, currentPosition: d.currentPosition };
   __m.network = { ...__m.network, loadNetwork: d.loadNetwork };
   __m.pois = { ...__m.pois, findPois: d.findPois };
+  __m.directions = { ...__m.directions, getDirections: d.directions, getTravelTimes: d.travelTimes };
   const baseText = __m.share.shareText;
   __m.share = { ...__m.share, shareText: (p, o) => baseText(p, o).split('\\n').filter((l) => !l.startsWith('https://')).join('\\n') };
 })();

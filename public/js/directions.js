@@ -1,0 +1,211 @@
+// Real directions: walking, cycling and driving from OpenStreetMap routing
+// (OSRM, run by FOSSGIS at routing.openstreetmap.de) and public transport
+// from Transitous (MOTIS 2, api.transitous.org).
+//
+// Pure functions shared by the browser and the server: request URLs,
+// response normalisers and a polyline decoder. The browser asks the Meet
+// server first (which caches, trims responses and identifies the app as the
+// providers ask); without a server it calls the providers directly.
+
+export const MODES = [
+  { id: 'transit', label: 'Transit' },
+  { id: 'walk', label: 'Walk' },
+  { id: 'bike', label: 'Bike' },
+  { id: 'drive', label: 'Drive' },
+];
+
+const OSRM = 'https://routing.openstreetmap.de';
+const OSRM_PROFILE = { walk: 'routed-foot', bike: 'routed-bike', drive: 'routed-car' };
+const TRANSITOUS = 'https://api.transitous.org/api/v5/plan';
+
+export const ATTRIBUTION = {
+  routing: { text: 'Routes © OpenStreetMap contributors, via FOSSGIS OSRM', url: 'https://routing.openstreetmap.de/about.html' },
+  transit: { text: 'Public transport by Transitous', url: 'https://transitous.org/sources/' },
+};
+
+const ll = (p) => `${Number(p.lat).toFixed(6)},${Number(p.lon).toFixed(6)}`;
+const lonlat = (p) => `${Number(p.lon).toFixed(6)},${Number(p.lat).toFixed(6)}`;
+
+export function osrmRouteUrl(mode, from, to) {
+  return `${OSRM}/${OSRM_PROFILE[mode]}/route/v1/driving/${lonlat(from)};${lonlat(to)}?overview=full&geometries=geojson&steps=false`;
+}
+
+export function osrmTableUrl(mode, sources, destinations) {
+  const pts = [...sources, ...destinations].map(lonlat).join(';');
+  const src = sources.map((_, i) => i).join(';');
+  const dst = destinations.map((_, i) => i + sources.length).join(';');
+  return `${OSRM}/${OSRM_PROFILE[mode]}/table/v1/driving/${pts}?sources=${src}&destinations=${dst}&annotations=duration,distance`;
+}
+
+export function transitUrl(from, to, { time, arriveBy = false } = {}) {
+  const q = new URLSearchParams({
+    fromPlace: ll(from), toPlace: ll(to), arriveBy: String(!!arriveBy),
+    numItineraries: '3', maxItineraries: '3', detailedTransfers: 'false',
+  });
+  if (time) q.set('time', new Date(time).toISOString());
+  return `${TRANSITOUS}?${q}`;
+}
+
+/** Decode a Google-style encoded polyline into [[lat, lon], ...]. */
+export function decodePolyline(str, precision = 5) {
+  const factor = 10 ** precision;
+  const out = [];
+  let i = 0, lat = 0, lon = 0;
+  while (i < str.length) {
+    for (const which of [0, 1]) {
+      let shift = 0, result = 0, b;
+      do {
+        b = str.charCodeAt(i++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20 && i < str.length);
+      const delta = result & 1 ? ~(result >> 1) : result >> 1;
+      if (which === 0) lat += delta; else lon += delta;
+    }
+    out.push([lat / factor, lon / factor]);
+  }
+  return out;
+}
+
+/** OSRM route → { mode, duration (s), distance (m), geometry: [[lat, lon]] }. */
+export function normalizeOsrm(json, mode) {
+  const r = json?.routes?.[0];
+  if (json?.code !== 'Ok' || !r) throw Object.assign(new Error('No route found'), { status: 404 });
+  return {
+    mode, provider: 'osrm',
+    duration: Math.round(r.duration), distance: Math.round(r.distance),
+    geometry: (r.geometry?.coordinates || []).map(([lon, lat]) => [lat, lon]),
+  };
+}
+
+/** OSRM table → { durations: [[s|null]], distances: [[m|null]] } (sources × destinations). */
+export function normalizeOsrmTable(json) {
+  if (json?.code !== 'Ok') throw Object.assign(new Error('Travel times unavailable'), { status: 502 });
+  const round = (rows) => (rows || []).map((row) => row.map((v) => (v == null ? null : Math.round(v))));
+  return { durations: round(json.durations), distances: round(json.distances) };
+}
+
+const VEHICLE = {
+  BUS: 'Bus', COACH: 'Coach', TRAM: 'Tram', SUBWAY: 'Underground', METRO: 'Metro', FERRY: 'Ferry', AIRPLANE: 'Flight',
+  RAIL: 'Train', HIGHSPEED_RAIL: 'Train', LONG_DISTANCE: 'Train', NIGHT_RAIL: 'Night train', REGIONAL_FAST_RAIL: 'Train',
+  REGIONAL_RAIL: 'Train', SUBURBAN: 'Train', FUNICULAR: 'Funicular', AERIAL_LIFT: 'Cable car', ODM: 'On-demand', OTHER: 'Transit',
+};
+export const vehicleName = (mode) => VEHICLE[mode] || 'Transit';
+export const isWalkLeg = (leg) => leg.mode === 'WALK' || leg.mode === 'BIKE' || leg.mode === 'CAR';
+
+const place = (p, fallback) => ({
+  name: p?.name && !['START', 'END'].includes(p.name) ? p.name : fallback,
+  lat: p?.lat, lon: p?.lon,
+  time: p?.departure || p?.arrival || null,
+});
+
+function normalizeLeg(l) {
+  const color = l.routeColor && /^[0-9a-f]{6}$/i.test(l.routeColor) ? `#${l.routeColor}` : null;
+  const textColor = l.routeTextColor && /^[0-9a-f]{6}$/i.test(l.routeTextColor) ? `#${l.routeTextColor}` : '#ffffff';
+  return {
+    mode: l.mode,
+    line: l.displayName || l.routeShortName || l.routeLongName || '',
+    color, textColor,
+    headsign: l.headsign || '',
+    agency: l.agencyName || '',
+    from: { ...place(l.from, 'Start'), time: l.startTime || l.from?.departure || null },
+    to: { ...place(l.to, 'Destination'), time: l.endTime || l.to?.arrival || null },
+    duration: Math.round(l.duration || 0),
+    distance: l.distance != null ? Math.round(l.distance) : null,
+    stops: Array.isArray(l.intermediateStops) ? l.intermediateStops.length : 0,
+    realTime: !!l.realTime,
+    geometry: l.legGeometry?.points ? decodePolyline(l.legGeometry.points, l.legGeometry.precision || 5) : [],
+  };
+}
+
+function normalizeItinerary(it) {
+  const legs = (it.legs || []).map(normalizeLeg);
+  return {
+    duration: Math.round(it.duration || 0),
+    start: it.startTime || legs[0]?.from.time || null,
+    end: it.endTime || legs.at(-1)?.to.time || null,
+    transfers: it.transfers ?? Math.max(0, legs.filter((l) => !isWalkLeg(l)).length - 1),
+    legs,
+  };
+}
+
+/**
+ * Transitous plan → { mode: 'transit', options: [itinerary, ...] } with the
+ * best option first: earliest arrival when leaving at a time, latest
+ * departure when arriving by a time; fewer changes break ties.
+ */
+export function normalizeTransit(json, { arriveBy = false } = {}) {
+  let options = (json?.itineraries || []).map(normalizeItinerary);
+  if (!options.length && json?.direct?.length) options = json.direct.map(normalizeItinerary);
+  if (!options.length) throw Object.assign(new Error('No public transport route found'), { status: 404 });
+  const t = (s) => (s ? Date.parse(s) : 0);
+  options.sort((a, b) => (arriveBy ? t(b.start) - t(a.start) : t(a.end) - t(b.end)) || a.transfers - b.transfers || a.duration - b.duration);
+  const best = options[0];
+  return {
+    mode: 'transit', provider: 'transitous',
+    duration: best.duration, distance: null,
+    geometry: best.legs.flatMap((l) => l.geometry),
+    options: options.slice(0, 3),
+  };
+}
+
+// ---------------------------------------------------------------- browser client
+
+const cache = new Map();
+
+async function getJson(url, init) {
+  const res = await fetch(url, init);
+  let data = null;
+  try { data = await res.json(); } catch { /* not JSON */ }
+  if (!res.ok) throw Object.assign(new Error(data?.error || `Request failed (${res.status})`), { status: res.status, data });
+  return data;
+}
+
+/** Ask the Meet server; if there is no server (404 / network error), call the provider directly. */
+async function viaServerOr(path, direct, signal) {
+  try {
+    return await getJson(path, { signal, credentials: 'same-origin' });
+  } catch (err) {
+    if (signal?.aborted) throw err;
+    if (err.status && err.status !== 404 && err.status !== 405) throw err;
+  }
+  return direct();
+}
+
+/** Directions for one person. mode: transit | walk | bike | drive. */
+export function getDirections(mode, from, to, { time, arriveBy = false, signal } = {}) {
+  const key = [mode, ll(from), ll(to), time || '', arriveBy].join('|');
+  if (cache.has(key)) return cache.get(key);
+  const q = new URLSearchParams({ mode, from: ll(from), to: ll(to) });
+  if (time) q.set('time', new Date(time).toISOString());
+  if (arriveBy) q.set('arriveBy', '1');
+  const promise = viaServerOr(`/api/directions?${q}`, async () => {
+    if (mode === 'transit') return normalizeTransit(await getJson(transitUrl(from, to, { time, arriveBy }), { signal }), { arriveBy });
+    return normalizeOsrm(await getJson(osrmRouteUrl(mode, from, to), { signal }), mode);
+  }, signal);
+  cache.set(key, promise);
+  promise.catch(() => cache.delete(key));
+  return promise;
+}
+
+/** Travel times from each source to each destination (walk, bike or drive only). */
+export function getTravelTimes(mode, sources, destinations, { signal } = {}) {
+  if (mode === 'transit') return Promise.reject(Object.assign(new Error('Not available for public transport'), { status: 400 }));
+  const key = ['table', mode, sources.map(ll).join(';'), destinations.map(ll).join(';')].join('|');
+  if (cache.has(key)) return cache.get(key);
+  const q = new URLSearchParams({ mode, from: sources.map(ll).join(';'), to: destinations.map(ll).join(';') });
+  const promise = viaServerOr(`/api/traveltimes?${q}`, async () => normalizeOsrmTable(await getJson(osrmTableUrl(mode, sources, destinations), { signal })), signal);
+  cache.set(key, promise);
+  promise.catch(() => cache.delete(key));
+  return promise;
+}
+
+/** Hand-off links to full navigation apps. */
+export function navLinks(mode, from, to) {
+  const gm = { transit: 'transit', walk: 'walking', bike: 'bicycling', drive: 'driving' }[mode];
+  const am = { transit: 'r', walk: 'w', bike: 'w', drive: 'd' }[mode];
+  return {
+    google: `https://www.google.com/maps/dir/?api=1&origin=${ll(from)}&destination=${ll(to)}&travelmode=${gm}`,
+    apple: `https://maps.apple.com/?saddr=${ll(from)}&daddr=${ll(to)}&dirflg=${am}`,
+  };
+}

@@ -7,6 +7,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { Store } from './lib/store.js';
+import { osrmRouteUrl, osrmTableUrl, transitUrl, normalizeOsrm, normalizeOsrmTable, normalizeTransit } from './public/js/directions.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
@@ -14,6 +15,12 @@ const HOST = process.env.HOST || '0.0.0.0';
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data', 'db.json');
 const SESSION_DAYS = 30;
 const MAX_BODY = 64 * 1024;
+// Directions providers ask apps to identify themselves. Set MEET_CONTACT to a
+// website or email address people can reach you at (Transitous requires it).
+const CONTACT = (process.env.MEET_CONTACT || '').trim();
+const USER_AGENT = `Meet/1.0${CONTACT ? ` (+${CONTACT})` : ''}`;
+// Transitous is a volunteer service: stay well under ~720 journey searches a day.
+const TRANSIT_DAILY_LIMIT = Number(process.env.TRANSIT_DAILY_LIMIT) || 600;
 
 const store = new Store(DATA_FILE);
 
@@ -262,6 +269,92 @@ route('DELETE', '/api/history/:id', async (req, res, { id }) => {
   send(res, 200, { ok: true });
 });
 
+// ---------------------------------------------------------------- directions
+
+const upstreamCache = new Map(); // url -> { at, ttl, data }
+let transitDay = '', transitCount = 0;
+const visitors = new Map(); // ip -> { start, n }
+
+function rateLimit(req, max = 90, windowMs = 10 * 60 * 1000) {
+  const ip = req.socket.remoteAddress || 'unknown';
+  const now = Date.now();
+  const v = visitors.get(ip);
+  if (!v || now - v.start > windowMs) { visitors.set(ip, { start: now, n: 1 }); return; }
+  if (++v.n > max) throw new HttpError(429, 'Too many directions requests — try again in a few minutes');
+}
+
+async function upstream(url, ttlMs, { transit = false } = {}) {
+  const hit = upstreamCache.get(url);
+  if (hit && Date.now() - hit.at < hit.ttl) return hit.data;
+  if (transit) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (today !== transitDay) { transitDay = today; transitCount = 0; }
+    if (transitCount >= TRANSIT_DAILY_LIMIT) throw new HttpError(429, 'Public transport directions are paused until tomorrow (daily limit reached)');
+    transitCount++;
+  }
+  let res;
+  try {
+    res = await fetch(url, { headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' }, signal: AbortSignal.timeout(20000) });
+  } catch {
+    throw new HttpError(502, 'The directions service could not be reached');
+  }
+  let data;
+  try { data = await res.json(); } catch { data = null; }
+  if (!res.ok && !data) throw new HttpError(502, `The directions service answered ${res.status}`);
+  if (upstreamCache.size > 800) upstreamCache.delete(upstreamCache.keys().next().value);
+  upstreamCache.set(url, { at: Date.now(), ttl: ttlMs, data });
+  return data;
+}
+
+function parsePoint(s) {
+  const [lat, lon] = String(s || '').split(',').map(Number);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) throw new HttpError(400, 'Invalid coordinates');
+  return { lat, lon };
+}
+const roundGeom = (pts) => pts.map(([a, b]) => [Math.round(a * 1e5) / 1e5, Math.round(b * 1e5) / 1e5]);
+const ROAD_MODES = ['walk', 'bike', 'drive'];
+
+route('GET', '/api/directions', async (req, res) => {
+  rateLimit(req);
+  const q = new URL(req.url, 'http://x').searchParams;
+  const mode = q.get('mode');
+  const from = parsePoint(q.get('from'));
+  const to = parsePoint(q.get('to'));
+  let out;
+  if (mode === 'transit') {
+    const arriveBy = q.get('arriveBy') === '1';
+    const time = q.get('time') ? new Date(q.get('time')) : new Date();
+    if (Number.isNaN(time.getTime())) throw new HttpError(400, 'Invalid time');
+    time.setSeconds(0, 0); // so nearby requests share a cache entry
+    const data = await upstream(transitUrl(from, to, { time, arriveBy }), 5 * 60 * 1000, { transit: true });
+    if (data?.error) throw new HttpError(502, String(data.error).slice(0, 200));
+    try { out = normalizeTransit(data, { arriveBy }); } catch (err) { throw new HttpError(err.status || 502, err.message); }
+    for (const o of out.options) for (const l of o.legs) l.geometry = roundGeom(l.geometry);
+    out.geometry = roundGeom(out.geometry);
+  } else if (ROAD_MODES.includes(mode)) {
+    const data = await upstream(osrmRouteUrl(mode, from, to), 24 * 3600 * 1000);
+    try { out = normalizeOsrm(data, mode); } catch (err) { throw new HttpError(err.status || 502, err.message); }
+    out.geometry = roundGeom(out.geometry);
+  } else {
+    throw new HttpError(400, 'mode must be transit, walk, bike or drive');
+  }
+  send(res, 200, out, { 'Cache-Control': 'private, max-age=60' });
+});
+
+route('GET', '/api/traveltimes', async (req, res) => {
+  rateLimit(req);
+  const q = new URL(req.url, 'http://x').searchParams;
+  const mode = q.get('mode');
+  if (!ROAD_MODES.includes(mode)) throw new HttpError(400, 'Travel times are available for walk, bike or drive');
+  const sources = String(q.get('from') || '').split(';').filter(Boolean).map(parsePoint);
+  const destinations = String(q.get('to') || '').split(';').filter(Boolean).map(parsePoint);
+  if (!sources.length || !destinations.length) throw new HttpError(400, 'from and to are required');
+  if (sources.length > 12 || destinations.length > 80) throw new HttpError(400, 'Too many points');
+  const data = await upstream(osrmTableUrl(mode, sources, destinations), 24 * 3600 * 1000);
+  try { send(res, 200, normalizeOsrmTable(data), { 'Cache-Control': 'private, max-age=300' }); }
+  catch (err) { throw new HttpError(err.status || 502, err.message); }
+});
+
 // ---------------------------------------------------------------- static
 
 function serveStatic(req, res) {
@@ -322,7 +415,10 @@ export const server = http.createServer(async (req, res) => {
 });
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  server.listen(PORT, HOST, () => console.log(`Meet running at http://localhost:${PORT}`));
+  server.listen(PORT, HOST, () => {
+    console.log(`Meet running at http://localhost:${PORT}`);
+    if (!CONTACT) console.warn('Tip: set MEET_CONTACT to a website or email so the directions services can reach you (Transitous asks every app for this).');
+  });
   const shutdown = () => { store.flush(); process.exit(0); };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);

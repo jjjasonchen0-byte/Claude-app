@@ -888,6 +888,38 @@ export const api = {
   async deleteHistory(id) { const { db, u } = me(); u.history = u.history.filter((x) => x.id !== id); save(db); return { ok: true }; },
 };
 
+// Directions in the test town: real shortest routes over its own streets for
+// walking, cycling and driving. There are no timetables, so no public transport.
+const TOWN_SPEED = { walk: 1.35, bike: 4.5, drive: 8.5 }; // m/s
+const noTimetables = () => Object.assign(new Error('No timetables in the test town'), { status: 404, friendly: true });
+
+export async function directions(mode, from, to) {
+  ensure();
+  if (mode === 'transit') throw noTimetables();
+  const g = town.graph;
+  const a = nearestAddress(from.lat, from.lon).node, b = nearestAddress(to.lat, to.lon).node;
+  const { dist, parent } = dijkstra(g, a);
+  if (!Number.isFinite(dist[b])) throw Object.assign(new Error('No route found'), { status: 404 });
+  const geometry = [];
+  for (let v = b; v !== -1; v = parent[v]) geometry.push([g.lat[v], g.lon[v]]);
+  geometry.reverse();
+  return { mode, provider: 'test-town', distance: Math.round(dist[b]), duration: Math.round(dist[b] / TOWN_SPEED[mode] + (mode === 'drive' ? 90 : 0)), geometry };
+}
+
+export async function travelTimes(mode, sources, destinations) {
+  ensure();
+  if (mode === 'transit') throw noTimetables();
+  const g = town.graph;
+  const targets = destinations.map((p) => nearestAddress(p.lat, p.lon).node);
+  const durations = [], distances = [];
+  for (const src of sources) {
+    const { dist } = dijkstra(g, nearestAddress(src.lat, src.lon).node);
+    distances.push(targets.map((t) => (Number.isFinite(dist[t]) ? Math.round(dist[t]) : null)));
+    durations.push(targets.map((t) => (Number.isFinite(dist[t]) ? Math.round(dist[t] / TOWN_SPEED[mode] + (mode === 'drive' ? 90 : 0)) : null)));
+  }
+  return { durations, distances };
+}
+
 /** A ready-made group: you plus three friends spread around town. */
 export function sampleGroup() {
   ensure();

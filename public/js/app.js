@@ -7,6 +7,7 @@ import { solveMeeting, roadDistanceTo } from './meet.js';
 import { GrowthAnimation } from './growth.js';
 import { TABS, findPois, groupPois } from './pois.js';
 import { mapLinks, shareText, messagingLinks, nativeShare, copyText, calendarInvite, download } from './share.js';
+import { MODES, ATTRIBUTION, getDirections, getTravelTimes, navLinks, vehicleName, isWalkLeg } from './directions.js';
 
 // ---------------------------------------------------------------- constants
 
@@ -19,7 +20,7 @@ const DEFAULT_SETTINGS = { mode: 'fair', travel: 'transit', speed: 'normal', the
 const SHEET_DEFAULT = { people: 'mid', results: 'mid', group: 'mid', place: 'mid', share: 'full' };
 
 // Category icons: Settings-style coloured tiles with simple line glyphs.
-const TAB_COLOR = { food: '#ff9500', drinks: '#a2845e', fun: '#5856d6', culture: '#af52de', outdoors: '#34c759', shopping: '#007aff' };
+const TAB_COLOR = { food: '#ff9500', drinks: '#a2845e', fun: '#5856d6', culture: '#af52de', outdoors: '#34c759', shopping: '#007aff', meet: '#007aff' };
 const GLYPH = {
   food: '<path d="M7 3v7a2 2 0 0 0 2 2v9M5 3v5M9 3v5M17 21V3c-2.2 1.2-3.5 4-3.5 7.5h3.5"/>',
   drinks: '<path d="M5 9h11v4a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5zM16 10.5h1.5a2.5 2.5 0 0 1 0 5H16M8 3.5v2.5M11.5 3.5v2.5"/>',
@@ -30,8 +31,13 @@ const GLYPH = {
   all: '<path d="M5 6h14M5 12h14M5 18h14"/>',
   pin: '<path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.2"/>',
   pencil: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
+  transit: '<path d="M7 3.5h10a2 2 0 0 1 2 2V15a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5.5a2 2 0 0 1 2-2zM5 10.5h14M8.5 14h.01M15.5 14h.01M8 17l-1.8 3.5M16 17l1.8 3.5"/>',
+  walk: '<circle cx="13" cy="4.5" r="1.7"/><path d="M10 21l2-6 3 3v3.5M9.5 12.5l1.2-4.8 3.8 1.3 1.8 3M10.7 7.7L7.5 10v3"/>',
+  bike: '<circle cx="6" cy="16" r="3.4"/><circle cx="18" cy="16" r="3.4"/><path d="M6 16l3.8-7h6.2l2 7M8.5 6h3M12 9l-2.2 7"/>',
+  drive: '<path d="M5 15l1.5-4.6A2 2 0 0 1 8.4 9h7.2a2 2 0 0 1 1.9 1.4L19 15M4 15h16v3a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H7v1a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/>',
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
 };
+GLYPH.meet = GLYPH.pin;
 const glyph = (id, size = 16, width = 2.2) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${GLYPH[id]}</svg>`;
 const tile = (id, size = '') => `<span class="tile ${size}${id === 'all' ? ' grey' : ''}" style="--c:${TAB_COLOR[id] || '#8e8e93'}">${glyph(id)}</span>`;
 const CHEV = '<svg class="chev" viewBox="0 0 8 14" width="8" height="14" aria-hidden="true"><path d="M1.5 1.5L6.5 7l-5 5.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -278,9 +284,11 @@ function initMap() {
   L.control.zoom({ position: 'bottomright' }).addTo(map);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
+    className: 'osm-tiles',
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map);
   map.attributionControl.setPrefix(false);
+  map.attributionControl.addAttribution(`Routes <a href="${ATTRIBUTION.routing.url}" target="_blank" rel="noopener">FOSSGIS OSRM</a> · Public transport <a href="${ATTRIBUTION.transit.url}" target="_blank" rel="noopener">Transitous</a>`);
   peopleLayer = L.layerGroup().addTo(map);
   resultLayer = L.layerGroup().addTo(map);
   poiLayer = L.layerGroup().addTo(map);
@@ -454,13 +462,14 @@ function setView(view, { pop = false } = {}) {
 }
 
 const afterRender = {};
-function render() {
+function render({ keepScroll = false } = {}) {
   const body = $('#panel-body');
+  const scroll = body.scrollTop;
   const views = { people: renderPeople, results: renderResults, group: renderGroup, place: renderPlace, share: renderShare };
   if (views[state.view]) {
     body.innerHTML = `<div class="panel-content">${views[state.view]()}</div>`;
     afterRender[state.view]?.();
-    body.scrollTop = 0;
+    body.scrollTop = keepScroll ? scroll : 0;
     if (isMobile() && sheet.snap) setSheet(sheet.snap);
   }
   drawPeople();
@@ -686,14 +695,40 @@ function distancesTo(poi) {
   return s.poiDist.get(poi.id);
 }
 
-const tripRow = (person, d) => `<li class="trip"><div class="cell"><span class="avatar sm" style="--c:${person.color}">${esc(initial(person.name))}</span>
-  <span class="cell-main cell-title">${esc(person.name)}</span><span class="cell-end"><b>${fmtTime(travelMinutes(d))}</b>${fmtDist(d)}</span></div></li>`;
+const clock = (iso) => (iso ? new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '');
+const mins = (sec) => fmtTime(Math.max(1, Math.round(sec / 60)));
+
+/** One person's travel time: real when known (seconds), otherwise an estimate from road distance. */
+const tripRow = (person, d, sec) => `<li class="trip"><div class="cell"><span class="avatar sm" style="--c:${person.color}">${esc(initial(person.name))}</span>
+  <span class="cell-main cell-title">${esc(person.name)}</span><span class="cell-end"><b>${sec != null ? mins(sec) : `≈ ${fmtTime(travelMinutes(d))}`}</b>${fmtDist(d)}</span></div></li>`;
+
+const modeSwitch = (action) => `<div class="segmented modes" role="tablist" aria-label="How everyone travels">
+  ${MODES.map((m) => `<button class="seg${m.id === state.settings.travel ? ' active' : ''}" data-action="${action}" data-mode="${m.id}" aria-selected="${m.id === state.settings.travel}">${glyph(m.id, 15)}<span>${m.label}</span></button>`).join('')}
+</div>`;
+
+/** Real travel times from everyone to the meeting point, in the chosen mode. */
+function loadMeetTimes() {
+  const s = state.search;
+  const mode = state.settings.travel;
+  const key = `${mode}|${s.solution.meet.lat},${s.solution.meet.lon}`;
+  if (s.meetTimes?.key === key) return;
+  const mt = s.meetTimes = { key, values: s.people.map(() => null) };
+  const refresh = () => { if (state.search === s && s.meetTimes === mt && state.view === 'results') render({ keepScroll: true }); };
+  if (mode === 'transit') {
+    s.people.forEach((person, i) => getDirections('transit', person, s.solution.meet)
+      .then((d) => { mt.values[i] = d.duration; refresh(); }).catch(() => {}));
+  } else {
+    getTravelTimes(mode, s.people, [s.solution.meet])
+      .then((t) => { t.durations.forEach((row, i) => { mt.values[i] = row[0]; }); refresh(); }).catch(() => {});
+  }
+}
 
 // ------------------------------------------------ results view
 
 function renderResults() {
   const s = state.search;
   const { solution } = s;
+  loadMeetTimes();
   const total = s.pois.length;
   const tabs = TABS.map((t) => {
     const n = s.grouped[t.id].reduce((a, g) => a + g.items.length, 0);
@@ -721,7 +756,9 @@ function renderResults() {
         <h2>${esc(s.area ? shortAddr(s.area) : 'Your meeting point')}</h2>
       </div>
     </div>
-    <ul class="group icons">${s.people.map((p, i) => tripRow(p, solution.people[i].reach)).join('')}</ul>
+    ${modeSwitch('trip-mode')}
+    <ul class="group icons">${s.people.map((p, i) => tripRow(p, solution.people[i].reach, s.meetTimes?.values[i])).join('')}
+      <li><button class="cell cell-btn" data-action="meet-place">${tile('meet')}<span class="cell-main cell-title">Routes to this spot &amp; send it</span>${CHEV}</button></li></ul>
     ${s.source === 'synthetic' ? `<p class="notice">${esc(s.reason)} Distances are estimates.</p>` : ''}
     <div class="pills" role="tablist">${tabs}</div>
     ${list}
@@ -739,10 +776,32 @@ function groupItems() {
   const s = state.search;
   const groups = s.grouped[s.tab] || [];
   const items = s.group === '*' ? groups.flatMap((g) => g.items) : (groups.find((g) => g.group === s.group)?.items || []);
-  const enriched = items.map((p) => { const ds = distancesTo(p); return { ...p, ds, worst: Math.max(...ds) }; });
-  if (s.sort === 'fair') enriched.sort((a, b) => a.worst - b.worst);
+  const times = loadGroupTimes(items);
+  const enriched = items.map((p, idx) => {
+    const ds = distancesTo(p);
+    const real = times && s.people.every((_, pi) => times[pi]?.[idx] != null);
+    const worstMin = real ? Math.round(Math.max(...s.people.map((_, pi) => times[pi][idx])) / 60) : travelMinutes(Math.max(...ds));
+    return { ...p, ds, worstMin, real };
+  });
+  if (s.sort === 'fair') enriched.sort((a, b) => a.worstMin - b.worstMin);
   else enriched.sort((a, b) => a.fromCenter - b.fromCenter);
   return enriched;
+}
+
+/** Real walk / bike / drive times from everyone to each place in the list (one request). */
+function loadGroupTimes(items) {
+  const s = state.search;
+  const mode = state.settings.travel;
+  if (mode === 'transit' || !items.length) return null;
+  const list = items.slice(0, 80);
+  const key = `${mode}|${list.map((p) => p.id).join(',')}`;
+  if (s.groupTimes?.key === key) return s.groupTimes.durations;
+  const gt = s.groupTimes = { key, durations: null };
+  getTravelTimes(mode, s.people, list).then((t) => {
+    gt.durations = t.durations;
+    if (state.search === s && s.groupTimes === gt && state.view === 'group') render({ keepScroll: true });
+  }).catch(() => {});
+  return null;
 }
 
 function renderGroup() {
@@ -750,7 +809,8 @@ function renderGroup() {
   const items = groupItems();
   const title = s.group === '*' ? `All ${TABS.find((t) => t.id === s.tab).label.toLowerCase()}` : s.group;
   const color = TAB_COLOR[s.tab];
-  drawPoiMarkers(items);
+  const markersKey = `${s.tab}|${s.group}|${s.sort}|${items.map((p) => p.id).join(',')}`;
+  if (s.markersKey !== markersKey) { s.markersKey = markersKey; drawPoiMarkers(items); }
   return `
     ${backBtn('back-results', 'Categories')}
     <div class="sheet-title">${tile(s.tab, 'lg')}<div style="flex:1;min-width:0"><h2>${esc(title)}</h2><div class="footnote">${items.length} place${items.length === 1 ? '' : 's'} nearby</div></div></div>
@@ -763,7 +823,7 @@ function renderGroup() {
         <span class="num" style="--c:${color}">${i + 1}</span>
         <span class="cell-main"><span class="cell-title">${esc(p.name)}</span>
           <span class="cell-sub">${esc([s.group === '*' ? p.group : '', p.address].filter(Boolean).join(' · ') || 'Near the meeting point')}</span></span>
-        <span class="cell-end"><b>${fmtDist(p.fromCenter)}</b>max ${fmtTime(travelMinutes(p.worst))}</span>${CHEV}
+        <span class="cell-end"><b>${fmtDist(p.fromCenter)}</b>max ${p.real ? '' : '≈ '}${fmtTime(p.worstMin)}</span>${CHEV}
       </button></li>`).join('')}
     </ul>`;
 }
@@ -800,6 +860,7 @@ function highlightPoi(id, on) {
 
 function openPlace(id) {
   const s = state.search;
+  s.placeDrawn = null;
   s.place = s.pois.find((p) => p.id === id);
   if (s.place) setView('place');
 }
@@ -810,36 +871,192 @@ function renderPlace() {
   const s = state.search;
   const p = s.place;
   const ds = distancesTo(p);
-  poiLayer.clearLayers();
-  L.marker([p.lat, p.lon], {
-    icon: L.divIcon({ className: '', html: `<div class="poi-pin hl" style="--c:${TAB_COLOR[p.tab]}">${glyph(p.tab, 15)}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] }),
-    zIndexOffset: 1200,
-  }).bindTooltip(esc(p.name), { permanent: true, direction: 'right', className: 'label', offset: [20, 0] }).addTo(poiLayer);
-  s.people.forEach((person) => {
-    L.polyline([[person.lat, person.lon], [p.lat, p.lon]], { color: person.color, weight: 3, opacity: 0.75, dashArray: '1 8', lineCap: 'round' }).addTo(poiLayer);
-  });
-  requestAnimationFrame(() => fitTo([...s.people.map((x) => [x.lat, x.lon]), [p.lat, p.lon]], { maxZoom: 16 }));
+  if (s.placeDrawn !== p.id) {
+    s.placeDrawn = p.id;
+    s.markersKey = null;
+    poiLayer.clearLayers();
+    L.marker([p.lat, p.lon], {
+      icon: L.divIcon({ className: '', html: `<div class="poi-pin hl" style="--c:${TAB_COLOR[p.tab] || '#007aff'}">${glyph(p.tab, 15)}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] }),
+      zIndexOffset: 1200,
+    }).bindTooltip(esc(p.name), { permanent: true, direction: 'right', className: 'label', offset: [20, 0] }).addTo(poiLayer);
+    requestAnimationFrame(() => fitTo([...s.people.map((x) => [x.lat, x.lon]), [p.lat, p.lon]], { maxZoom: 16 }));
+  }
+  loadPlaceDirections();
+  drawDirections();
 
   const tags = [p.group, p.outdoor ? 'Outdoor seating' : '', p.vegan ? 'Vegan options' : p.vegetarian ? 'Vegetarian options' : '', p.wheelchair === 'yes' ? 'Step-free' : ''].filter(Boolean);
   const links = mapLinks(p);
   const website = p.website && /^https?:\/\//i.test(p.website) ? p.website : p.website ? `https://${p.website}` : '';
+  const mode = state.settings.travel;
+  const when = state.when || { type: 'now' };
+  const att = mode === 'transit' ? ATTRIBUTION.transit : ATTRIBUTION.routing;
   return `
-    ${backBtn('back-group', s.group === '*' ? 'Back' : s.group)}
+    ${p.id === 'meet' ? backBtn('back-results', 'Places') : backBtn('back-group', s.group === '*' ? 'Back' : s.group)}
     <div class="place-head">${tile(p.tab, 'xl')}<div style="min-width:0"><h2>${esc(p.name)}</h2><div class="footnote">${esc(tags.join(' · '))}</div></div></div>
     <button class="btn btn-primary btn-block btn-lg" data-action="choose">Send location</button>
+    <div class="section-title">Getting there</div>
+    ${modeSwitch('dir-mode')}
+    ${mode === 'transit' ? `<div class="when-row">
+      <select id="dir-when-type" aria-label="When">
+        <option value="now"${when.type === 'now' ? ' selected' : ''}>Leave now</option>
+        <option value="arrive"${when.type === 'arrive' ? ' selected' : ''}>Arrive by…</option>
+      </select>
+      ${when.type === 'arrive' ? `<input type="datetime-local" id="dir-when-time" value="${esc(when.time || '')}" aria-label="Arrive by">` : ''}
+    </div>` : ''}
+    <ul class="group icons dirs">${s.people.map((person, i) => dirRow(person, i, ds[i])).join('')}</ul>
+    <p class="footnote attrib"><a href="${att.url}" target="_blank" rel="noopener">${esc(att.text)}</a></p>
     <div class="section-title">Details</div>
     <ul class="group kv">
-      <li><div class="cell"><span class="k">Address</span><span class="v">${esc(p.address || 'Not listed')}<br><span class="footnote">${fmtDist(p.fromCenter)} from the meeting point</span></span></div></li>
+      <li><div class="cell"><span class="k">Address</span><span class="v">${esc(p.address || 'Not listed')}${p.id === 'meet' ? '' : `<br><span class="footnote">${fmtDist(p.fromCenter)} from the meeting point</span>`}</span></div></li>
       ${p.hours ? `<li><div class="cell"><span class="k">Hours</span><span class="v">${esc(p.hours)}</span></div></li>` : ''}
       ${p.phone ? `<li><div class="cell"><span class="k">Phone</span><a class="v" href="tel:${esc(p.phone.replace(/\s/g, ''))}">${esc(p.phone)}</a></div></li>` : ''}
       ${website ? `<li><div class="cell"><span class="k">Website</span><a class="v" href="${esc(website)}" target="_blank" rel="noopener">${esc(website.replace(/^https?:\/\//, '').replace(/\/$/, ''))}</a></div></li>` : ''}
     </ul>
-    <div class="section-title">Getting there</div>
-    <ul class="group icons">${s.people.map((person, i) => tripRow(person, ds[i])).join('')}</ul>
     <div class="actions">
-      <a class="btn btn-tinted" href="${links.googleDirections}" target="_blank" rel="noopener">Directions</a>
       <a class="btn btn-tinted" href="${links.osm}" target="_blank" rel="noopener">Open in maps</a>
     </div>`;
+}
+
+afterRender.place = () => {
+  $('#dir-when-type')?.addEventListener('change', (e) => {
+    if (e.target.value === 'arrive') {
+      const d = nextHalfHour();
+      d.setHours(d.getHours() + 1);
+      const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      state.when = { type: 'arrive', time: state.shareWhen || local };
+    } else state.when = { type: 'now' };
+    render({ keepScroll: true });
+  });
+  $('#dir-when-time')?.addEventListener('change', (e) => {
+    if (e.target.value) { state.when = { type: 'arrive', time: e.target.value }; render({ keepScroll: true }); }
+  });
+};
+
+/** Fetch each person's real directions to the open place (once per place / mode / time). */
+function loadPlaceDirections() {
+  const s = state.search;
+  const p = s.place;
+  const mode = state.settings.travel;
+  const when = mode === 'transit' ? state.when || { type: 'now' } : { type: 'now' };
+  const key = [p.id, mode, when.type, when.time || ''].join('|');
+  if (state.dir?.key === key) return;
+  const prev = state.dir;
+  const dir = state.dir = { key, mode, results: s.people.map(() => ({ status: 'loading' })), expanded: prev?.key?.startsWith(`${p.id}|`) ? prev.expanded : -1, fitted: false };
+  const opts = when.type === 'arrive' && when.time ? { time: new Date(when.time), arriveBy: true } : {};
+  s.people.forEach((person, i) => {
+    getDirections(mode, person, p, opts)
+      .then((data) => { dir.results[i] = { status: 'ok', data, option: 0 }; })
+      .catch((err) => { dir.results[i] = { status: 'error', message: friendlyError(err, mode) }; })
+      .finally(() => {
+        if (state.dir !== dir || state.view !== 'place') return;
+        drawDirections();
+        render({ keepScroll: true });
+        if (!dir.fitted && dir.results.every((r) => r.status !== 'loading')) {
+          dir.fitted = true;
+          const pts = dir.results.flatMap((r) => (r.status === 'ok' ? routeGeometry(r) : []));
+          if (pts.length) fitTo([...pts, ...s.people.map((x) => [x.lat, x.lon]), [p.lat, p.lon]], { maxZoom: 16 });
+        }
+      });
+  });
+}
+
+function friendlyError(err, mode) {
+  if (err.status === 429 || err.friendly) return err.message;
+  if (err.status === 404) return mode === 'transit' ? 'No public transport route found' : 'No route found';
+  return mode === 'transit' ? 'Public transport times unavailable right now' : 'Directions unavailable right now';
+}
+
+const currentOption = (r) => r.data.options?.[r.option || 0];
+const routeGeometry = (r) => (r.data.options ? currentOption(r).legs.flatMap((l) => l.geometry) : r.data.geometry);
+
+/** Draw everyone's real routes on the map; walking parts dotted. */
+function drawDirections() {
+  const dir = state.dir;
+  const s = state.search;
+  if (!dir) return;
+  if (dir.layer) poiLayer.removeLayer(dir.layer);
+  const layer = dir.layer = L.layerGroup().addTo(poiLayer);
+  s.people.forEach((person, i) => {
+    const r = dir.results[i];
+    const dim = dir.expanded >= 0 && dir.expanded !== i;
+    const opacity = dim ? 0.3 : 1;
+    if (r.status !== 'ok') {
+      L.polyline([[person.lat, person.lon], [s.place.lat, s.place.lon]], { color: person.color, weight: 3, opacity: 0.6 * opacity, dashArray: '1 8', lineCap: 'round', interactive: false }).addTo(layer);
+      return;
+    }
+    const pieces = r.data.options
+      ? currentOption(r).legs.map((l) => ({ pts: l.geometry, walk: isWalkLeg(l) }))
+      : [{ pts: r.data.geometry, walk: r.data.mode === 'walk' }];
+    for (const piece of pieces) {
+      if (piece.pts.length < 2) continue;
+      if (piece.walk) {
+        L.polyline(piece.pts, { color: person.color, weight: 4, opacity: 0.9 * opacity, dashArray: '0.1 7', lineCap: 'round', interactive: false }).addTo(layer);
+      } else {
+        L.polyline(piece.pts, { color: '#fff', weight: 8, opacity: 0.9 * opacity, interactive: false }).addTo(layer);
+        L.polyline(piece.pts, { color: person.color, weight: 4.5, opacity, interactive: false }).addTo(layer);
+      }
+    }
+  });
+}
+
+const legChip = (l) => (isWalkLeg(l)
+  ? `<span class="walk-chip">${glyph('walk', 12)}${Math.max(1, Math.round(l.duration / 60))}</span>`
+  : `<span class="line-badge" style="background:${l.color || '#8e8e93'};color:${l.textColor}">${esc(l.line || vehicleName(l.mode))}</span>`);
+
+function dirRow(person, i, d) {
+  const dir = state.dir;
+  const r = dir.results[i];
+  const open = dir.expanded === i;
+  let sub, end;
+  if (r.status === 'loading') {
+    sub = 'Finding the best route…';
+    end = '<span class="spinner" aria-label="Loading"></span>';
+  } else if (r.status === 'error') {
+    sub = esc(r.message);
+    end = `<b>≈ ${fmtTime(travelMinutes(d, dir.mode))}</b>estimate`;
+  } else if (r.data.options) {
+    const o = currentOption(r);
+    const legs = o.legs.filter((l) => !isWalkLeg(l) || l.duration >= 180);
+    sub = `<span class="chips">${legs.map(legChip).join('<span class="sep">›</span>')}</span><span class="times">${clock(o.start)} – ${clock(o.end)}${o.transfers ? ` · ${o.transfers} change${o.transfers > 1 ? 's' : ''}` : ''}</span>`;
+    end = `<b>${mins(o.duration)}</b>`;
+  } else {
+    const arrive = new Date(Date.now() + r.data.duration * 1000).toISOString();
+    sub = `${fmtDist(r.data.distance)} by ${MODES.find((m) => m.id === r.data.mode).label.toLowerCase()}<span class="times">Arrive about ${clock(arrive)} if you leave now</span>`;
+    end = `<b>${mins(r.data.duration)}</b>`;
+  }
+  return `<li class="dir${open ? ' open' : ''}">
+    <button class="cell cell-btn" data-action="dir-toggle" data-pi="${i}" aria-expanded="${open}">
+      <span class="avatar sm" style="--c:${person.color}">${esc(initial(person.name))}</span>
+      <span class="cell-main"><span class="cell-title">${esc(person.name)}</span><span class="cell-sub">${sub}</span></span>
+      <span class="cell-end">${end}</span>${CHEV}
+    </button>
+    ${open ? itinerary(person, i, r) : ''}
+  </li>`;
+}
+
+function itinerary(person, i, r) {
+  const p = state.search.place;
+  const links = navLinks(state.dir.mode, person, p);
+  const handoff = `<div class="handoff"><a class="btn btn-tinted btn-sm" href="${links.google}" target="_blank" rel="noopener">Google Maps</a><a class="btn btn-tinted btn-sm" href="${links.apple}" target="_blank" rel="noopener">Apple Maps</a></div>`;
+  if (r.status !== 'ok') return `<div class="itin">${handoff}</div>`;
+  if (!r.data.options) {
+    return `<div class="itin"><p class="footnote">${fmtDist(r.data.distance)} · about ${mins(r.data.duration)}${state.dir.mode === 'drive' ? ' without traffic' : ''}.</p>${handoff}</div>`;
+  }
+  const opts = r.data.options;
+  const o = currentOption(r);
+  const choices = opts.length > 1 ? `<div class="opt-row">${opts.map((x, k) => `<button class="chip${k === (r.option || 0) ? ' active' : ''}" data-action="dir-opt" data-pi="${i}" data-opt="${k}">${clock(x.start)} · ${mins(x.duration)}${x.transfers ? ` · ${x.transfers} change${x.transfers > 1 ? 's' : ''}` : ''}</button>`).join('')}</div>` : '';
+  const steps = o.legs.map((l) => {
+    if (isWalkLeg(l)) {
+      const m = Math.max(1, Math.round(l.duration / 60));
+      return `<li class="leg walk"><span class="t">${clock(l.from.time)}</span><span class="rail"></span><div class="what">Walk ${m} min${l.to.name && l.to.name !== 'Destination' ? ` to <b>${esc(l.to.name)}</b>` : ` to ${esc(p.name)}`}</div></li>`;
+    }
+    return `<li class="leg ride" style="--line:${l.color || '#8e8e93'}"><span class="t">${clock(l.from.time)}</span><span class="rail"></span><div class="what">
+      <b>${esc(l.from.name)}</b>
+      <div class="ride-line"><span class="line-badge" style="background:${l.color || '#8e8e93'};color:${l.textColor}">${esc(l.line || vehicleName(l.mode))}</span> ${esc(vehicleName(l.mode))}${l.headsign ? ` towards ${esc(l.headsign)}` : ''}</div>
+      <div class="footnote">${l.stops + 1} stop${l.stops ? 's' : ''} · ${mins(l.duration)}${l.realTime ? ' · live times' : ''}${l.agency ? ` · ${esc(l.agency)}` : ''}</div>
+      <div class="footnote">Get off at <b>${esc(l.to.name)}</b> · ${clock(l.to.time)}</div></div></li>`;
+  }).join('');
+  return `<div class="itin">${choices}<ol class="legs">${steps}<li class="leg end"><span class="t">${clock(o.end)}</span><span class="rail"></span><div class="what">Arrive at <b>${esc(p.name)}</b></div></li></ol>${handoff}</div>`;
 }
 
 // ------------------------------------------------ share view
@@ -928,7 +1145,7 @@ function initPanel() {
       case 'delete': deletePlace(id); break;
       case 'toggle': patchPlace(id, { active: el.checked }); break;
       case 'tab': s.tab = el.dataset.tab; render(); break;
-      case 'group': s.group = el.dataset.group; s.sort = s.sort || 'near'; setView('group'); break;
+      case 'group': s.markersKey = null; s.group = el.dataset.group; s.sort = s.sort || 'near'; setView('group'); break;
       case 'radius': {
         el.textContent = '…';
         const ctrl = new AbortController();
@@ -940,20 +1157,46 @@ function initPanel() {
       }
       case 'surprise': {
         const pick = s.pois[Math.floor(Math.random() * s.pois.length)];
-        s.tab = pick.tab; s.group = pick.group; s.place = pick;
+        s.tab = pick.tab; s.group = pick.group; s.place = pick; s.placeDrawn = null;
         setView('place');
         break;
       }
       case 'replay': findPlaces({ replay: true }); break;
+      case 'meet-place': {
+        const m = s.solution.meet;
+        s.place = { id: 'meet', name: s.area ? shortAddr(s.area) : 'Meeting point', lat: m.lat, lon: m.lon, tab: 'meet', group: 'Meeting point', address: s.area || '', fromCenter: 0 };
+        s.placeDrawn = null;
+        setView('place');
+        break;
+      }
       case 'edit-people': cancelSearch(); break;
       case 'back-results':
         poiLayer.clearLayers();
+        s.markersKey = null;
         setView('results');
         fitTo([...s.people.map((p) => [p.lat, p.lon]), [s.solution.meet.lat, s.solution.meet.lon]], { maxZoom: 16 });
         break;
       case 'sort': s.sort = el.dataset.sort; render(); break;
       case 'place': openPlace(id); break;
-      case 'back-group': setView('group'); break;
+      case 'back-group': s.markersKey = null; setView('group'); break;
+      case 'trip-mode':
+      case 'dir-mode':
+        if (el.dataset.mode !== state.settings.travel) saveSettings({ travel: el.dataset.mode });
+        break;
+      case 'dir-toggle': {
+        const i = Number(el.dataset.pi);
+        state.dir.expanded = state.dir.expanded === i ? -1 : i;
+        drawDirections();
+        render({ keepScroll: true });
+        break;
+      }
+      case 'dir-opt': {
+        const r = state.dir.results[Number(el.dataset.pi)];
+        r.option = Number(el.dataset.opt);
+        drawDirections();
+        render({ keepScroll: true });
+        break;
+      }
       case 'choose': enterShare(); break;
       case 'back-place': setView('place'); break;
       case 'back-people': state.sharePlace = null; poiLayer.clearLayers(); setView('people'); break;
@@ -1050,7 +1293,7 @@ async function saveSettings(patch) {
   syncSettingsUI();
   if (state.search && ['results', 'group', 'place'].includes(state.view)) {
     if (patch.mode && patch.mode !== prevMode) toast('Run the search again to use this rule', { action: 'Run', onAction: () => { openDrawer(false); findPlaces(); } });
-    render();
+    render({ keepScroll: true });
   }
   try { await api.updateMe({ settings: state.settings }); } catch { /* keep local */ }
 }

@@ -1063,11 +1063,61 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .leaflet-control-zoom a:last-child { border-bottom: 0 !important; }
 .leaflet-control-attribution { font-size: 10px; border-radius: 8px 0 0 0; background: var(--material) !important; color: var(--text-2); }
 .leaflet-control-attribution a { color: var(--text-2); }
-:root[data-dark-tiles] .leaflet-tile-pane, :root[data-theme="dark"] .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.88) saturate(0.5); }
+/* Real OpenStreetMap tiles: a little calmer to sit with the UI; inverted for dark mode. */
+.osm-tiles { filter: saturate(0.72) contrast(0.96) brightness(1.03); }
+:root[data-dark-tiles] .osm-tiles, :root[data-theme="dark"] .osm-tiles { filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.88) saturate(0.5); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+/* ---------------------------------------------------------------- directions */
+.segmented.modes { margin: 0 0 10px; }
+.segmented.modes .seg { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 7px 6px; }
+.segmented.modes .seg svg { flex: none; opacity: 0.8; }
+.when-row { display: flex; gap: 8px; margin: 0 0 10px; }
+.when-row select, .when-row input {
+  border: 0; background: var(--card); border-radius: 10px; padding: 8px 10px; font: inherit; font-size: 14px; color: var(--text);
+  box-shadow: var(--shadow-1); -webkit-appearance: none; appearance: none;
+}
+.when-row select { padding-right: 26px; background-image: linear-gradient(45deg, transparent 50%, var(--text-2) 50%), linear-gradient(135deg, var(--text-2) 50%, transparent 50%); background-position: calc(100% - 14px) 52%, calc(100% - 9px) 52%; background-size: 5px 5px; background-repeat: no-repeat; }
+.when-row input { flex: 1; min-width: 0; width: auto; }
+.dirs .cell-sub { display: block; white-space: normal; }
+.dirs .cell-sub .times { display: block; margin-top: 3px; font-variant-numeric: tabular-nums; }
+.dirs .cell-end b { font-size: 16px; }
+.chips { flex-wrap: wrap; row-gap: 4px; }
+.dirs .spinner { display: inline-block; }
+.dir .chev { transition: transform 0.2s; }
+.dir.open .chev { transform: rotate(90deg); }
+.chips { display: inline-flex; align-items: center; gap: 4px; flex-wrap: nowrap; overflow: hidden; vertical-align: middle; max-width: 100%; }
+.chips .sep { color: var(--text-3); font-size: 12px; }
+.line-badge {
+  display: inline-block; padding: 1px 7px; border-radius: 6px; font-size: 12px; font-weight: 700; line-height: 18px; white-space: nowrap;
+  max-width: 120px; overflow: hidden; text-overflow: ellipsis; vertical-align: middle;
+}
+.walk-chip { display: inline-flex; align-items: center; gap: 1px; color: var(--text-2); font-size: 12px; font-weight: 600; }
+.itin { padding: 2px 14px 14px 62px; }
+.itin > .footnote { margin: 0 0 10px; }
+.opt-row { display: flex; gap: 6px; overflow-x: auto; margin: 0 0 10px; scrollbar-width: none; }
+.opt-row .chip { border: 0; background: var(--fill); color: var(--text); border-radius: 999px; padding: 5px 11px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.opt-row .chip.active { background: var(--accent); color: #fff; }
+.legs { list-style: none; margin: 0 0 12px; padding: 0; }
+.leg { display: grid; grid-template-columns: 52px 14px 1fr; gap: 0 8px; position: relative; padding-bottom: 12px; font-size: 14px; }
+.leg .t { font-size: 12.5px; font-weight: 600; color: var(--text-2); font-variant-numeric: tabular-nums; padding-top: 1px; }
+.leg .rail { position: relative; }
+.leg .rail::before { content: ""; position: absolute; left: 50%; top: 4px; bottom: -8px; transform: translateX(-50%); width: 0; border-left: 3px dotted var(--text-3); }
+.leg.ride .rail::before { border-left: 4px solid var(--line); border-radius: 2px; }
+.leg .rail::after { content: ""; position: absolute; left: 50%; top: 4px; width: 10px; height: 10px; transform: translateX(-50%); border-radius: 50%; background: var(--card); border: 2.5px solid var(--text-3); }
+.leg.ride .rail::after { border-color: var(--line); }
+.leg.end { padding-bottom: 0; }
+.leg.end .rail::before { display: none; }
+.leg.end .rail::after { background: var(--accent); border-color: var(--accent); }
+.leg .what { min-width: 0; }
+.ride-line { margin: 3px 0 2px; }
+.handoff { display: flex; gap: 8px; flex-wrap: wrap; }
+.handoff .btn { margin: 0; }
+.attrib { margin: -6px 6px 14px; font-size: 11.5px; }
+.attrib a { color: var(--text-2); }
 
 :root { --map-forest: #dcebcf; --map-motorway: #ffbd6b; --map-motorway-casing: #ec9b45; --map-land: #f6f4ef; --map-park: #cfe8bf; --map-water: #a8d4f5; --map-road: #ffffff; --map-casing: #e3ded4; --map-major: #ffe28a; --map-major-casing: #efc65a; --map-label: #6e6e73; --map-halo: rgba(255,255,255,.92); --map-park-label: #3c7a35; --map-water-label: #3b7bb5; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --map-forest: #1c2a1f; --map-motorway: #7a5427; --map-motorway-casing: #5b3e1c; --map-land: #1e1f22; --map-park: #1f3324; --map-water: #13304a; --map-road: #3a3b3f; --map-casing: #26272a; --map-major: #6b5a2a; --map-major-casing: #4c4121; --map-label: #aeaeb2; --map-halo: rgba(20,20,22,.9); --map-park-label: #7cc47a; --map-water-label: #6fb1ea; } }
@@ -2319,6 +2369,222 @@ function download(filename, content, type = 'text/calendar') {
 
 __m["share"] = { mapLinks, shareText, messagingLinks, nativeShare, copyText, calendarInvite, download };
 })();
+// ---- directions
+(() => {
+// Real directions: walking, cycling and driving from OpenStreetMap routing
+// (OSRM, run by FOSSGIS at routing.openstreetmap.de) and public transport
+// from Transitous (MOTIS 2, api.transitous.org).
+//
+// Pure functions shared by the browser and the server: request URLs,
+// response normalisers and a polyline decoder. The browser asks the Meet
+// server first (which caches, trims responses and identifies the app as the
+// providers ask); without a server it calls the providers directly.
+
+const MODES = [
+  { id: 'transit', label: 'Transit' },
+  { id: 'walk', label: 'Walk' },
+  { id: 'bike', label: 'Bike' },
+  { id: 'drive', label: 'Drive' },
+];
+
+const OSRM = 'https://routing.openstreetmap.de';
+const OSRM_PROFILE = { walk: 'routed-foot', bike: 'routed-bike', drive: 'routed-car' };
+const TRANSITOUS = 'https://api.transitous.org/api/v5/plan';
+
+const ATTRIBUTION = {
+  routing: { text: 'Routes © OpenStreetMap contributors, via FOSSGIS OSRM', url: 'https://routing.openstreetmap.de/about.html' },
+  transit: { text: 'Public transport by Transitous', url: 'https://transitous.org/sources/' },
+};
+
+const ll = (p) => `${Number(p.lat).toFixed(6)},${Number(p.lon).toFixed(6)}`;
+const lonlat = (p) => `${Number(p.lon).toFixed(6)},${Number(p.lat).toFixed(6)}`;
+
+function osrmRouteUrl(mode, from, to) {
+  return `${OSRM}/${OSRM_PROFILE[mode]}/route/v1/driving/${lonlat(from)};${lonlat(to)}?overview=full&geometries=geojson&steps=false`;
+}
+
+function osrmTableUrl(mode, sources, destinations) {
+  const pts = [...sources, ...destinations].map(lonlat).join(';');
+  const src = sources.map((_, i) => i).join(';');
+  const dst = destinations.map((_, i) => i + sources.length).join(';');
+  return `${OSRM}/${OSRM_PROFILE[mode]}/table/v1/driving/${pts}?sources=${src}&destinations=${dst}&annotations=duration,distance`;
+}
+
+function transitUrl(from, to, { time, arriveBy = false } = {}) {
+  const q = new URLSearchParams({
+    fromPlace: ll(from), toPlace: ll(to), arriveBy: String(!!arriveBy),
+    numItineraries: '3', maxItineraries: '3', detailedTransfers: 'false',
+  });
+  if (time) q.set('time', new Date(time).toISOString());
+  return `${TRANSITOUS}?${q}`;
+}
+
+/** Decode a Google-style encoded polyline into [[lat, lon], ...]. */
+function decodePolyline(str, precision = 5) {
+  const factor = 10 ** precision;
+  const out = [];
+  let i = 0, lat = 0, lon = 0;
+  while (i < str.length) {
+    for (const which of [0, 1]) {
+      let shift = 0, result = 0, b;
+      do {
+        b = str.charCodeAt(i++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20 && i < str.length);
+      const delta = result & 1 ? ~(result >> 1) : result >> 1;
+      if (which === 0) lat += delta; else lon += delta;
+    }
+    out.push([lat / factor, lon / factor]);
+  }
+  return out;
+}
+
+/** OSRM route → { mode, duration (s), distance (m), geometry: [[lat, lon]] }. */
+function normalizeOsrm(json, mode) {
+  const r = json?.routes?.[0];
+  if (json?.code !== 'Ok' || !r) throw Object.assign(new Error('No route found'), { status: 404 });
+  return {
+    mode, provider: 'osrm',
+    duration: Math.round(r.duration), distance: Math.round(r.distance),
+    geometry: (r.geometry?.coordinates || []).map(([lon, lat]) => [lat, lon]),
+  };
+}
+
+/** OSRM table → { durations: [[s|null]], distances: [[m|null]] } (sources × destinations). */
+function normalizeOsrmTable(json) {
+  if (json?.code !== 'Ok') throw Object.assign(new Error('Travel times unavailable'), { status: 502 });
+  const round = (rows) => (rows || []).map((row) => row.map((v) => (v == null ? null : Math.round(v))));
+  return { durations: round(json.durations), distances: round(json.distances) };
+}
+
+const VEHICLE = {
+  BUS: 'Bus', COACH: 'Coach', TRAM: 'Tram', SUBWAY: 'Underground', METRO: 'Metro', FERRY: 'Ferry', AIRPLANE: 'Flight',
+  RAIL: 'Train', HIGHSPEED_RAIL: 'Train', LONG_DISTANCE: 'Train', NIGHT_RAIL: 'Night train', REGIONAL_FAST_RAIL: 'Train',
+  REGIONAL_RAIL: 'Train', SUBURBAN: 'Train', FUNICULAR: 'Funicular', AERIAL_LIFT: 'Cable car', ODM: 'On-demand', OTHER: 'Transit',
+};
+const vehicleName = (mode) => VEHICLE[mode] || 'Transit';
+const isWalkLeg = (leg) => leg.mode === 'WALK' || leg.mode === 'BIKE' || leg.mode === 'CAR';
+
+const place = (p, fallback) => ({
+  name: p?.name && !['START', 'END'].includes(p.name) ? p.name : fallback,
+  lat: p?.lat, lon: p?.lon,
+  time: p?.departure || p?.arrival || null,
+});
+
+function normalizeLeg(l) {
+  const color = l.routeColor && /^[0-9a-f]{6}$/i.test(l.routeColor) ? `#${l.routeColor}` : null;
+  const textColor = l.routeTextColor && /^[0-9a-f]{6}$/i.test(l.routeTextColor) ? `#${l.routeTextColor}` : '#ffffff';
+  return {
+    mode: l.mode,
+    line: l.displayName || l.routeShortName || l.routeLongName || '',
+    color, textColor,
+    headsign: l.headsign || '',
+    agency: l.agencyName || '',
+    from: { ...place(l.from, 'Start'), time: l.startTime || l.from?.departure || null },
+    to: { ...place(l.to, 'Destination'), time: l.endTime || l.to?.arrival || null },
+    duration: Math.round(l.duration || 0),
+    distance: l.distance != null ? Math.round(l.distance) : null,
+    stops: Array.isArray(l.intermediateStops) ? l.intermediateStops.length : 0,
+    realTime: !!l.realTime,
+    geometry: l.legGeometry?.points ? decodePolyline(l.legGeometry.points, l.legGeometry.precision || 5) : [],
+  };
+}
+
+function normalizeItinerary(it) {
+  const legs = (it.legs || []).map(normalizeLeg);
+  return {
+    duration: Math.round(it.duration || 0),
+    start: it.startTime || legs[0]?.from.time || null,
+    end: it.endTime || legs.at(-1)?.to.time || null,
+    transfers: it.transfers ?? Math.max(0, legs.filter((l) => !isWalkLeg(l)).length - 1),
+    legs,
+  };
+}
+
+/**
+ * Transitous plan → { mode: 'transit', options: [itinerary, ...] } with the
+ * best option first: earliest arrival when leaving at a time, latest
+ * departure when arriving by a time; fewer changes break ties.
+ */
+function normalizeTransit(json, { arriveBy = false } = {}) {
+  let options = (json?.itineraries || []).map(normalizeItinerary);
+  if (!options.length && json?.direct?.length) options = json.direct.map(normalizeItinerary);
+  if (!options.length) throw Object.assign(new Error('No public transport route found'), { status: 404 });
+  const t = (s) => (s ? Date.parse(s) : 0);
+  options.sort((a, b) => (arriveBy ? t(b.start) - t(a.start) : t(a.end) - t(b.end)) || a.transfers - b.transfers || a.duration - b.duration);
+  const best = options[0];
+  return {
+    mode: 'transit', provider: 'transitous',
+    duration: best.duration, distance: null,
+    geometry: best.legs.flatMap((l) => l.geometry),
+    options: options.slice(0, 3),
+  };
+}
+
+// ---------------------------------------------------------------- browser client
+
+const cache = new Map();
+
+async function getJson(url, init) {
+  const res = await fetch(url, init);
+  let data = null;
+  try { data = await res.json(); } catch { /* not JSON */ }
+  if (!res.ok) throw Object.assign(new Error(data?.error || `Request failed (${res.status})`), { status: res.status, data });
+  return data;
+}
+
+/** Ask the Meet server; if there is no server (404 / network error), call the provider directly. */
+async function viaServerOr(path, direct, signal) {
+  try {
+    return await getJson(path, { signal, credentials: 'same-origin' });
+  } catch (err) {
+    if (signal?.aborted) throw err;
+    if (err.status && err.status !== 404 && err.status !== 405) throw err;
+  }
+  return direct();
+}
+
+/** Directions for one person. mode: transit | walk | bike | drive. */
+function getDirections(mode, from, to, { time, arriveBy = false, signal } = {}) {
+  const key = [mode, ll(from), ll(to), time || '', arriveBy].join('|');
+  if (cache.has(key)) return cache.get(key);
+  const q = new URLSearchParams({ mode, from: ll(from), to: ll(to) });
+  if (time) q.set('time', new Date(time).toISOString());
+  if (arriveBy) q.set('arriveBy', '1');
+  const promise = viaServerOr(`/api/directions?${q}`, async () => {
+    if (mode === 'transit') return normalizeTransit(await getJson(transitUrl(from, to, { time, arriveBy }), { signal }), { arriveBy });
+    return normalizeOsrm(await getJson(osrmRouteUrl(mode, from, to), { signal }), mode);
+  }, signal);
+  cache.set(key, promise);
+  promise.catch(() => cache.delete(key));
+  return promise;
+}
+
+/** Travel times from each source to each destination (walk, bike or drive only). */
+function getTravelTimes(mode, sources, destinations, { signal } = {}) {
+  if (mode === 'transit') return Promise.reject(Object.assign(new Error('Not available for public transport'), { status: 400 }));
+  const key = ['table', mode, sources.map(ll).join(';'), destinations.map(ll).join(';')].join('|');
+  if (cache.has(key)) return cache.get(key);
+  const q = new URLSearchParams({ mode, from: sources.map(ll).join(';'), to: destinations.map(ll).join(';') });
+  const promise = viaServerOr(`/api/traveltimes?${q}`, async () => normalizeOsrmTable(await getJson(osrmTableUrl(mode, sources, destinations), { signal })), signal);
+  cache.set(key, promise);
+  promise.catch(() => cache.delete(key));
+  return promise;
+}
+
+/** Hand-off links to full navigation apps. */
+function navLinks(mode, from, to) {
+  const gm = { transit: 'transit', walk: 'walking', bike: 'bicycling', drive: 'driving' }[mode];
+  const am = { transit: 'r', walk: 'w', bike: 'w', drive: 'd' }[mode];
+  return {
+    google: `https://www.google.com/maps/dir/?api=1&origin=${ll(from)}&destination=${ll(to)}&travelmode=${gm}`,
+    apple: `https://maps.apple.com/?saddr=${ll(from)}&daddr=${ll(to)}&dirflg=${am}`,
+  };
+}
+
+__m["directions"] = { MODES, ATTRIBUTION, osrmRouteUrl, osrmTableUrl, transitUrl, decodePolyline, normalizeOsrm, normalizeOsrmTable, vehicleName, isWalkLeg, normalizeTransit, getDirections, getTravelTimes, navLinks };
+})();
 // ---- demo
 (() => {
 // Self-contained test mode for Meet.
@@ -3210,6 +3476,38 @@ const api = {
   async deleteHistory(id) { const { db, u } = me(); u.history = u.history.filter((x) => x.id !== id); save(db); return { ok: true }; },
 };
 
+// Directions in the test town: real shortest routes over its own streets for
+// walking, cycling and driving. There are no timetables, so no public transport.
+const TOWN_SPEED = { walk: 1.35, bike: 4.5, drive: 8.5 }; // m/s
+const noTimetables = () => Object.assign(new Error('No timetables in the test town'), { status: 404, friendly: true });
+
+async function directions(mode, from, to) {
+  ensure();
+  if (mode === 'transit') throw noTimetables();
+  const g = town.graph;
+  const a = nearestAddress(from.lat, from.lon).node, b = nearestAddress(to.lat, to.lon).node;
+  const { dist, parent } = dijkstra(g, a);
+  if (!Number.isFinite(dist[b])) throw Object.assign(new Error('No route found'), { status: 404 });
+  const geometry = [];
+  for (let v = b; v !== -1; v = parent[v]) geometry.push([g.lat[v], g.lon[v]]);
+  geometry.reverse();
+  return { mode, provider: 'test-town', distance: Math.round(dist[b]), duration: Math.round(dist[b] / TOWN_SPEED[mode] + (mode === 'drive' ? 90 : 0)), geometry };
+}
+
+async function travelTimes(mode, sources, destinations) {
+  ensure();
+  if (mode === 'transit') throw noTimetables();
+  const g = town.graph;
+  const targets = destinations.map((p) => nearestAddress(p.lat, p.lon).node);
+  const durations = [], distances = [];
+  for (const src of sources) {
+    const { dist } = dijkstra(g, nearestAddress(src.lat, src.lon).node);
+    distances.push(targets.map((t) => (Number.isFinite(dist[t]) ? Math.round(dist[t]) : null)));
+    durations.push(targets.map((t) => (Number.isFinite(dist[t]) ? Math.round(dist[t] / TOWN_SPEED[mode] + (mode === 'drive' ? 90 : 0)) : null)));
+  }
+  return { durations, distances };
+}
+
 /** A ready-made group: you plus three friends spread around town. */
 function sampleGroup() {
   ensure();
@@ -3413,7 +3711,7 @@ function addBasemap(map) {
 
 const townCenter = CENTER;
 
-__m["demo"] = { warm, getBounds, findPois, searchAddress, reverseGeocode, currentPosition, loadNetwork, api, sampleGroup, addBasemap, townCenter };
+__m["demo"] = { warm, getBounds, findPois, searchAddress, reverseGeocode, currentPosition, loadNetwork, api, directions, travelTimes, sampleGroup, addBasemap, townCenter };
 })();
 // ---- guest
 (() => {
@@ -3509,6 +3807,7 @@ __m["guest"] = { guest };
   __m.geocode = { searchAddress: d.searchAddress, reverseGeocode: d.reverseGeocode, currentPosition: d.currentPosition };
   __m.network = { ...__m.network, loadNetwork: d.loadNetwork };
   __m.pois = { ...__m.pois, findPois: d.findPois };
+  __m.directions = { ...__m.directions, getDirections: d.directions, getTravelTimes: d.travelTimes };
   const baseText = __m.share.shareText;
   __m.share = { ...__m.share, shareText: (p, o) => baseText(p, o).split('\n').filter((l) => !l.startsWith('https://')).join('\n') };
 })();
@@ -3584,6 +3883,7 @@ const { solveMeeting, roadDistanceTo } = __m["meet"];
 const { GrowthAnimation } = __m["growth"];
 const { TABS, findPois, groupPois } = __m["pois"];
 const { mapLinks, shareText, messagingLinks, nativeShare, copyText, calendarInvite, download } = __m["share"];
+const { MODES, ATTRIBUTION, getDirections, getTravelTimes, navLinks, vehicleName, isWalkLeg } = __m["directions"];
 // ---------------------------------------------------------------- constants
 
 const COLORS = ['#007aff', '#ff9500', '#34c759', '#af52de', '#ff3b30', '#30b0c7', '#5856d6', '#ff2d55', '#a2845e', '#8e8e93'];
@@ -3591,11 +3891,11 @@ const SPEEDS = { walk: 1.35, bike: 4.2, transit: 6.5, drive: 9.5 }; // m/s, urba
 const TRAVEL_LABEL = { walk: 'walk', bike: 'bike', transit: 'transit', drive: 'drive' };
 const ANIM_MS = { slow: 9000, normal: 6000, fast: 3200 };
 const RADII = [500, 1000, 2000, 5000];
-const DEFAULT_SETTINGS = { mode: 'fair', travel: 'transit', speed: 'normal', theme: 'auto' };
+const DEFAULT_SETTINGS = { mode: 'fair', travel: 'walk', speed: 'normal', theme: 'auto' };
 const SHEET_DEFAULT = { people: 'mid', results: 'mid', group: 'mid', place: 'mid', share: 'full' };
 
 // Category icons: Settings-style coloured tiles with simple line glyphs.
-const TAB_COLOR = { food: '#ff9500', drinks: '#a2845e', fun: '#5856d6', culture: '#af52de', outdoors: '#34c759', shopping: '#007aff' };
+const TAB_COLOR = { food: '#ff9500', drinks: '#a2845e', fun: '#5856d6', culture: '#af52de', outdoors: '#34c759', shopping: '#007aff', meet: '#007aff' };
 const GLYPH = {
   food: '<path d="M7 3v7a2 2 0 0 0 2 2v9M5 3v5M9 3v5M17 21V3c-2.2 1.2-3.5 4-3.5 7.5h3.5"/>',
   drinks: '<path d="M5 9h11v4a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5zM16 10.5h1.5a2.5 2.5 0 0 1 0 5H16M8 3.5v2.5M11.5 3.5v2.5"/>',
@@ -3606,8 +3906,13 @@ const GLYPH = {
   all: '<path d="M5 6h14M5 12h14M5 18h14"/>',
   pin: '<path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.2"/>',
   pencil: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
+  transit: '<path d="M7 3.5h10a2 2 0 0 1 2 2V15a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5.5a2 2 0 0 1 2-2zM5 10.5h14M8.5 14h.01M15.5 14h.01M8 17l-1.8 3.5M16 17l1.8 3.5"/>',
+  walk: '<circle cx="13" cy="4.5" r="1.7"/><path d="M10 21l2-6 3 3v3.5M9.5 12.5l1.2-4.8 3.8 1.3 1.8 3M10.7 7.7L7.5 10v3"/>',
+  bike: '<circle cx="6" cy="16" r="3.4"/><circle cx="18" cy="16" r="3.4"/><path d="M6 16l3.8-7h6.2l2 7M8.5 6h3M12 9l-2.2 7"/>',
+  drive: '<path d="M5 15l1.5-4.6A2 2 0 0 1 8.4 9h7.2a2 2 0 0 1 1.9 1.4L19 15M4 15h16v3a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H7v1a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/>',
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
 };
+GLYPH.meet = GLYPH.pin;
 const glyph = (id, size = 16, width = 2.2) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${GLYPH[id]}</svg>`;
 const tile = (id, size = '') => `<span class="tile ${size}${id === 'all' ? ' grey' : ''}" style="--c:${TAB_COLOR[id] || '#8e8e93'}">${glyph(id)}</span>`;
 const CHEV = '<svg class="chev" viewBox="0 0 8 14" width="8" height="14" aria-hidden="true"><path d="M1.5 1.5L6.5 7l-5 5.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -4027,13 +4332,14 @@ function setView(view, { pop = false } = {}) {
 }
 
 const afterRender = {};
-function render() {
+function render({ keepScroll = false } = {}) {
   const body = $('#panel-body');
+  const scroll = body.scrollTop;
   const views = { people: renderPeople, results: renderResults, group: renderGroup, place: renderPlace, share: renderShare };
   if (views[state.view]) {
     body.innerHTML = `<div class="panel-content">${views[state.view]()}</div>`;
     afterRender[state.view]?.();
-    body.scrollTop = 0;
+    body.scrollTop = keepScroll ? scroll : 0;
     if (isMobile() && sheet.snap) setSheet(sheet.snap);
   }
   drawPeople();
@@ -4259,14 +4565,40 @@ function distancesTo(poi) {
   return s.poiDist.get(poi.id);
 }
 
-const tripRow = (person, d) => `<li class="trip"><div class="cell"><span class="avatar sm" style="--c:${person.color}">${esc(initial(person.name))}</span>
-  <span class="cell-main cell-title">${esc(person.name)}</span><span class="cell-end"><b>${fmtTime(travelMinutes(d))}</b>${fmtDist(d)}</span></div></li>`;
+const clock = (iso) => (iso ? new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '');
+const mins = (sec) => fmtTime(Math.max(1, Math.round(sec / 60)));
+
+/** One person's travel time: real when known (seconds), otherwise an estimate from road distance. */
+const tripRow = (person, d, sec) => `<li class="trip"><div class="cell"><span class="avatar sm" style="--c:${person.color}">${esc(initial(person.name))}</span>
+  <span class="cell-main cell-title">${esc(person.name)}</span><span class="cell-end"><b>${sec != null ? mins(sec) : `≈ ${fmtTime(travelMinutes(d))}`}</b>${fmtDist(d)}</span></div></li>`;
+
+const modeSwitch = (action) => `<div class="segmented modes" role="tablist" aria-label="How everyone travels">
+  ${MODES.map((m) => `<button class="seg${m.id === state.settings.travel ? ' active' : ''}" data-action="${action}" data-mode="${m.id}" aria-selected="${m.id === state.settings.travel}">${glyph(m.id, 15)}<span>${m.label}</span></button>`).join('')}
+</div>`;
+
+/** Real travel times from everyone to the meeting point, in the chosen mode. */
+function loadMeetTimes() {
+  const s = state.search;
+  const mode = state.settings.travel;
+  const key = `${mode}|${s.solution.meet.lat},${s.solution.meet.lon}`;
+  if (s.meetTimes?.key === key) return;
+  const mt = s.meetTimes = { key, values: s.people.map(() => null) };
+  const refresh = () => { if (state.search === s && s.meetTimes === mt && state.view === 'results') render({ keepScroll: true }); };
+  if (mode === 'transit') {
+    s.people.forEach((person, i) => getDirections('transit', person, s.solution.meet)
+      .then((d) => { mt.values[i] = d.duration; refresh(); }).catch(() => {}));
+  } else {
+    getTravelTimes(mode, s.people, [s.solution.meet])
+      .then((t) => { t.durations.forEach((row, i) => { mt.values[i] = row[0]; }); refresh(); }).catch(() => {});
+  }
+}
 
 // ------------------------------------------------ results view
 
 function renderResults() {
   const s = state.search;
   const { solution } = s;
+  loadMeetTimes();
   const total = s.pois.length;
   const tabs = TABS.map((t) => {
     const n = s.grouped[t.id].reduce((a, g) => a + g.items.length, 0);
@@ -4294,7 +4626,9 @@ function renderResults() {
         <h2>${esc(s.area ? shortAddr(s.area) : 'Your meeting point')}</h2>
       </div>
     </div>
-    <ul class="group icons">${s.people.map((p, i) => tripRow(p, solution.people[i].reach)).join('')}</ul>
+    ${modeSwitch('trip-mode')}
+    <ul class="group icons">${s.people.map((p, i) => tripRow(p, solution.people[i].reach, s.meetTimes?.values[i])).join('')}
+      <li><button class="cell cell-btn" data-action="meet-place">${tile('meet')}<span class="cell-main cell-title">Routes to this spot &amp; send it</span>${CHEV}</button></li></ul>
     ${s.source === 'synthetic' ? `<p class="notice">${esc(s.reason)} Distances are estimates.</p>` : ''}
     <div class="pills" role="tablist">${tabs}</div>
     ${list}
@@ -4312,10 +4646,32 @@ function groupItems() {
   const s = state.search;
   const groups = s.grouped[s.tab] || [];
   const items = s.group === '*' ? groups.flatMap((g) => g.items) : (groups.find((g) => g.group === s.group)?.items || []);
-  const enriched = items.map((p) => { const ds = distancesTo(p); return { ...p, ds, worst: Math.max(...ds) }; });
-  if (s.sort === 'fair') enriched.sort((a, b) => a.worst - b.worst);
+  const times = loadGroupTimes(items);
+  const enriched = items.map((p, idx) => {
+    const ds = distancesTo(p);
+    const real = times && s.people.every((_, pi) => times[pi]?.[idx] != null);
+    const worstMin = real ? Math.round(Math.max(...s.people.map((_, pi) => times[pi][idx])) / 60) : travelMinutes(Math.max(...ds));
+    return { ...p, ds, worstMin, real };
+  });
+  if (s.sort === 'fair') enriched.sort((a, b) => a.worstMin - b.worstMin);
   else enriched.sort((a, b) => a.fromCenter - b.fromCenter);
   return enriched;
+}
+
+/** Real walk / bike / drive times from everyone to each place in the list (one request). */
+function loadGroupTimes(items) {
+  const s = state.search;
+  const mode = state.settings.travel;
+  if (mode === 'transit' || !items.length) return null;
+  const list = items.slice(0, 80);
+  const key = `${mode}|${list.map((p) => p.id).join(',')}`;
+  if (s.groupTimes?.key === key) return s.groupTimes.durations;
+  const gt = s.groupTimes = { key, durations: null };
+  getTravelTimes(mode, s.people, list).then((t) => {
+    gt.durations = t.durations;
+    if (state.search === s && s.groupTimes === gt && state.view === 'group') render({ keepScroll: true });
+  }).catch(() => {});
+  return null;
 }
 
 function renderGroup() {
@@ -4323,7 +4679,8 @@ function renderGroup() {
   const items = groupItems();
   const title = s.group === '*' ? `All ${TABS.find((t) => t.id === s.tab).label.toLowerCase()}` : s.group;
   const color = TAB_COLOR[s.tab];
-  drawPoiMarkers(items);
+  const markersKey = `${s.tab}|${s.group}|${s.sort}|${items.map((p) => p.id).join(',')}`;
+  if (s.markersKey !== markersKey) { s.markersKey = markersKey; drawPoiMarkers(items); }
   return `
     ${backBtn('back-results', 'Categories')}
     <div class="sheet-title">${tile(s.tab, 'lg')}<div style="flex:1;min-width:0"><h2>${esc(title)}</h2><div class="footnote">${items.length} place${items.length === 1 ? '' : 's'} nearby</div></div></div>
@@ -4336,7 +4693,7 @@ function renderGroup() {
         <span class="num" style="--c:${color}">${i + 1}</span>
         <span class="cell-main"><span class="cell-title">${esc(p.name)}</span>
           <span class="cell-sub">${esc([s.group === '*' ? p.group : '', p.address].filter(Boolean).join(' · ') || 'Near the meeting point')}</span></span>
-        <span class="cell-end"><b>${fmtDist(p.fromCenter)}</b>max ${fmtTime(travelMinutes(p.worst))}</span>${CHEV}
+        <span class="cell-end"><b>${fmtDist(p.fromCenter)}</b>max ${p.real ? '' : '≈ '}${fmtTime(p.worstMin)}</span>${CHEV}
       </button></li>`).join('')}
     </ul>`;
 }
@@ -4373,6 +4730,7 @@ function highlightPoi(id, on) {
 
 function openPlace(id) {
   const s = state.search;
+  s.placeDrawn = null;
   s.place = s.pois.find((p) => p.id === id);
   if (s.place) setView('place');
 }
@@ -4383,34 +4741,191 @@ function renderPlace() {
   const s = state.search;
   const p = s.place;
   const ds = distancesTo(p);
-  poiLayer.clearLayers();
-  L.marker([p.lat, p.lon], {
-    icon: L.divIcon({ className: '', html: `<div class="poi-pin hl" style="--c:${TAB_COLOR[p.tab]}">${glyph(p.tab, 15)}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] }),
-    zIndexOffset: 1200,
-  }).bindTooltip(esc(p.name), { permanent: true, direction: 'right', className: 'label', offset: [20, 0] }).addTo(poiLayer);
-  s.people.forEach((person) => {
-    L.polyline([[person.lat, person.lon], [p.lat, p.lon]], { color: person.color, weight: 3, opacity: 0.75, dashArray: '1 8', lineCap: 'round' }).addTo(poiLayer);
-  });
-  requestAnimationFrame(() => fitTo([...s.people.map((x) => [x.lat, x.lon]), [p.lat, p.lon]], { maxZoom: 16 }));
+  if (s.placeDrawn !== p.id) {
+    s.placeDrawn = p.id;
+    s.markersKey = null;
+    poiLayer.clearLayers();
+    L.marker([p.lat, p.lon], {
+      icon: L.divIcon({ className: '', html: `<div class="poi-pin hl" style="--c:${TAB_COLOR[p.tab] || '#007aff'}">${glyph(p.tab, 15)}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] }),
+      zIndexOffset: 1200,
+    }).bindTooltip(esc(p.name), { permanent: true, direction: 'right', className: 'label', offset: [20, 0] }).addTo(poiLayer);
+    requestAnimationFrame(() => fitTo([...s.people.map((x) => [x.lat, x.lon]), [p.lat, p.lon]], { maxZoom: 16 }));
+  }
+  loadPlaceDirections();
+  drawDirections();
 
   const tags = [p.group, p.outdoor ? 'Outdoor seating' : '', p.vegan ? 'Vegan options' : p.vegetarian ? 'Vegetarian options' : '', p.wheelchair === 'yes' ? 'Step-free' : ''].filter(Boolean);
   const links = mapLinks(p);
   const website = p.website && /^https?:\/\//i.test(p.website) ? p.website : p.website ? `https://${p.website}` : '';
+  const mode = state.settings.travel;
+  const when = state.when || { type: 'now' };
+  const att = mode === 'transit' ? ATTRIBUTION.transit : ATTRIBUTION.routing;
   return `
-    ${backBtn('back-group', s.group === '*' ? 'Back' : s.group)}
+    ${p.id === 'meet' ? backBtn('back-results', 'Places') : backBtn('back-group', s.group === '*' ? 'Back' : s.group)}
     <div class="place-head">${tile(p.tab, 'xl')}<div style="min-width:0"><h2>${esc(p.name)}</h2><div class="footnote">${esc(tags.join(' · '))}</div></div></div>
     <button class="btn btn-primary btn-block btn-lg" data-action="choose">Send location</button>
+    <div class="section-title">Getting there</div>
+    ${modeSwitch('dir-mode')}
+    ${mode === 'transit' ? `<div class="when-row">
+      <select id="dir-when-type" aria-label="When">
+        <option value="now"${when.type === 'now' ? ' selected' : ''}>Leave now</option>
+        <option value="arrive"${when.type === 'arrive' ? ' selected' : ''}>Arrive by…</option>
+      </select>
+      ${when.type === 'arrive' ? `<input type="datetime-local" id="dir-when-time" value="${esc(when.time || '')}" aria-label="Arrive by">` : ''}
+    </div>` : ''}
+    <ul class="group icons dirs">${s.people.map((person, i) => dirRow(person, i, ds[i])).join('')}</ul>
+    <p class="footnote attrib">Test town: routes follow its own streets. The real app uses live routing and public transport.</p>
     <div class="section-title">Details</div>
     <ul class="group kv">
-      <li><div class="cell"><span class="k">Address</span><span class="v">${esc(p.address || 'Not listed')}<br><span class="footnote">${fmtDist(p.fromCenter)} from the meeting point</span></span></div></li>
+      <li><div class="cell"><span class="k">Address</span><span class="v">${esc(p.address || 'Not listed')}${p.id === 'meet' ? '' : `<br><span class="footnote">${fmtDist(p.fromCenter)} from the meeting point</span>`}</span></div></li>
       ${p.hours ? `<li><div class="cell"><span class="k">Hours</span><span class="v">${esc(p.hours)}</span></div></li>` : ''}
       ${p.phone ? `<li><div class="cell"><span class="k">Phone</span><a class="v" href="tel:${esc(p.phone.replace(/\s/g, ''))}">${esc(p.phone)}</a></div></li>` : ''}
       ${website ? `<li><div class="cell"><span class="k">Website</span><a class="v" href="${esc(website)}" target="_blank" rel="noopener">${esc(website.replace(/^https?:\/\//, '').replace(/\/$/, ''))}</a></div></li>` : ''}
     </ul>
-    <div class="section-title">Getting there</div>
-    <ul class="group icons">${s.people.map((person, i) => tripRow(person, ds[i])).join('')}</ul>
     <div class="actions">
     </div>`;
+}
+
+afterRender.place = () => {
+  $('#dir-when-type')?.addEventListener('change', (e) => {
+    if (e.target.value === 'arrive') {
+      const d = nextHalfHour();
+      d.setHours(d.getHours() + 1);
+      const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      state.when = { type: 'arrive', time: state.shareWhen || local };
+    } else state.when = { type: 'now' };
+    render({ keepScroll: true });
+  });
+  $('#dir-when-time')?.addEventListener('change', (e) => {
+    if (e.target.value) { state.when = { type: 'arrive', time: e.target.value }; render({ keepScroll: true }); }
+  });
+};
+
+/** Fetch each person's real directions to the open place (once per place / mode / time). */
+function loadPlaceDirections() {
+  const s = state.search;
+  const p = s.place;
+  const mode = state.settings.travel;
+  const when = mode === 'transit' ? state.when || { type: 'now' } : { type: 'now' };
+  const key = [p.id, mode, when.type, when.time || ''].join('|');
+  if (state.dir?.key === key) return;
+  const prev = state.dir;
+  const dir = state.dir = { key, mode, results: s.people.map(() => ({ status: 'loading' })), expanded: prev?.key?.startsWith(`${p.id}|`) ? prev.expanded : -1, fitted: false };
+  const opts = when.type === 'arrive' && when.time ? { time: new Date(when.time), arriveBy: true } : {};
+  s.people.forEach((person, i) => {
+    getDirections(mode, person, p, opts)
+      .then((data) => { dir.results[i] = { status: 'ok', data, option: 0 }; })
+      .catch((err) => { dir.results[i] = { status: 'error', message: friendlyError(err, mode) }; })
+      .finally(() => {
+        if (state.dir !== dir || state.view !== 'place') return;
+        drawDirections();
+        render({ keepScroll: true });
+        if (!dir.fitted && dir.results.every((r) => r.status !== 'loading')) {
+          dir.fitted = true;
+          const pts = dir.results.flatMap((r) => (r.status === 'ok' ? routeGeometry(r) : []));
+          if (pts.length) fitTo([...pts, ...s.people.map((x) => [x.lat, x.lon]), [p.lat, p.lon]], { maxZoom: 16 });
+        }
+      });
+  });
+}
+
+function friendlyError(err, mode) {
+  if (err.status === 429 || err.friendly) return err.message;
+  if (err.status === 404) return mode === 'transit' ? 'No public transport route found' : 'No route found';
+  return mode === 'transit' ? 'Public transport times unavailable right now' : 'Directions unavailable right now';
+}
+
+const currentOption = (r) => r.data.options?.[r.option || 0];
+const routeGeometry = (r) => (r.data.options ? currentOption(r).legs.flatMap((l) => l.geometry) : r.data.geometry);
+
+/** Draw everyone's real routes on the map; walking parts dotted. */
+function drawDirections() {
+  const dir = state.dir;
+  const s = state.search;
+  if (!dir) return;
+  if (dir.layer) poiLayer.removeLayer(dir.layer);
+  const layer = dir.layer = L.layerGroup().addTo(poiLayer);
+  s.people.forEach((person, i) => {
+    const r = dir.results[i];
+    const dim = dir.expanded >= 0 && dir.expanded !== i;
+    const opacity = dim ? 0.3 : 1;
+    if (r.status !== 'ok') {
+      L.polyline([[person.lat, person.lon], [s.place.lat, s.place.lon]], { color: person.color, weight: 3, opacity: 0.6 * opacity, dashArray: '1 8', lineCap: 'round', interactive: false }).addTo(layer);
+      return;
+    }
+    const pieces = r.data.options
+      ? currentOption(r).legs.map((l) => ({ pts: l.geometry, walk: isWalkLeg(l) }))
+      : [{ pts: r.data.geometry, walk: r.data.mode === 'walk' }];
+    for (const piece of pieces) {
+      if (piece.pts.length < 2) continue;
+      if (piece.walk) {
+        L.polyline(piece.pts, { color: person.color, weight: 4, opacity: 0.9 * opacity, dashArray: '0.1 7', lineCap: 'round', interactive: false }).addTo(layer);
+      } else {
+        L.polyline(piece.pts, { color: '#fff', weight: 8, opacity: 0.9 * opacity, interactive: false }).addTo(layer);
+        L.polyline(piece.pts, { color: person.color, weight: 4.5, opacity, interactive: false }).addTo(layer);
+      }
+    }
+  });
+}
+
+const legChip = (l) => (isWalkLeg(l)
+  ? `<span class="walk-chip">${glyph('walk', 12)}${Math.max(1, Math.round(l.duration / 60))}</span>`
+  : `<span class="line-badge" style="background:${l.color || '#8e8e93'};color:${l.textColor}">${esc(l.line || vehicleName(l.mode))}</span>`);
+
+function dirRow(person, i, d) {
+  const dir = state.dir;
+  const r = dir.results[i];
+  const open = dir.expanded === i;
+  let sub, end;
+  if (r.status === 'loading') {
+    sub = 'Finding the best route…';
+    end = '<span class="spinner" aria-label="Loading"></span>';
+  } else if (r.status === 'error') {
+    sub = esc(r.message);
+    end = `<b>≈ ${fmtTime(travelMinutes(d, dir.mode))}</b>estimate`;
+  } else if (r.data.options) {
+    const o = currentOption(r);
+    const legs = o.legs.filter((l) => !isWalkLeg(l) || l.duration >= 180);
+    sub = `<span class="chips">${legs.map(legChip).join('<span class="sep">›</span>')}</span><span class="times">${clock(o.start)} – ${clock(o.end)}${o.transfers ? ` · ${o.transfers} change${o.transfers > 1 ? 's' : ''}` : ''}</span>`;
+    end = `<b>${mins(o.duration)}</b>`;
+  } else {
+    const arrive = new Date(Date.now() + r.data.duration * 1000).toISOString();
+    sub = `${fmtDist(r.data.distance)} by ${MODES.find((m) => m.id === r.data.mode).label.toLowerCase()}<span class="times">Arrive about ${clock(arrive)} if you leave now</span>`;
+    end = `<b>${mins(r.data.duration)}</b>`;
+  }
+  return `<li class="dir${open ? ' open' : ''}">
+    <button class="cell cell-btn" data-action="dir-toggle" data-pi="${i}" aria-expanded="${open}">
+      <span class="avatar sm" style="--c:${person.color}">${esc(initial(person.name))}</span>
+      <span class="cell-main"><span class="cell-title">${esc(person.name)}</span><span class="cell-sub">${sub}</span></span>
+      <span class="cell-end">${end}</span>${CHEV}
+    </button>
+    ${open ? itinerary(person, i, r) : ''}
+  </li>`;
+}
+
+function itinerary(person, i, r) {
+  const p = state.search.place;
+  const links = navLinks(state.dir.mode, person, p);
+  const handoff = '';
+  if (r.status !== 'ok') return `<div class="itin">${handoff}</div>`;
+  if (!r.data.options) {
+    return `<div class="itin"><p class="footnote">${fmtDist(r.data.distance)} · about ${mins(r.data.duration)}${state.dir.mode === 'drive' ? ' without traffic' : ''}.</p>${handoff}</div>`;
+  }
+  const opts = r.data.options;
+  const o = currentOption(r);
+  const choices = opts.length > 1 ? `<div class="opt-row">${opts.map((x, k) => `<button class="chip${k === (r.option || 0) ? ' active' : ''}" data-action="dir-opt" data-pi="${i}" data-opt="${k}">${clock(x.start)} · ${mins(x.duration)}${x.transfers ? ` · ${x.transfers} change${x.transfers > 1 ? 's' : ''}` : ''}</button>`).join('')}</div>` : '';
+  const steps = o.legs.map((l) => {
+    if (isWalkLeg(l)) {
+      const m = Math.max(1, Math.round(l.duration / 60));
+      return `<li class="leg walk"><span class="t">${clock(l.from.time)}</span><span class="rail"></span><div class="what">Walk ${m} min${l.to.name && l.to.name !== 'Destination' ? ` to <b>${esc(l.to.name)}</b>` : ` to ${esc(p.name)}`}</div></li>`;
+    }
+    return `<li class="leg ride" style="--line:${l.color || '#8e8e93'}"><span class="t">${clock(l.from.time)}</span><span class="rail"></span><div class="what">
+      <b>${esc(l.from.name)}</b>
+      <div class="ride-line"><span class="line-badge" style="background:${l.color || '#8e8e93'};color:${l.textColor}">${esc(l.line || vehicleName(l.mode))}</span> ${esc(vehicleName(l.mode))}${l.headsign ? ` towards ${esc(l.headsign)}` : ''}</div>
+      <div class="footnote">${l.stops + 1} stop${l.stops ? 's' : ''} · ${mins(l.duration)}${l.realTime ? ' · live times' : ''}${l.agency ? ` · ${esc(l.agency)}` : ''}</div>
+      <div class="footnote">Get off at <b>${esc(l.to.name)}</b> · ${clock(l.to.time)}</div></div></li>`;
+  }).join('');
+  return `<div class="itin">${choices}<ol class="legs">${steps}<li class="leg end"><span class="t">${clock(o.end)}</span><span class="rail"></span><div class="what">Arrive at <b>${esc(p.name)}</b></div></li></ol>${handoff}</div>`;
 }
 
 // ------------------------------------------------ share view
@@ -4496,7 +5011,7 @@ function initPanel() {
       case 'delete': deletePlace(id); break;
       case 'toggle': patchPlace(id, { active: el.checked }); break;
       case 'tab': s.tab = el.dataset.tab; render(); break;
-      case 'group': s.group = el.dataset.group; s.sort = s.sort || 'near'; setView('group'); break;
+      case 'group': s.markersKey = null; s.group = el.dataset.group; s.sort = s.sort || 'near'; setView('group'); break;
       case 'radius': {
         el.textContent = '…';
         const ctrl = new AbortController();
@@ -4508,20 +5023,46 @@ function initPanel() {
       }
       case 'surprise': {
         const pick = s.pois[Math.floor(Math.random() * s.pois.length)];
-        s.tab = pick.tab; s.group = pick.group; s.place = pick;
+        s.tab = pick.tab; s.group = pick.group; s.place = pick; s.placeDrawn = null;
         setView('place');
         break;
       }
       case 'replay': findPlaces({ replay: true }); break;
+      case 'meet-place': {
+        const m = s.solution.meet;
+        s.place = { id: 'meet', name: s.area ? shortAddr(s.area) : 'Meeting point', lat: m.lat, lon: m.lon, tab: 'meet', group: 'Meeting point', address: s.area || '', fromCenter: 0 };
+        s.placeDrawn = null;
+        setView('place');
+        break;
+      }
       case 'edit-people': cancelSearch(); break;
       case 'back-results':
         poiLayer.clearLayers();
+        s.markersKey = null;
         setView('results');
         fitTo([...s.people.map((p) => [p.lat, p.lon]), [s.solution.meet.lat, s.solution.meet.lon]], { maxZoom: 16 });
         break;
       case 'sort': s.sort = el.dataset.sort; render(); break;
       case 'place': openPlace(id); break;
-      case 'back-group': setView('group'); break;
+      case 'back-group': s.markersKey = null; setView('group'); break;
+      case 'trip-mode':
+      case 'dir-mode':
+        if (el.dataset.mode !== state.settings.travel) saveSettings({ travel: el.dataset.mode });
+        break;
+      case 'dir-toggle': {
+        const i = Number(el.dataset.pi);
+        state.dir.expanded = state.dir.expanded === i ? -1 : i;
+        drawDirections();
+        render({ keepScroll: true });
+        break;
+      }
+      case 'dir-opt': {
+        const r = state.dir.results[Number(el.dataset.pi)];
+        r.option = Number(el.dataset.opt);
+        drawDirections();
+        render({ keepScroll: true });
+        break;
+      }
       case 'choose': enterShare(); break;
       case 'back-place': setView('place'); break;
       case 'back-people': state.sharePlace = null; poiLayer.clearLayers(); setView('people'); break;
@@ -4618,7 +5159,7 @@ async function saveSettings(patch) {
   syncSettingsUI();
   if (state.search && ['results', 'group', 'place'].includes(state.view)) {
     if (patch.mode && patch.mode !== prevMode) toast('Run the search again to use this rule', { action: 'Run', onAction: () => { openDrawer(false); findPlaces(); } });
-    render();
+    render({ keepScroll: true });
   }
   try { await api.updateMe({ settings: state.settings }); } catch { /* keep local */ }
 }
