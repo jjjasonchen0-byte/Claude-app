@@ -1,0 +1,20 @@
+{
+  "name": "midway",
+  "version": "1.0.0",
+  "description": "Find a meeting place that is fair for every friend — routes grow out from each address and meet in the middle.",
+  "main": "server.js",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test test/unit/*.test.js",
+    "test:e2e": "node test/e2e.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "leaflet": "1.9.4"
+  }
+}

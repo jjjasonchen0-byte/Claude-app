@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Midway — meet in the middle</title>
+  <meta name="description" content="Find a place that's fair for every friend. Routes grow out from each address and meet in the middle.">
+  <meta name="theme-color" content="#5b5bf0">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <!-- ============ Sign in ============ -->
+  <section id="screen-auth" class="screen screen-centered" hidden>
+    <div class="auth-card card">
+      <div class="brand brand-lg"><span class="brand-mark" aria-hidden="true"></span>Midway</div>
+      <p class="tagline">Find the spot that's fair for everyone.</p>
+      <div class="segmented" role="tablist">
+        <button type="button" role="tab" class="seg active" data-auth-mode="login" aria-selected="true">Sign in</button>
+        <button type="button" role="tab" class="seg" data-auth-mode="signup" aria-selected="false">Create account</button>
+      </div>
+      <form id="auth-form" novalidate>
+        <label class="field" data-signup-only hidden>
+          <span>Your name <em>(optional)</em></span>
+          <input name="name" autocomplete="name" maxlength="60" placeholder="Alex">
+        </label>
+        <label class="field">
+          <span>Email</span>
+          <input name="email" type="email" autocomplete="email" required placeholder="you@example.com">
+        </label>
+        <label class="field">
+          <span>Password</span>
+          <div class="input-row">
+            <input name="password" type="password" autocomplete="current-password" required minlength="6" placeholder="At least 6 characters">
+            <button type="button" class="icon-btn" id="toggle-password" aria-label="Show password">👁</button>
+          </div>
+        </label>
+        <p class="form-error" id="auth-error" role="alert" hidden></p>
+        <button class="btn btn-primary btn-block" type="submit" id="auth-submit">Sign in</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- ============ Home address ============ -->
+  <section id="screen-home" class="screen screen-centered" hidden>
+    <div class="card onboard-card">
+      <div class="step">Step 1 of 2</div>
+      <h1>Where do you live?</h1>
+      <p class="muted">We'll centre the map here and use it as your starting point. Only you can see it.</p>
+      <div class="search" id="home-search">
+        <input type="search" placeholder="Start typing your address…" autocomplete="off" aria-label="Your address">
+        <ul class="suggestions" role="listbox" hidden></ul>
+      </div>
+      <button class="btn btn-ghost btn-block" type="button" id="home-locate">📍 Use my current location</button>
+      <button class="btn btn-link" type="button" id="home-cancel" hidden>Cancel</button>
+    </div>
+  </section>
+
+  <!-- ============ Main app ============ -->
+  <section id="screen-main" class="screen" hidden>
+    <div id="map" aria-label="Map"></div>
+
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"></span>Midway</div>
+      <div class="topbar-actions">
+        <button class="icon-btn round" id="btn-recenter" title="Centre on home" aria-label="Centre on home">⌂</button>
+        <button class="icon-btn round" id="btn-menu" title="Menu" aria-label="Open menu">☰</button>
+      </div>
+    </header>
+
+    <div class="status-chip" id="search-status" hidden>
+      <span class="spinner" aria-hidden="true"></span>
+      <span class="status-text">Finding routes…</span>
+      <button class="chip-btn" id="btn-skip" hidden>Skip ›</button>
+      <button class="chip-btn" id="btn-cancel-search">Cancel</button>
+    </div>
+
+    <aside class="panel" id="panel" aria-live="polite">
+      <button class="panel-handle" id="panel-handle" aria-label="Expand or collapse panel"></button>
+      <div class="panel-body" id="panel-body"></div>
+    </aside>
+  </section>
+
+  <!-- ============ Menu drawer ============ -->
+  <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
+  <nav class="drawer" id="drawer" aria-label="Menu" hidden>
+    <div class="drawer-head">
+      <div>
+        <div class="drawer-name" id="drawer-name"></div>
+        <div class="muted small" id="drawer-email"></div>
+      </div>
+      <button class="icon-btn" id="drawer-close" aria-label="Close menu">✕</button>
+    </div>
+    <div class="drawer-section">
+      <h3>Home</h3>
+      <div class="muted small" id="drawer-home"></div>
+      <button class="btn btn-ghost btn-sm" id="btn-edit-home">Change home address</button>
+    </div>
+    <div class="drawer-section">
+      <h3>Meeting point</h3>
+      <div class="segmented small" id="set-mode">
+        <button class="seg" data-value="fair">Fairest</button>
+        <button class="seg" data-value="total">Least total travel</button>
+      </div>
+      <p class="muted small" id="mode-hint"></p>
+    </div>
+    <div class="drawer-section">
+      <h3>Travel times shown for</h3>
+      <div class="segmented small" id="set-travel">
+        <button class="seg" data-value="walk">🚶 Walk</button>
+        <button class="seg" data-value="bike">🚲 Bike</button>
+        <button class="seg" data-value="transit">🚆 Transit</button>
+        <button class="seg" data-value="drive">🚗 Drive</button>
+      </div>
+    </div>
+    <div class="drawer-section">
+      <h3>Animation</h3>
+      <div class="segmented small" id="set-speed">
+        <button class="seg" data-value="slow">Relaxed</button>
+        <button class="seg" data-value="normal">Normal</button>
+        <button class="seg" data-value="fast">Quick</button>
+      </div>
+    </div>
+    <div class="drawer-section">
+      <h3>Theme</h3>
+      <div class="segmented small" id="set-theme">
+        <button class="seg" data-value="auto">Auto</button>
+        <button class="seg" data-value="light">Light</button>
+        <button class="seg" data-value="dark">Dark</button>
+      </div>
+    </div>
+    <div class="drawer-section grow">
+      <h3>Past meetups</h3>
+      <ul class="history" id="history-list"></ul>
+    </div>
+    <div class="drawer-section">
+      <button class="btn btn-ghost btn-block" id="btn-logout">Sign out</button>
+    </div>
+  </nav>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <noscript><p class="noscript">Midway needs JavaScript to run.</p></noscript>
+  <script src="/vendor/leaflet/leaflet.js"></script>
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>
