@@ -203,50 +203,69 @@ export function pathTo(person, node) {
 }
 
 /**
- * Animation segments for one person: the shortest-path tree, clipped at
- * `limit`. Each segment grows from d0 to d1 (metres along the roads), so a
- * single shared radius r draws every friend's frontier at the same rate.
+ * A small bundle of different routes from a person to the meeting point.
  *
- * Each segment also gets a `trunk` flag: 1 when the branch beyond it carries
- * on for at least `minTail` metres (or reaches the limit, or is on the route
- * to the meeting point). Drawing only trunks leaves out the short dead-end
- * twigs that make a raw shortest-path tree look busy.
+ * Every step of every route moves closer to the meeting point (its road
+ * distance to the meeting point strictly drops), so no route ever heads the
+ * wrong way. Each route is at most `slack` longer than the shortest one.
+ * Alternatives are found by making the edges of routes already found (and,
+ * more gently, every street touching them) more expensive and searching
+ * again, so the next route sits at least a block away. Only routes that
+ * differ enough are kept.
  *
- * Returns Float64Array of [lat0, lon0, lat1, lon1, d0, d1, trunk] * count, sorted by d0.
+ * @param toMeet road distance from every node to the meeting point (dijkstra from it)
+ * @returns [{ path: node ids from the person's street to the meeting point, length }], shortest first
  */
-export const SEG_STRIDE = 7;
-export function treeSegments(g, person, limit, others = [], meetNode = -1, { minTail = Math.max(150, Math.min(700, limit * 0.12)) } = {}) {
-  // Furthest distance reached anywhere in each node's subtree.
-  const reached = [];
-  for (let v = 0; v < g.n; v++) if (person.dist[v] < Infinity) reached.push(v);
-  reached.sort((a, b) => person.dist[b] - person.dist[a]);
-  const far = new Float64Array(g.n);
-  for (const v of reached) if (person.dist[v] > far[v]) far[v] = person.dist[v];
-  for (const v of reached) {
-    const p = person.parent[v];
-    if (p >= 0 && far[v] > far[p]) far[p] = far[v];
+export function routeBundle(g, person, meetNode, toMeet, { max = 4, attempts = 16, slack = 0.15, penalty = 1.8, nearby = 1.35, overlap = 0.6 } = {}) {
+  const start = person.node;
+  if (start === meetNode || toMeet[start] === Infinity) return [{ path: [start], length: 0 }];
+  const limit = toMeet[start] * (1 + slack) + 30;
+  const pen = new Float32Array(g.adjNode.length).fill(1);
+  const dist = new Float64Array(g.n), parent = new Int32Array(g.n), viaEdge = new Int32Array(g.n), seen = new Int32Array(g.n);
+  const twin = (e, u, v) => { for (let f = g.adjStart[v]; f < g.adjStart[v + 1]; f++) if (g.adjNode[f] === u) return f; return -1; };
+  const routes = [];
+  for (let t = 1; t <= attempts && routes.length < max; t++) {
+    const heap = new Heap();
+    dist[start] = 0; seen[start] = t; parent[start] = -1;
+    heap.push(0, start);
+    while (heap.size) {
+      const u = heap.pop();
+      const du = heap.lastKey;
+      if (du > dist[u]) continue;
+      if (u === meetNode) break;
+      for (let e = g.adjStart[u]; e < g.adjStart[u + 1]; e++) {
+        const v = g.adjNode[e];
+        if (!(toMeet[v] < toMeet[u] - 0.01)) continue; // only ever towards the meeting point
+        const nd = du + g.adjLen[e] * pen[e];
+        if (nd + toMeet[v] > limit * 3) continue;
+        if (seen[v] !== t || nd < dist[v]) { seen[v] = t; dist[v] = nd; parent[v] = u; viaEdge[v] = e; heap.push(nd, v); }
+      }
+    }
+    if (seen[meetNode] !== t) break;
+    const path = [meetNode];
+    const keys = new Set();
+    let length = 0;
+    for (let v = meetNode; v !== start; v = parent[v]) {
+      const u = parent[v], e = viaEdge[v];
+      length += g.adjLen[e];
+      keys.add(Math.min(u, v) * 1048576 + Math.max(u, v));
+      pen[e] *= penalty;
+      const back = twin(e, u, v);
+      if (back >= 0) pen[back] *= penalty;
+      path.push(u);
+    }
+    path.reverse();
+    // Nudge the next search a block or so away from this route.
+    for (const v of path) for (let f = g.adjStart[v]; f < g.adjStart[v + 1]; f++) pen[f] *= nearby;
+    if (length > limit) continue;
+    const similar = routes.some((r) => {
+      let shared = 0;
+      for (const k of keys) if (r.keys.has(k)) shared++;
+      return shared / Math.min(keys.size, r.keys.size) > overlap;
+    });
+    if (!similar) routes.push({ path, length, keys });
   }
-
-  const rows = [];
-  // Connector from the doorstep to the nearest street.
-  rows.push([person.lat, person.lon, g.lat[person.node], g.lon[person.node], 0, person.gap, 1]);
-  // Branches stop where they run into a friend's frontier (a node someone
-  // else reaches first), except along this person's route to the meeting point.
-  const onRoute = new Uint8Array(g.n);
-  if (meetNode >= 0) for (const v of pathTo(person, meetNode)) onRoute[v] = 1;
-  for (let v = 0; v < g.n; v++) {
-    const p = person.parent[v];
-    if (p < 0) continue;
-    const d0 = person.dist[p];
-    if (d0 > limit) continue;
-    if (!onRoute[v] && others.some((o) => o.dist[p] < d0)) continue;
-    const trunk = onRoute[v] || far[v] >= Math.min(d0 + minTail, limit) ? 1 : 0;
-    rows.push([g.lat[p], g.lon[p], g.lat[v], g.lon[v], d0, person.dist[v], trunk]);
-  }
-  rows.sort((a, b) => a[4] - b[4]);
-  const out = new Float64Array(rows.length * SEG_STRIDE);
-  rows.forEach((r, i) => out.set(r, i * SEG_STRIDE));
-  return out;
+  return routes.map(({ path, length }) => ({ path, length }));
 }
 
 /** Approximate road distance from a person to an arbitrary point. */

@@ -1,19 +1,18 @@
-// Canvas overlay that shows everyone's reach spreading along the streets at
-// one shared rate (an invisible circle measured along the roads) until they
-// meet. It is drawn softly:
-//   • a pale wash of each person's colour over the streets reached so far,
-//   • thin lines only along streets that lead somewhere (no dead-end twigs),
-//     fading behind a slightly stronger leading edge.
+// Canvas overlay that shows each person's routes to the meeting point
+// growing at one shared rate (an invisible circle measured along the roads)
+// until they meet. Each person gets a small bundle of routes; every step of
+// every route moves closer to the meeting point, so nothing branches off the
+// wrong way. Once everyone arrives the alternatives fade and each person's
+// best route stays, like a directions line.
 // Coordinates are pre-projected to Web Mercator at zoom 0, so each frame is a
 // cheap scale + translate.
-import { treeSegments, pathTo, SEG_STRIDE } from './meet.js';
+import { routeBundle, dijkstra } from './meet.js';
 
-const WASH_M = 135;          // width of the wash along each street, in metres
-const WASH_BLUR = 3;         // px, softens the wash's outline where supported
-const WASH_ALPHA = 0.13;     // while spreading
-const WASH_ALPHA_DONE = 0.08;
-const LINE_ALPHA = 0.32;     // trails behind the edge
-const EDGE_ALPHA = 0.75;     // the leading edge
+// While growing: each person's main route a little stronger, the other
+// options lighter. Once everyone has met: options fade, main route goes bold.
+const MAIN = { width: 2.4, alpha: 0.85 };
+const ALT = { width: 1.6, alpha: 0.4 };
+const ALT_DONE = { width: 1.5, alpha: 0.16 };
 
 export class GrowthAnimation {
   /**
@@ -33,32 +32,38 @@ export class GrowthAnimation {
 
     const crs = L.CRS.EPSG3857;
     const proj = (lat, lon) => crs.latLngToPoint(L.latLng(lat, lon), 0);
+    const pt = (v) => proj(graph.lat[v], graph.lon[v]);
     this.limit = solution.radius;
-    this.band = Math.max(250, solution.radius * 0.14); // depth of the leading edge, metres
+    const toMeet = dijkstra(graph, solution.meetNode).dist;
     this.layers = solution.people.map((person) => {
-      const others = solution.people.filter((o) => o !== person);
-      const segs = treeSegments(graph, person, this.limit, others, solution.meetNode);
-      const count = segs.length / SEG_STRIDE;
-      const xy = new Float64Array(count * 4);
-      const d = new Float64Array(count * 2);
-      const trunk = new Uint8Array(count);
-      for (let i = 0; i < count; i++) {
-        const o = i * SEG_STRIDE;
-        const a = proj(segs[o], segs[o + 1]);
-        const b = proj(segs[o + 2], segs[o + 3]);
-        xy[i * 4] = a.x; xy[i * 4 + 1] = a.y; xy[i * 4 + 2] = b.x; xy[i * 4 + 3] = b.y;
-        d[i * 2] = segs[o + 4];
-        d[i * 2 + 1] = segs[o + 5];
-        trunk[i] = segs[o + 6];
-      }
-      // Route from this person to the meeting point, shown once everyone meets.
-      const route = [proj(person.lat, person.lon), ...pathTo(person, solution.meetNode).map((v) => proj(graph.lat[v], graph.lon[v]))];
-      return { count, xy, d, trunk, route };
+      const routes = routeBundle(graph, person, solution.meetNode, toMeet);
+      // Everyone's routes arrive together when the shared radius reaches this
+      // person's distance, so the "same rate" circle still holds.
+      const arrive = person.reach;
+      const segs = [];
+      const seen = new Set();
+      const door = proj(person.lat, person.lon);
+      const first = pt(routes[0].path[0]);
+      segs.push({ a: door, b: first, d0: 0, d1: person.gap, best: true });
+      routes.forEach((route, ri) => {
+        const scale = route.length > 0 ? (arrive - person.gap) / route.length : 0;
+        let along = 0;
+        for (let i = 1; i < route.path.length; i++) {
+          const u = route.path[i - 1], v = route.path[i];
+          const len = edgeLength(graph, u, v);
+          const key = Math.min(u, v) * 1048576 + Math.max(u, v);
+          const d0 = person.gap + along * scale;
+          along += len;
+          if (seen.has(key)) continue; // shared with a route already drawn
+          seen.add(key);
+          segs.push({ a: pt(u), b: pt(v), d0, d1: person.gap + along * scale, best: ri === 0 });
+        }
+      });
+      segs.sort((x, y) => x.d0 - y.d0);
+      const best = [door, ...routes[0].path.map(pt)];
+      return { segs, best, routes: routes.length };
     });
 
-    // One shared wash layer: where two people's areas touch, the later one
-    // simply paints over the earlier, so overlaps never muddy into grey.
-    this.wash = document.createElement('canvas');
     this.canvas = document.createElement('canvas');
     this.canvas.className = 'growth-canvas';
     map.getContainer().appendChild(this.canvas);
@@ -81,9 +86,6 @@ export class GrowthAnimation {
     this.canvas.style.height = `${size.y}px`;
     this.dpr = dpr;
     this.size = size;
-    // The wash is soft, so it renders at 1× and is scaled up.
-    this.wash.width = size.x;
-    this.wash.height = size.y;
     this.draw();
   }
 
@@ -144,88 +146,60 @@ export class GrowthAnimation {
   draw() {
     const { ctx, map, dpr } = this;
     if (!this.size) return;
-    const z = map.getZoom();
-    const scale = 2 ** z;
+    const scale = 2 ** map.getZoom();
     const origin = map.getPixelBounds().min;
     const ox = origin.x, oy = origin.y;
-    const lat = map.getCenter().lat;
-    const mpp = (156543.03 * Math.cos((lat * Math.PI) / 180)) / scale;
-    const washW = Math.max(5, Math.min(90, WASH_M / mpp));
     const r = this.r;
     const finished = this.done;
-    const edgeFrom = r - this.band;
-
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, this.size.x, this.size.y);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    const wctx = this.wash.getContext('2d');
-    wctx.clearRect(0, 0, this.wash.width, this.wash.height);
-    wctx.lineCap = 'round';
-    wctx.lineJoin = 'round';
-    wctx.lineWidth = washW;
-    const lines = this.layers.map((layer, li) => {
+    this.layers.forEach((layer, li) => {
       const color = this.colors[li % this.colors.length];
-      const { xy, d, trunk, count } = layer;
-      const behind = new Path2D();
-      const edge = new Path2D();
-      wctx.beginPath();
-      for (let i = 0; i < count; i++) {
-        const d0 = d[i * 2];
-        if (d0 >= r) break; // sorted by d0
-        const d1 = d[i * 2 + 1];
-        const x0 = xy[i * 4] * scale - ox, y0 = xy[i * 4 + 1] * scale - oy;
-        let x1 = xy[i * 4 + 2] * scale - ox, y1 = xy[i * 4 + 3] * scale - oy;
-        if (d1 > r) {
-          const f = (r - d0) / Math.max(1e-9, d1 - d0);
+      const main = new Path2D();
+      const alt = new Path2D();
+      for (const s of layer.segs) {
+        if (s.d0 >= r) break; // sorted by d0
+        const path = s.best ? main : alt;
+        const x0 = s.a.x * scale - ox, y0 = s.a.y * scale - oy;
+        let x1 = s.b.x * scale - ox, y1 = s.b.y * scale - oy;
+        if (s.d1 > r) {
+          const f = (r - s.d0) / Math.max(1e-9, s.d1 - s.d0);
           x1 = x0 + (x1 - x0) * f;
           y1 = y0 + (y1 - y0) * f;
         }
-        wctx.moveTo(x0, y0);
-        wctx.lineTo(x1, y1);
-        if (!trunk[i] || finished) continue;
-        const path = d1 >= edgeFrom ? edge : behind;
         path.moveTo(x0, y0);
         path.lineTo(x1, y1);
       }
-      wctx.strokeStyle = color;
-      wctx.stroke();
-      return { color, behind, edge, route: layer.route };
-    });
-
-    // 1. The wash: the area each person can reach so far.
-    ctx.globalAlpha = finished ? WASH_ALPHA_DONE : WASH_ALPHA;
-    if ('filter' in ctx) ctx.filter = `blur(${WASH_BLUR}px)`;
-    ctx.drawImage(this.wash, 0, 0, this.size.x, this.size.y);
-    if ('filter' in ctx) ctx.filter = 'none';
-
-    for (const { color, behind, edge, route } of lines) {
-      // 2. Thin lines along streets that lead somewhere, stronger at the edge.
-      if (!finished) {
-        ctx.strokeStyle = color;
-        ctx.globalAlpha = LINE_ALPHA;
-        ctx.lineWidth = 1.2;
-        ctx.stroke(behind);
-        ctx.globalAlpha = EDGE_ALPHA;
-        ctx.lineWidth = 1.8;
-        ctx.stroke(edge);
-        continue;
-      }
-      // 3. Once everyone meets: each person's route, like a map directions line.
-      ctx.globalAlpha = 1;
-      ctx.beginPath();
-      route.forEach((p, i) => {
-        const x = p.x * scale - ox, y = p.y * scale - oy;
-        if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
-      });
-      ctx.strokeStyle = 'rgba(255,255,255,0.95)';
-      ctx.lineWidth = 6.5;
-      ctx.stroke();
       ctx.strokeStyle = color;
-      ctx.lineWidth = 3.5;
-      ctx.stroke();
-    }
+      const altStyle = finished ? ALT_DONE : ALT;
+      ctx.globalAlpha = altStyle.alpha;
+      ctx.lineWidth = altStyle.width;
+      ctx.stroke(alt);
+      if (!finished) {
+        ctx.globalAlpha = MAIN.alpha;
+        ctx.lineWidth = MAIN.width;
+        ctx.stroke(main);
+      }
+
+      // Once everyone meets: each person's best route, like a directions line.
+      if (finished) {
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        layer.best.forEach((p, i) => {
+          const x = p.x * scale - ox, y = p.y * scale - oy;
+          if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+        });
+        ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+        ctx.lineWidth = 6.5;
+        ctx.stroke();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3.5;
+        ctx.stroke();
+      }
+    });
     ctx.globalAlpha = 1;
   }
 
@@ -237,4 +211,9 @@ export class GrowthAnimation {
     this.map.off('zoomanim', this.onZoomAnim);
     this.canvas.remove();
   }
+}
+
+function edgeLength(g, u, v) {
+  for (let e = g.adjStart[u]; e < g.adjStart[u + 1]; e++) if (g.adjNode[e] === v) return g.adjLen[e];
+  return 0;
 }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { solveMeeting, treeSegments, pathTo, SEG_STRIDE } from '../../public/js/meet.js';
+import { solveMeeting, routeBundle, pathTo, dijkstra } from '../../public/js/meet.js';
 import { buildGraph, syntheticGraph, fromEdgeList } from '../../public/js/network.js';
 import { haversine, smallestEnclosingCircle } from '../../public/js/geo.js';
 
@@ -45,11 +45,18 @@ test('three friends on a synthetic network all reach the meeting point', () => {
     const path = pathTo(person, r.meetNode);
     assert.equal(path[0], person.node);
     assert.equal(path.at(-1), r.meetNode);
-    const segs = treeSegments(g, person, r.radius);
-    assert.ok(segs.length >= SEG_STRIDE && segs.length % SEG_STRIDE === 0);
-    let trunks = 0;
-    for (let i = 0; i < segs.length; i += SEG_STRIDE) trunks += segs[i + 6];
-    assert.ok(trunks > 0 && trunks < segs.length / SEG_STRIDE, 'some, but not all, branches are trunks');
+    const toMeet = dijkstra(g, r.meetNode).dist;
+    const routes = routeBundle(g, person, r.meetNode, toMeet);
+    assert.ok(routes.length >= 2, 'offers a few alternative routes');
+    assert.ok(Math.abs(routes[0].length - toMeet[person.node]) < 1, 'first route is the shortest');
+    for (const route of routes) {
+      assert.equal(route.path[0], person.node);
+      assert.equal(route.path.at(-1), r.meetNode);
+      assert.ok(route.length <= routes[0].length * 1.15 + 30, 'alternatives are not much longer');
+      for (let i = 1; i < route.path.length; i++) {
+        assert.ok(toMeet[route.path[i]] < toMeet[route.path[i - 1]], 'every step moves towards the meeting point');
+      }
+    }
   }
   // Meeting point should be near the geometric fair point.
   const sec = smallestEnclosingCircle(people);

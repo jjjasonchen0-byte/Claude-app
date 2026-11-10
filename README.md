@@ -4,7 +4,7 @@ Find somewhere that's roughly as close for everyone in a group, with a press of 
 
 1. **Enter where you're starting from.** No account is needed. The map centres on your address.
 2. **Add the people you're meeting**, each with an optional name. You can type an address, tap the map, or drag a dot.
-3. Press **Find a place to meet.** Routes branch out along the real streets from every address, all growing at the same rate (an invisible circle measured along the roads). They only grow in directions that lead towards the others. Where they meet is the meeting point.
+3. Press **Find a place to meet.** Routes grow along the real streets from every address at the same rate (an invisible circle measured along the roads). Each person gets a main route and a few alternatives, and every step of every route moves towards the meeting point, the spot where everyone's routes arrive together.
 4. A panel lists what's nearby in tabs (Food, Drinks, Fun, Culture, Outdoors, Shopping). Each tab has listings with counts, e.g. `Italian 4`.
 5. Pick a listing to **show those places on the map** as numbered, labelled pins you can click.
 6. Choose one and **send the location** by share sheet, WhatsApp, Messages, Email, Telegram, copy, a calendar invite, or Google/Apple Maps.
@@ -47,8 +47,8 @@ Requires Node 18+. The only dependency is Leaflet, which is served from `node_mo
 | `server.js` | Static hosting plus a JSON API for optional profiles (scrypt-hashed passwords, httpOnly session cookie), saved addresses, settings and history |
 | `public/js/api.js` | One data API for the app: guest storage (`guest.js`) until someone signs in, then the server (`remote.js`), moving guest data across |
 | `public/js/network.js` | Downloads the road network from OpenStreetMap (Overpass) and builds a compact graph. The road classes it fetches depend on how spread out the group is |
-| `public/js/meet.js` | Runs Dijkstra from every address, each limited to a "towards the others" corridor that widens automatically if roads don't connect. The meeting point is the node that minimises the longest (or total) road distance |
-| `public/js/growth.js` | Canvas animation at one shared radius: a pale wash of each person's colour over the streets they can reach, thin lines only along streets that lead somewhere (dead-end twigs are left out), and each person's route once everyone meets |
+| `public/js/meet.js` | Runs Dijkstra from every address, each limited to a "towards the others" corridor that widens automatically if roads don't connect. The meeting point is the node that minimises the longest (or total) road distance. `routeBundle` then finds up to four different routes per person in which every step moves closer to the meeting point |
+| `public/js/growth.js` | Canvas animation: each person's routes grow at one shared rate (an invisible circle measured along the roads), a main route plus faint alternatives, with nothing branching away from the meeting point. When everyone arrives the alternatives fade and the main routes stay. It scales with the map while zooming |
 | `public/js/pois.js` | Fetches places near the meeting point from Overpass and groups them into tabs and listings |
 | `public/js/share.js` | Share text, messaging links, map links and the `.ics` invite |
 
