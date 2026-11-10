@@ -1,0 +1,18 @@
+# One-click hosting on Render (https://render.com): Dashboard → New → Blueprint
+# → pick this repository. Render builds it and gives you an https:// address.
+services:
+  - type: web
+    name: meet
+    runtime: node
+    plan: free
+    branch: main
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Your email or website: the public transport service (Transitous)
+      # asks every app for a way to reach its owner. Render asks for it on setup.
+      - key: MEET_CONTACT
+        sync: false

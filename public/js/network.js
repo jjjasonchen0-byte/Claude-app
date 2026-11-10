@@ -27,9 +27,9 @@ export function roadQuery(bbox, classes) {
 }
 
 /** POST an Overpass query, trying mirrors in turn. */
-export async function overpass(query, { signal, timeoutMs = 45000 } = {}) {
+export async function overpass(query, { signal, timeoutMs = 45000, mirrors = OVERPASS_ENDPOINTS.length } = {}) {
   let lastErr;
-  for (const url of OVERPASS_ENDPOINTS) {
+  for (const url of OVERPASS_ENDPOINTS.slice(0, mirrors)) {
     const ctrl = new AbortController();
     const onAbort = () => ctrl.abort();
     signal?.addEventListener('abort', onAbort);
@@ -174,7 +174,7 @@ export async function loadNetwork(points, { signal, onStatus = () => {} } = {}) 
   try {
     onStatus('Downloading streets…');
     const bbox = paddedBBox(points, 0.2, 700);
-    const json = await overpass(roadQuery(bbox, roadClassesFor(s)), { signal });
+    const json = await overpass(roadQuery(bbox, roadClassesFor(s)), { signal, timeoutMs: 30000, mirrors: 2 });
     onStatus('Mapping intersections…');
     const graph = buildGraph(json.elements);
     if (graph.n < 20) throw new Error('Too few roads found');

@@ -23,7 +23,18 @@ MEET_CONTACT="you@example.com" npm start      # http://localhost:3000
 
 Requires Node 18+. The only dependency is Leaflet, which is served from `node_modules`. Profiles are stored in `data/db.json`; set `DATA_FILE` to change where. Set `PORT` to change the port.
 
-To use it on your phone, deploy it anywhere that runs Node or Docker (for example Render, Railway or Fly.io) and open the HTTPS address it gives you; your phone's location button needs HTTPS. A `Dockerfile` is included:
+### Put it online (for your phone)
+
+Your phone's location button needs an `https://` address, so host it. The repo includes a `render.yaml`, so on [Render](https://render.com) it takes a few clicks:
+
+1. Sign up at render.com with your GitHub account and allow it to see this repository.
+2. In the Render dashboard choose **New → Blueprint**, then pick this repository.
+3. When asked for **MEET_CONTACT**, enter your email or website, then click **Apply**.
+4. After a few minutes Render shows an address like `https://meet-xxxx.onrender.com`. Open it on your phone.
+
+The free plan pauses when idle (the first visit then takes about a minute) and doesn't keep files between restarts. Guest data lives in each browser, so that's fine, but saved profiles would be lost; pick a paid plan with a disk if you want profiles to last.
+
+Any host that runs Node or Docker works too (Railway, Fly.io…). A `Dockerfile` is included:
 
 ```bash
 docker build -t meet . && docker run -p 3000:3000 -e MEET_CONTACT="you@example.com" -v meet-data:/app/data meet
@@ -37,7 +48,7 @@ Everything comes from free, open services. Each asks for light, fair use:
 | --- | --- | --- |
 | Map tiles | OpenStreetMap | [Tile usage policy](https://operations.osmfoundation.org/policies/tiles/). For heavy use, switch to a commercial tile provider |
 | Address search | Photon (komoot), Nominatim fallback | Called from the browser |
-| Streets and places | Overpass API (overpass-api.de, with two mirrors) | Called from the browser. Public Overpass servers sometimes refuse cloud servers or are busy; the app then falls back to approximate streets and lets you open the meeting point directly |
+| Streets and places | Overpass API (overpass-api.de, with a mirror), Photon fallback for places | Called from the browser. Public Overpass servers are sometimes busy or refuse requests; places then come from Photon (grouped by type, e.g. Restaurants, Cafés, Pubs, rather than by cuisine), streets fall back to an approximation, and you can always open the meeting point directly |
 | Walk / bike / drive directions | [FOSSGIS OSRM](https://routing.openstreetmap.de/about.html) | Relayed and cached by the Meet server |
 | Public transport | [Transitous](https://transitous.org/api/) (MOTIS 2) | Relayed and cached by the Meet server |
 
@@ -78,9 +89,13 @@ The browser asks the Meet server for directions (`/api/directions`, `/api/travel
 
 Map data © OpenStreetMap contributors. Routing by FOSSGIS OSRM. Public transport by Transitous and [its data sources](https://transitous.org/sources/).
 
+## Licence
+
+MIT, see [LICENSE](LICENSE).
+
 ## Tests
 
 ```bash
-npm test                                   # solver and directions unit tests (directions use trimmed real London responses)
+npm test                                   # solver, places and directions unit tests (places and directions use trimmed real London responses)
 NODE_PATH=$(npm root -g) npm run test:e2e  # full browser walkthrough (Playwright; map services mocked)
 ```

@@ -159,15 +159,76 @@ export function groupPois(pois) {
 }
 
 /** Fetch POIs, widening the search radius until there is a decent choice. */
+/**
+ * Fetch POIs, widening the search radius until there is a decent choice.
+ * Uses OpenStreetMap's Overpass API; if that is down or refusing requests,
+ * falls back to Photon (the address search service), which can list nearby
+ * places by type but not by cuisine.
+ */
 export async function findPois(center, { radius, signal, minResults = 12 } = {}) {
   const radii = radius ? [radius] : [800, 1800, 4000];
   let pois = [];
   let used = radii[0];
-  for (const r of radii) {
-    used = r;
-    const json = await overpass(poiQuery(center, r), { signal, timeoutMs: 30000 });
-    pois = parsePois(json.elements, center);
-    if (pois.length >= minResults) break;
+  try {
+    for (const r of radii) {
+      used = r;
+      const json = await overpass(poiQuery(center, r), { signal, timeoutMs: 10000, mirrors: 2 });
+      pois = parsePois(json.elements, center);
+      if (pois.length >= minResults) break;
+    }
+    return { pois, radius: used, source: 'overpass' };
+  } catch (err) {
+    if (signal?.aborted) throw err;
+    const r = radius || 1500;
+    return { pois: await photonPois(center, r, { signal }), radius: r, source: 'photon' };
   }
-  return { pois, radius: used };
+}
+
+// ---------------------------------------------------------------- Photon fallback
+
+const PHOTON_REVERSE = 'https://photon.komoot.io/reverse';
+// One request per group, so each kind of place gets a fair share of the 50 results.
+export const PHOTON_GROUPS = [
+  ['amenity:restaurant', 'amenity:fast_food', 'amenity:food_court', 'shop:bakery'],
+  ['amenity:cafe', 'amenity:pub', 'amenity:bar', 'amenity:biergarten', 'amenity:ice_cream'],
+  ['amenity:cinema', 'amenity:theatre', 'amenity:arts_centre', 'amenity:nightclub', 'amenity:library', 'tourism:museum', 'tourism:gallery',
+    'tourism:attraction', 'tourism:zoo', 'leisure:bowling_alley', 'leisure:escape_game', 'leisure:amusement_arcade', 'leisure:sports_centre'],
+  ['leisure:park', 'leisure:garden', 'leisure:playground', 'leisure:nature_reserve', 'tourism:viewpoint',
+    'shop:mall', 'shop:department_store', 'shop:books', 'shop:games', 'shop:gift', 'shop:clothes', 'amenity:marketplace'],
+];
+
+export function photonUrl(center, radiusM, tags) {
+  const q = new URLSearchParams({ lat: center.lat.toFixed(6), lon: center.lon.toFixed(6), radius: (radiusM / 1000).toFixed(2), limit: '50' });
+  for (const t of tags) q.append('osm_tag', t);
+  return `${PHOTON_REVERSE}?${q}`;
+}
+
+/** Photon features → Overpass-style elements, so parsePois can sort them into tabs. */
+export function photonElements(features) {
+  const TYPES = { N: 'node', W: 'way', R: 'relation' };
+  return (features || []).filter((f) => f?.properties?.name && f.geometry?.coordinates).map((f) => {
+    const p = f.properties;
+    const [lon, lat] = f.geometry.coordinates;
+    return {
+      type: TYPES[p.osm_type] || 'node', id: p.osm_id, lat, lon,
+      tags: {
+        name: p.name, [p.osm_key]: p.osm_value,
+        ...(p.street ? { 'addr:street': p.street } : {}),
+        ...(p.housenumber ? { 'addr:housenumber': p.housenumber } : {}),
+        ...(p.district || p.city ? { 'addr:suburb': p.district || p.city } : {}),
+      },
+    };
+  });
+}
+
+async function photonPois(center, radiusM, { signal } = {}) {
+  const results = await Promise.allSettled(PHOTON_GROUPS.map(async (tags) => {
+    const res = await fetch(photonUrl(center, radiusM, tags), { signal, headers: { Accept: 'application/json' } });
+    if (!res.ok) throw new Error(`Photon ${res.status}`);
+    return (await res.json()).features;
+  }));
+  const ok = results.filter((r) => r.status === 'fulfilled');
+  if (!ok.length) throw new Error('Places could not be loaded');
+  return parsePois(photonElements(ok.flatMap((r) => r.value)), center)
+    .filter((p) => p.fromCenter <= radiusM * 1.1);
 }
