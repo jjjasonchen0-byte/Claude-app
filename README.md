@@ -24,7 +24,7 @@ Requires Node 18+. The only dependency is Leaflet, which is served from `node_mo
 
 ## Test version (no server, no internet)
 
-`node scripts/build-test.mjs` builds `dist/meet-test.html`, a single page that runs the same app code in a made-up town called Port Verity. The town is about 22 × 16 km, with generated streets, boulevards, a river with bridges, a bay, lakes, parks, about 1,900 places and street names that appear as you zoom in. It's drawn as map tiles, so panning, scroll-wheel zoom and pinch zoom behave like a normal map. Open the page and press **Try a sample group** to start with three friends already added. The test-mode stand-ins live in `public/js/demo.js`.
+`node scripts/build-test.mjs` builds `dist/meet-test.html`, a single page that runs the same app code in a made-up town called Port Verity. The town is about 22 × 16 km and randomly laid out: districts at different angles, curving streets, a tangled old town with diagonal lanes, suburbs with long blocks and dead ends, boulevards, a river with bridges, a bay, irregular lakes and parks, about 1,900 places, and street names that appear as you zoom in. It's drawn as map tiles, so panning, scroll-wheel zoom and pinch zoom behave like a normal map. Open the page and press **Try a sample group** to start with three friends already added. The test-mode stand-ins live in `public/js/demo.js`.
 
 ## Extras
 
@@ -48,7 +48,7 @@ Requires Node 18+. The only dependency is Leaflet, which is served from `node_mo
 | `public/js/api.js` | One data API for the app: guest storage (`guest.js`) until someone signs in, then the server (`remote.js`), moving guest data across |
 | `public/js/network.js` | Downloads the road network from OpenStreetMap (Overpass) and builds a compact graph. The road classes it fetches depend on how spread out the group is |
 | `public/js/meet.js` | Runs Dijkstra from every address, each limited to a "towards the others" corridor that widens automatically if roads don't connect. The meeting point is the node that minimises the longest (or total) road distance |
-| `public/js/growth.js` | Canvas animation of each shortest-path tree at one shared radius. Branches stop where they reach another person's frontier |
+| `public/js/growth.js` | Canvas animation at one shared radius: a pale wash of each person's colour over the streets they can reach, thin lines only along streets that lead somewhere (dead-end twigs are left out), and each person's route once everyone meets |
 | `public/js/pois.js` | Fetches places near the meeting point from Overpass and groups them into tabs and listings |
 | `public/js/share.js` | Share text, messaging links, map links and the `.ics` invite |
 

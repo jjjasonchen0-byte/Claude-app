@@ -206,12 +206,30 @@ export function pathTo(person, node) {
  * Animation segments for one person: the shortest-path tree, clipped at
  * `limit`. Each segment grows from d0 to d1 (metres along the roads), so a
  * single shared radius r draws every friend's frontier at the same rate.
- * Returns Float64Array of [lat0, lon0, lat1, lon1, d0, d1] * count, sorted by d0.
+ *
+ * Each segment also gets a `trunk` flag: 1 when the branch beyond it carries
+ * on for at least `minTail` metres (or reaches the limit, or is on the route
+ * to the meeting point). Drawing only trunks leaves out the short dead-end
+ * twigs that make a raw shortest-path tree look busy.
+ *
+ * Returns Float64Array of [lat0, lon0, lat1, lon1, d0, d1, trunk] * count, sorted by d0.
  */
-export function treeSegments(g, person, limit, others = [], meetNode = -1) {
+export const SEG_STRIDE = 7;
+export function treeSegments(g, person, limit, others = [], meetNode = -1, { minTail = Math.max(150, Math.min(700, limit * 0.12)) } = {}) {
+  // Furthest distance reached anywhere in each node's subtree.
+  const reached = [];
+  for (let v = 0; v < g.n; v++) if (person.dist[v] < Infinity) reached.push(v);
+  reached.sort((a, b) => person.dist[b] - person.dist[a]);
+  const far = new Float64Array(g.n);
+  for (const v of reached) if (person.dist[v] > far[v]) far[v] = person.dist[v];
+  for (const v of reached) {
+    const p = person.parent[v];
+    if (p >= 0 && far[v] > far[p]) far[p] = far[v];
+  }
+
   const rows = [];
   // Connector from the doorstep to the nearest street.
-  rows.push([person.lat, person.lon, g.lat[person.node], g.lon[person.node], 0, person.gap]);
+  rows.push([person.lat, person.lon, g.lat[person.node], g.lon[person.node], 0, person.gap, 1]);
   // Branches stop where they run into a friend's frontier (a node someone
   // else reaches first), except along this person's route to the meeting point.
   const onRoute = new Uint8Array(g.n);
@@ -222,11 +240,12 @@ export function treeSegments(g, person, limit, others = [], meetNode = -1) {
     const d0 = person.dist[p];
     if (d0 > limit) continue;
     if (!onRoute[v] && others.some((o) => o.dist[p] < d0)) continue;
-    rows.push([g.lat[p], g.lon[p], g.lat[v], g.lon[v], d0, person.dist[v]]);
+    const trunk = onRoute[v] || far[v] >= Math.min(d0 + minTail, limit) ? 1 : 0;
+    rows.push([g.lat[p], g.lon[p], g.lat[v], g.lon[v], d0, person.dist[v], trunk]);
   }
   rows.sort((a, b) => a[4] - b[4]);
-  const out = new Float64Array(rows.length * 6);
-  rows.forEach((r, i) => out.set(r, i * 6));
+  const out = new Float64Array(rows.length * SEG_STRIDE);
+  rows.forEach((r, i) => out.set(r, i * SEG_STRIDE));
   return out;
 }
 
