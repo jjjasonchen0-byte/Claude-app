@@ -10,13 +10,32 @@ import { mapLinks, shareText, messagingLinks, nativeShare, copyText, calendarInv
 
 // ---------------------------------------------------------------- constants
 
-const COLORS = ['#3d5afe', '#e5484d', '#12a594', '#f08c00', '#c2298a', '#2f9e44', '#0b8bd1', '#7c4dff', '#d9480f', '#495057'];
+const COLORS = ['#007aff', '#ff9500', '#34c759', '#af52de', '#ff3b30', '#30b0c7', '#5856d6', '#ff2d55', '#a2845e', '#8e8e93'];
 const SPEEDS = { walk: 1.35, bike: 4.2, transit: 6.5, drive: 9.5 }; // m/s, urban averages
 const TRAVEL_LABEL = { walk: 'walk', bike: 'bike', transit: 'transit', drive: 'drive' };
 const ANIM_MS = { slow: 9000, normal: 6000, fast: 3200 };
 const RADII = [500, 1000, 2000, 5000];
 const DEFAULT_SETTINGS = { mode: 'fair', travel: 'transit', speed: 'normal', theme: 'auto' };
 const SHEET_DEFAULT = { people: 'mid', results: 'mid', group: 'mid', place: 'mid', share: 'full' };
+
+// Category icons: Settings-style coloured tiles with simple line glyphs.
+const TAB_COLOR = { food: '#ff9500', drinks: '#a2845e', fun: '#5856d6', culture: '#af52de', outdoors: '#34c759', shopping: '#007aff' };
+const GLYPH = {
+  food: '<path d="M7 3v7a2 2 0 0 0 2 2v9M5 3v5M9 3v5M17 21V3c-2.2 1.2-3.5 4-3.5 7.5h3.5"/>',
+  drinks: '<path d="M5 9h11v4a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5zM16 10.5h1.5a2.5 2.5 0 0 1 0 5H16M8 3.5v2.5M11.5 3.5v2.5"/>',
+  fun: '<path d="M12 3.5l2.5 5.2 5.7.8-4.1 4 1 5.6-5.1-2.7-5.1 2.7 1-5.6-4.1-4 5.7-.8z"/>',
+  culture: '<path d="M3.5 9.5L12 4.5l8.5 5M5.5 10v8M10 10v8M14 10v8M18.5 10v8M3.5 20h17"/>',
+  outdoors: '<path d="M12 21v-5M12 3.5l6.5 9h-13zM12 8.5l7 8h-14z"/>',
+  shopping: '<path d="M5.5 8.5h13l-1 12h-11zM9 8.5V7a3 3 0 0 1 6 0v1.5"/>',
+  all: '<path d="M5 6h14M5 12h14M5 18h14"/>',
+  pin: '<path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.2"/>',
+  pencil: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
+  close: '<path d="M6 6l12 12M18 6L6 18"/>',
+};
+const glyph = (id, size = 16, width = 2.2) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${GLYPH[id]}</svg>`;
+const tile = (id, size = '') => `<span class="tile ${size}${id === 'all' ? ' grey' : ''}" style="--c:${TAB_COLOR[id] || '#8e8e93'}">${glyph(id)}</span>`;
+const CHEV = '<svg class="chev" viewBox="0 0 8 14" width="8" height="14" aria-hidden="true"><path d="M1.5 1.5L6.5 7l-5 5.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const backBtn = (action, label) => `<button class="back" data-action="${action}">${CHEV}<span>${esc(label)}</span></button>`;
 
 // ---------------------------------------------------------------- state
 
@@ -234,9 +253,10 @@ function initHome() {
   homeSearchCtl = attachSearch($('#home-search'), { near: () => null, onPick: saveHome });
   $('#home-locate').onclick = async (e) => {
     const btn = e.currentTarget;
-    const label = btn.textContent;
+    const span = $('span', btn);
+    const label = span.textContent;
     btn.disabled = true;
-    btn.textContent = 'Locating…';
+    span.textContent = 'Locating…';
     try {
       const pos = await currentPosition();
       await saveHome(await reverseGeocode(pos.lat, pos.lon));
@@ -244,7 +264,7 @@ function initHome() {
       toast(err.message, { error: true });
     } finally {
       btn.disabled = false;
-      btn.textContent = label;
+      span.textContent = label;
     }
   };
   $('#home-cancel').onclick = () => enterMain();
@@ -284,9 +304,9 @@ function initMap() {
 function pinIcon(person) {
   return L.divIcon({
     className: '',
-    html: `<div class="pin" style="background:${person.color}">${esc(initial(person.name))}</div>`,
-    iconSize: [26, 26],
-    iconAnchor: [13, 13],
+    html: `<div class="avatar-pin" style="--c:${person.color}">${esc(initial(person.name))}</div>`,
+    iconSize: [38, 47],
+    iconAnchor: [19, 47],
   });
 }
 
@@ -295,7 +315,7 @@ function drawPeople() {
   for (const p of everyone()) {
     if (!p.active && state.view !== 'people') continue;
     const m = L.marker([p.lat, p.lon], { icon: pinIcon(p), draggable: state.view === 'people', opacity: p.active ? 1 : 0.4, riseOnHover: true })
-      .bindTooltip(esc(p.name), { permanent: true, direction: 'top', className: 'label', offset: [0, -14] })
+      .bindTooltip(esc(p.name), { permanent: true, direction: 'top', className: 'label', offset: [0, -48] })
       .addTo(peopleLayer);
     m.on('dragend', () => moveAddress(p, m.getLatLng()));
   }
@@ -454,18 +474,18 @@ function renderPeople() {
   const rows = all.map((p) => {
     const editing = state.editingId === p.id;
     return `<li class="person${p.active ? '' : ' inactive'}" data-id="${esc(p.id)}">
-      <div class="row">
-        <span class="dot" style="background:${p.color}"></span>
-        <div class="row-main" data-action="focus" style="cursor:pointer">
-          <div class="row-title">${esc(p.isHome ? (state.user.name ? `You (${state.user.name})` : 'You') : p.name)}</div>
-          <div class="row-sub" title="${esc(p.address)}">${esc(shortAddr(p.address))}</div>
+      <div class="cell">
+        <span class="avatar" style="--c:${p.color}">${esc(initial(p.name))}</span>
+        <div class="cell-main" data-action="focus" style="cursor:pointer">
+          <span class="cell-title">${esc(p.isHome ? (state.user.name ? `You (${state.user.name})` : 'You') : p.name)}</span>
+          <span class="cell-sub" title="${esc(p.address)}">${esc(shortAddr(p.address))}</span>
           ${editing ? `<form class="edit-inline" data-action="save-nick"><input id="nick-${esc(p.id)}" name="nick" value="${esc(p.nickname || '')}" maxlength="60" placeholder="Name"><button class="btn btn-primary">Save</button></form>` : ''}
         </div>
         <div class="person-actions">
           ${p.isHome
-            ? '<button class="icon-btn" data-action="edit-home" aria-label="Change your starting point">Edit</button>'
-            : `<button class="icon-btn" data-action="edit" aria-label="Rename">Rename</button>
-               <button class="icon-btn" data-action="delete" aria-label="Remove ${esc(p.name)}">✕</button>
+            ? '<button class="btn btn-plain" data-action="edit-home" aria-label="Change your starting point">Edit</button>'
+            : `<button class="icon-circle" data-action="edit" aria-label="Rename ${esc(p.name)}">${glyph('pencil', 14)}</button>
+               <button class="icon-circle" data-action="delete" aria-label="Remove ${esc(p.name)}">${glyph('close', 13, 2.6)}</button>
                <label class="switch" title="${p.active ? 'Included' : 'Left out'}">
                  <input type="checkbox" data-action="toggle" ${p.active ? 'checked' : ''} aria-label="Include ${esc(p.name)}"><span></span></label>`}
         </div>
@@ -473,16 +493,16 @@ function renderPeople() {
     </li>`;
   }).join('');
   return `
-    <div class="head"><h2>Who's meeting</h2><span class="muted small">${active} of ${all.length}</span></div>
-    <ul class="rows">${rows}</ul>
-    <div class="add">
-      <div class="search" id="add-search">
+    <div class="sheet-title"><h2>Who's meeting</h2><span class="badge">${active} of ${all.length}</span></div>
+    <ul class="group icons">${rows}</ul>
+    <div class="add-box">
+      <div class="search searchfield" id="add-search">
         <input id="add-input" type="search" placeholder="Add someone's address" autocomplete="off" aria-label="Someone's address">
         <ul class="suggestions" role="listbox" hidden></ul>
       </div>
       <input id="add-nick" maxlength="60" placeholder="Their name (optional)" aria-label="Their name">
-      <p class="hint">Or tap the map. Drag a dot to move it.</p>
     </div>
+    <p class="footnote" style="margin:0 6px">Or tap the map to drop a pin. Drag any pin to move it.</p>
     <div class="cta">
       <button class="btn btn-primary btn-block btn-lg" data-action="find" ${active < 2 ? 'disabled' : ''}>Find a place to meet</button>
     </div>`;
@@ -620,9 +640,9 @@ async function findPlaces({ replay = false } = {}) {
     if (!done || ctrl.signal.aborted) return;
 
     L.marker([solution.meet.lat, solution.meet.lon], {
-      icon: L.divIcon({ className: '', html: '<div class="meet-pin"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }),
+      icon: L.divIcon({ className: '', html: '<div class="meet-dot"></div>', iconSize: [22, 22], iconAnchor: [11, 11] }),
       zIndexOffset: 1000,
-    }).bindTooltip('Meeting point', { permanent: true, direction: 'top', className: 'label', offset: [0, -10] }).addTo(resultLayer);
+    }).bindTooltip('Meeting point', { permanent: true, direction: 'top', className: 'label', offset: [0, -14] }).addTo(resultLayer);
 
     setStatus('Finding places nearby…');
     await poisPromise;
@@ -666,8 +686,8 @@ function distancesTo(poi) {
   return s.poiDist.get(poi.id);
 }
 
-const tripRow = (person, d) => `<div class="travel"><span class="dot" style="background:${person.color}"></span>
-  <span class="name">${esc(person.name)}</span><span class="row-end">${fmtTime(travelMinutes(d))} <span>· ${fmtDist(d)}</span></span></div>`;
+const tripRow = (person, d) => `<li class="trip"><div class="cell"><span class="avatar sm" style="--c:${person.color}">${esc(initial(person.name))}</span>
+  <span class="cell-main cell-title">${esc(person.name)}</span><span class="cell-end"><b>${fmtTime(travelMinutes(d))}</b>${fmtDist(d)}</span></div></li>`;
 
 // ------------------------------------------------ results view
 
@@ -677,33 +697,39 @@ function renderResults() {
   const total = s.pois.length;
   const tabs = TABS.map((t) => {
     const n = s.grouped[t.id].reduce((a, g) => a + g.items.length, 0);
-    return `<button class="tab${t.id === s.tab ? ' active' : ''}" role="tab" data-action="tab" data-tab="${t.id}" ${n ? '' : 'disabled'}>${t.label}<span class="count">${n}</span></button>`;
+    return `<button class="pill${t.id === s.tab ? ' active' : ''}" role="tab" aria-selected="${t.id === s.tab}" data-action="tab" data-tab="${t.id}" ${n ? '' : 'disabled'}>
+      <span class="pill-ico" style="--c:${TAB_COLOR[t.id]}">${glyph(t.id)}</span>${t.label}<span class="count">${n}</span></button>`;
   }).join('');
 
   const groups = s.grouped[s.tab] || [];
   const tabMeta = TABS.find((t) => t.id === s.tab);
   const tabCount = groups.reduce((a, g) => a + g.items.length, 0);
   const list = groups.length
-    ? `<ul class="rows tab-rows">
-        ${groups.map((g) => `<li><button class="row" data-action="group" data-group="${esc(g.group)}"><span class="row-main row-title">${esc(g.group)}</span><span class="row-end">${g.items.length}</span><span class="chev">›</span></button></li>`).join('')}
-        ${groups.length > 1 ? `<li><button class="row" data-action="group" data-group="*"><span class="row-main row-title muted">All ${esc(tabMeta.label.toLowerCase())}</span><span class="row-end">${tabCount}</span><span class="chev">›</span></button></li>` : ''}
+    ? `<ul class="group icons">
+        ${groups.map((g) => `<li><button class="cell cell-btn" data-action="group" data-group="${esc(g.group)}">${tile(s.tab)}<span class="cell-main cell-title">${esc(g.group)}</span><span class="cell-end count">${g.items.length}</span>${CHEV}</button></li>`).join('')}
+        ${groups.length > 1 ? `<li><button class="cell cell-btn" data-action="group" data-group="*">${tile('all')}<span class="cell-main cell-title">All ${esc(tabMeta.label.toLowerCase())}</span><span class="cell-end count">${tabCount}</span>${CHEV}</button></li>` : ''}
       </ul>`
     : `<div class="empty">${s.poiError ? esc(s.poiError) : 'Nothing found nearby. Try a wider radius.'}</div>`;
 
-  const radiusChips = RADII.map((r) => `<button class="chip${r === s.radius ? ' active' : ''}" data-action="radius" data-r="${r}">${fmtDist(r)}</button>`).join('');
+  const radius = RADII.map((r) => `<button class="seg${r === s.radius ? ' active' : ''}" data-action="radius" data-r="${r}">${fmtDist(r)}</button>`).join('');
 
   return `
-    <div class="eyebrow">${state.settings.mode === 'fair' ? 'Fairest meeting point' : 'Least total travel'}</div>
-    <h2>${esc(s.area ? shortAddr(s.area) : 'Your meeting point')}</h2>
-    <div class="trips">${s.people.map((p, i) => tripRow(p, solution.people[i].reach)).join('')}</div>
+    <div class="result-head">
+      <span class="meet-badge"><i></i></span>
+      <div style="min-width:0">
+        <div class="eyebrow">${state.settings.mode === 'fair' ? 'Fairest meeting point' : 'Least total travel'}</div>
+        <h2>${esc(s.area ? shortAddr(s.area) : 'Your meeting point')}</h2>
+      </div>
+    </div>
+    <ul class="group icons">${s.people.map((p, i) => tripRow(p, solution.people[i].reach)).join('')}</ul>
     ${s.source === 'synthetic' ? `<p class="notice">${esc(s.reason)} Distances are estimates.</p>` : ''}
-    <div class="tabs" role="tablist">${tabs}</div>
+    <div class="pills" role="tablist">${tabs}</div>
     ${list}
-    <div class="radius-row"><span>${total} places within</span><div class="chips">${radiusChips}</div></div>
-    <div class="links">
-      <button class="btn-text" data-action="surprise" ${total ? '' : 'disabled'}>Surprise me</button>
-      <button class="btn-text" data-action="replay">Replay</button>
-      <button class="btn-text" data-action="edit-people">Change people</button>
+    <div class="radius-row"><span class="footnote">${total} places within</span><div class="segmented">${radius}</div></div>
+    <div class="actions">
+      <button class="btn btn-tinted" data-action="surprise" ${total ? '' : 'disabled'}>Surprise me</button>
+      <button class="btn btn-tinted" data-action="replay">Replay</button>
+      <button class="btn btn-tinted" data-action="edit-people">Edit people</button>
     </div>`;
 }
 
@@ -723,20 +749,21 @@ function renderGroup() {
   const s = state.search;
   const items = groupItems();
   const title = s.group === '*' ? `All ${TABS.find((t) => t.id === s.tab).label.toLowerCase()}` : s.group;
+  const color = TAB_COLOR[s.tab];
   drawPoiMarkers(items);
   return `
-    <button class="back" data-action="back-results">‹ Categories</button>
-    <div class="head"><h2>${esc(title)}</h2><span class="muted small">${items.length}</span></div>
-    <div class="chips" style="margin-bottom:8px">
-      <button class="chip${s.sort !== 'fair' ? ' active' : ''}" data-action="sort" data-sort="near">Nearest</button>
-      <button class="chip${s.sort === 'fair' ? ' active' : ''}" data-action="sort" data-sort="fair">Fairest</button>
+    ${backBtn('back-results', 'Categories')}
+    <div class="sheet-title">${tile(s.tab, 'lg')}<div style="flex:1;min-width:0"><h2>${esc(title)}</h2><div class="footnote">${items.length} place${items.length === 1 ? '' : 's'} nearby</div></div></div>
+    <div class="segmented" style="margin-top:0">
+      <button class="seg${s.sort !== 'fair' ? ' active' : ''}" data-action="sort" data-sort="near">Nearest</button>
+      <button class="seg${s.sort === 'fair' ? ' active' : ''}" data-action="sort" data-sort="fair">Fairest for everyone</button>
     </div>
-    <ul class="rows">
-      ${items.map((p, i) => `<li><button class="row poi" data-action="place" data-id="${esc(p.id)}">
-        <span class="num">${i + 1}</span>
-        <span class="row-main"><span class="row-title" style="display:block">${esc(p.name)}</span>
-          <span class="row-sub" style="display:block">${esc([s.group === '*' ? p.group : '', p.address].filter(Boolean).join(' · ') || 'Near the meeting point')}</span></span>
-        <span class="row-end">${fmtDist(p.fromCenter)}<br><span class="muted">max ${fmtTime(travelMinutes(p.worst))}</span></span>
+    <ul class="group icons">
+      ${items.map((p, i) => `<li><button class="cell cell-btn poi" data-action="place" data-id="${esc(p.id)}">
+        <span class="num" style="--c:${color}">${i + 1}</span>
+        <span class="cell-main"><span class="cell-title">${esc(p.name)}</span>
+          <span class="cell-sub">${esc([s.group === '*' ? p.group : '', p.address].filter(Boolean).join(' · ') || 'Near the meeting point')}</span></span>
+        <span class="cell-end"><b>${fmtDist(p.fromCenter)}</b>max ${fmtTime(travelMinutes(p.worst))}</span>${CHEV}
       </button></li>`).join('')}
     </ul>`;
 }
@@ -754,9 +781,9 @@ function drawPoiMarkers(items) {
   poiMarkers.clear();
   items.forEach((p, i) => {
     const m = L.marker([p.lat, p.lon], {
-      icon: L.divIcon({ className: '', html: `<div class="poi-pin">${i + 1}</div>`, iconSize: [24, 24], iconAnchor: [12, 12] }),
+      icon: L.divIcon({ className: '', html: `<div class="poi-pin" style="--c:${TAB_COLOR[p.tab]}">${i + 1}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] }),
       riseOnHover: true,
-    }).bindTooltip(esc(p.name), { permanent: items.length <= 25, direction: 'right', className: 'label', offset: [12, 0] })
+    }).bindTooltip(esc(p.name), { permanent: items.length <= 25, direction: 'right', className: 'label', offset: [16, 0] })
       .addTo(poiLayer);
     m.on('click', () => openPlace(p.id));
     poiMarkers.set(p.id, m);
@@ -785,11 +812,11 @@ function renderPlace() {
   const ds = distancesTo(p);
   poiLayer.clearLayers();
   L.marker([p.lat, p.lon], {
-    icon: L.divIcon({ className: '', html: '<div class="poi-pin hl">★</div>', iconSize: [24, 24], iconAnchor: [12, 12] }),
+    icon: L.divIcon({ className: '', html: `<div class="poi-pin hl" style="--c:${TAB_COLOR[p.tab]}">${glyph(p.tab, 15)}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] }),
     zIndexOffset: 1200,
-  }).bindTooltip(esc(p.name), { permanent: true, direction: 'right', className: 'label', offset: [12, 0] }).addTo(poiLayer);
+  }).bindTooltip(esc(p.name), { permanent: true, direction: 'right', className: 'label', offset: [20, 0] }).addTo(poiLayer);
   s.people.forEach((person) => {
-    L.polyline([[person.lat, person.lon], [p.lat, p.lon]], { color: person.color, weight: 2, opacity: 0.7, dashArray: '4 6' }).addTo(poiLayer);
+    L.polyline([[person.lat, person.lon], [p.lat, p.lon]], { color: person.color, weight: 3, opacity: 0.75, dashArray: '1 8', lineCap: 'round' }).addTo(poiLayer);
   });
   requestAnimationFrame(() => fitTo([...s.people.map((x) => [x.lat, x.lon]), [p.lat, p.lon]], { maxZoom: 16 }));
 
@@ -797,21 +824,21 @@ function renderPlace() {
   const links = mapLinks(p);
   const website = p.website && /^https?:\/\//i.test(p.website) ? p.website : p.website ? `https://${p.website}` : '';
   return `
-    <button class="back" data-action="back-group">‹ ${esc(s.group === '*' ? 'Back' : s.group)}</button>
-    <h2>${esc(p.name)}</h2>
-    <div class="meta">${esc(tags.join(' · '))}</div>
-    <ul class="details">
-      <li><span>Address</span><span>${esc(p.address || 'Not listed')} · ${fmtDist(p.fromCenter)} from the meeting point</span></li>
-      ${p.hours ? `<li><span>Hours</span><span>${esc(p.hours)}</span></li>` : ''}
-      ${p.phone ? `<li><span>Phone</span><a href="tel:${esc(p.phone.replace(/\s/g, ''))}">${esc(p.phone)}</a></li>` : ''}
-      ${website ? `<li><span>Website</span><a href="${esc(website)}" target="_blank" rel="noopener">${esc(website.replace(/^https?:\/\//, '').replace(/\/$/, ''))}</a></li>` : ''}
-    </ul>
-    <h3>Getting there</h3>
-    <div class="trips">${s.people.map((person, i) => tripRow(person, ds[i])).join('')}</div>
+    ${backBtn('back-group', s.group === '*' ? 'Back' : s.group)}
+    <div class="place-head">${tile(p.tab, 'xl')}<div style="min-width:0"><h2>${esc(p.name)}</h2><div class="footnote">${esc(tags.join(' · '))}</div></div></div>
     <button class="btn btn-primary btn-block btn-lg" data-action="choose">Send location</button>
-    <div class="links">
-      <a class="btn-text" href="${links.googleDirections}" target="_blank" rel="noopener">Directions</a>
-      <a class="btn-text" href="${links.osm}" target="_blank" rel="noopener">Open in maps</a>
+    <div class="section-title">Details</div>
+    <ul class="group kv">
+      <li><div class="cell"><span class="k">Address</span><span class="v">${esc(p.address || 'Not listed')}<br><span class="footnote">${fmtDist(p.fromCenter)} from the meeting point</span></span></div></li>
+      ${p.hours ? `<li><div class="cell"><span class="k">Hours</span><span class="v">${esc(p.hours)}</span></div></li>` : ''}
+      ${p.phone ? `<li><div class="cell"><span class="k">Phone</span><a class="v" href="tel:${esc(p.phone.replace(/\s/g, ''))}">${esc(p.phone)}</a></div></li>` : ''}
+      ${website ? `<li><div class="cell"><span class="k">Website</span><a class="v" href="${esc(website)}" target="_blank" rel="noopener">${esc(website.replace(/^https?:\/\//, '').replace(/\/$/, ''))}</a></div></li>` : ''}
+    </ul>
+    <div class="section-title">Getting there</div>
+    <ul class="group icons">${s.people.map((person, i) => tripRow(person, ds[i])).join('')}</ul>
+    <div class="actions">
+      <a class="btn btn-tinted" href="${links.googleDirections}" target="_blank" rel="noopener">Directions</a>
+      <a class="btn btn-tinted" href="${links.osm}" target="_blank" rel="noopener">Open in maps</a>
     </div>`;
 }
 
@@ -827,22 +854,24 @@ function renderShare() {
   const msg = messagingLinks(text, `Meet at ${p.name}?`);
   const links = mapLinks(p);
   return `
-    <button class="back" data-action="${state.search?.place ? 'back-place' : 'back-people'}">‹ Back</button>
-    <div class="eyebrow">Send location</div>
-    <h2>${esc(p.name)}</h2>
-    <div class="meta">${esc(p.address || `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`)}</div>
-    <label class="field"><span>When <em>(optional)</em></span><input type="datetime-local" id="share-when" value="${esc(state.shareWhen || '')}"></label>
-    <label class="field"><span>Message</span><textarea id="share-text">${esc(text)}</textarea></label>
-    <button class="btn btn-primary btn-block btn-lg" data-action="native-share">Share</button>
-    <div class="share-list">
-      <button class="btn" data-action="copy">Copy</button>
-      <a class="btn" href="${msg.whatsapp}" target="_blank" rel="noopener" data-share="whatsapp">WhatsApp</a>
-      <a class="btn" href="${msg.sms}" data-share="sms">Messages</a>
-      <a class="btn" href="${msg.email}" data-share="email">Email</a>
-      <a class="btn" href="${msg.telegram}" target="_blank" rel="noopener" data-share="telegram">Telegram</a>
-      <button class="btn" data-action="calendar">Calendar</button>
-      <a class="btn" href="${links.google}" target="_blank" rel="noopener">Google Maps</a>
-      <a class="btn" href="${links.apple}" target="_blank" rel="noopener">Apple Maps</a>
+    ${backBtn(state.search?.place ? 'back-place' : 'back-people', 'Back')}
+    <div class="eyebrow" style="margin-left:4px">Send location</div>
+    <div class="sheet-title" style="margin-top:0"><h2>${esc(p.name)}</h2></div>
+    <p class="footnote" style="margin:-8px 4px 14px">${esc(p.address || `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`)}</p>
+    <ul class="group share-form">
+      <li><div class="cell"><label for="share-when">When</label><input type="datetime-local" id="share-when" value="${esc(state.shareWhen || '')}"></div></li>
+      <li><textarea id="share-text" aria-label="Message">${esc(text)}</textarea></li>
+    </ul>
+    <button class="btn btn-primary btn-block btn-lg" data-action="native-share">Share…</button>
+    <div class="share-grid">
+      <button class="btn btn-tinted" data-action="copy">Copy</button>
+      <a class="btn btn-tinted" href="${msg.whatsapp}" target="_blank" rel="noopener" data-share="whatsapp">WhatsApp</a>
+      <a class="btn btn-tinted" href="${msg.sms}" data-share="sms">Messages</a>
+      <a class="btn btn-tinted" href="${msg.email}" data-share="email">Email</a>
+      <a class="btn btn-tinted" href="${msg.telegram}" target="_blank" rel="noopener" data-share="telegram">Telegram</a>
+      <button class="btn btn-tinted" data-action="calendar">Calendar</button>
+      <a class="btn btn-tinted" href="${links.google}" target="_blank" rel="noopener">Google Maps</a>
+      <a class="btn btn-tinted" href="${links.apple}" target="_blank" rel="noopener">Apple Maps</a>
     </div>`;
 }
 
@@ -1005,6 +1034,7 @@ function openDrawer(open) {
   if (!open) return;
   const guest = api.isGuest();
   $('#drawer-name').textContent = guest ? 'Guest' : (state.user.name || 'Your profile');
+  $('#drawer-avatar').textContent = guest ? '?' : initial(state.user.name || state.user.email);
   $('#drawer-email').textContent = guest ? '' : state.user.email;
   $('#drawer-guest').hidden = !guest;
   $('#drawer-account').hidden = guest;
@@ -1068,8 +1098,8 @@ function initDrawer() {
     state.shareText = null;
     state.shareWhen = '';
     L.marker([h.lat, h.lon], {
-      icon: L.divIcon({ className: '', html: '<div class="poi-pin hl">★</div>', iconSize: [24, 24], iconAnchor: [12, 12] }),
-    }).bindTooltip(esc(h.name), { permanent: true, direction: 'right', className: 'label', offset: [12, 0] }).addTo(poiLayer);
+      icon: L.divIcon({ className: '', html: `<div class="poi-pin hl">${glyph('pin', 15)}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] }),
+    }).bindTooltip(esc(h.name), { permanent: true, direction: 'right', className: 'label', offset: [20, 0] }).addTo(poiLayer);
     setView('share');
     map.flyTo([h.lat, h.lon], 16, { duration: 0.8 });
   });
@@ -1088,5 +1118,5 @@ async function boot() {
   onUser(await api.start());
 }
 
-window.__meet = { onUser, api };
+window.__meet = { onUser, api, get map() { return map; } };
 boot();

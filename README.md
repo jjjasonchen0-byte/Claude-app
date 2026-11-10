@@ -11,7 +11,7 @@ Find somewhere that's roughly as close for everyone in a group, with a press of 
 
 **Profiles are optional.** Without one, everything is saved in the browser. Signing in or creating a profile (menu → *Sign in or create a profile*) keeps your people and past meetups on every device, and anything you set up as a guest moves into the profile.
 
-On phones the panel is a bottom sheet. Drag its handle to resize it, or tap the handle to collapse and expand it.
+The look follows Apple's design language: system font, frosted-glass panels, inset grouped lists, coloured category tiles, iOS-style switches and segmented controls. On phones the panel is a bottom sheet. Drag its handle to resize it, or tap the handle to collapse and expand it.
 
 ## Run it
 
@@ -24,7 +24,7 @@ Requires Node 18+. The only dependency is Leaflet, which is served from `node_mo
 
 ## Test version (no server, no internet)
 
-`node scripts/build-test.mjs` builds `dist/meet-test.html`, a single page that runs the same app code in a made-up town called Port Verity. The town has generated streets, a river with bridges, parks and about 380 places. Open the page and press **Try a sample group** to start with three friends already added. The test-mode stand-ins live in `public/js/demo.js`.
+`node scripts/build-test.mjs` builds `dist/meet-test.html`, a single page that runs the same app code in a made-up town called Port Verity. The town is about 22 × 16 km, with generated streets, boulevards, a river with bridges, a bay, lakes, parks, about 1,900 places and street names that appear as you zoom in. It's drawn as map tiles, so panning, scroll-wheel zoom and pinch zoom behave like a normal map. Open the page and press **Try a sample group** to start with three friends already added. The test-mode stand-ins live in `public/js/demo.js`.
 
 ## Extras
 

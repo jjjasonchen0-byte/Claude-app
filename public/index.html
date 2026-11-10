@@ -5,9 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Meet</title>
   <meta name="description" content="Find a place that's fair for everyone. Routes grow out from each address and meet in the middle.">
-  <meta name="theme-color" content="#ffffff">
+  <meta name="theme-color" content="#f2f2f7">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="/css/styles.css">
 </head>
@@ -16,17 +19,32 @@
   <section id="screen-home" class="screen screen-centered" hidden>
     <div class="intro">
       <div class="wordmark wordmark-lg">meet<i></i></div>
+      <svg class="hero" viewBox="0 0 240 140" aria-hidden="true">
+        <g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+          <path class="flow" d="M38 32 C 72 36, 98 52, 120 70"/>
+          <path class="flow" d="M204 40 C 172 44, 142 56, 120 70"/>
+          <path class="flow" d="M118 122 C 112 104, 122 88, 120 70"/>
+        </g>
+        <circle class="halo" cx="120" cy="70" r="20" fill="#007aff" opacity=".16"/>
+        <circle cx="120" cy="70" r="9" fill="#007aff" stroke="#fff" stroke-width="4"/>
+        <circle cx="38" cy="32" r="15" fill="#ff9500" stroke="#fff" stroke-width="3.5"/>
+        <circle cx="204" cy="40" r="15" fill="#34c759" stroke="#fff" stroke-width="3.5"/>
+        <circle cx="118" cy="122" r="15" fill="#af52de" stroke="#fff" stroke-width="3.5"/>
+      </svg>
       <h1>Where are you starting from?</h1>
-      <p class="muted">Add your address, then the people you're meeting. Meet finds the spot that's fair for everyone.</p>
-      <div class="search" id="home-search">
+      <p>Add your address, then the people you're meeting. Meet finds the spot that's fair for everyone.</p>
+      <div class="search searchfield" id="home-search">
         <input id="home-input" type="search" placeholder="Your address" autocomplete="off" aria-label="Your address">
         <ul class="suggestions" role="listbox" hidden></ul>
       </div>
       <div class="intro-actions">
-        <button class="btn-text" type="button" id="home-locate">Use my current location</button>
-        <button class="btn-text" type="button" id="home-cancel" hidden>Cancel</button>
+        <button class="btn btn-tinted btn-sm" type="button" id="home-locate">
+          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M20.5 3.5L3.5 10.6l7.3 2.6 2.6 7.3z" fill="currentColor"/></svg>
+          <span>Use my current location</span>
+        </button>
+        <button class="btn btn-sm" type="button" id="home-cancel" hidden>Cancel</button>
       </div>
-      <p class="intro-foot muted small" id="home-signin-row">Have a profile? <button class="btn-text" type="button" id="home-signin">Sign in</button></p>
+      <p class="intro-foot" id="home-signin-row">Have a profile? <button class="btn btn-plain" type="button" id="home-signin">Sign in</button></p>
     </div>
   </section>
 
@@ -37,11 +55,11 @@
     <header class="topbar">
       <div class="wordmark">meet<i></i></div>
       <div class="topbar-actions">
-        <button class="icon-btn round" id="btn-recenter" title="Show everyone" aria-label="Show everyone">
-          <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="10" cy="10" r="3" fill="currentColor"/><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+        <button class="round-btn" id="btn-recenter" title="Show everyone" aria-label="Show everyone">
+          <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path d="M20.5 3.5L3.5 10.6l7.3 2.6 2.6 7.3z" fill="var(--accent)"/></svg>
         </button>
-        <button class="icon-btn round" id="btn-menu" title="Menu" aria-label="Open menu">
-          <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M3 7h14M3 13h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <button class="round-btn" id="btn-menu" title="Menu" aria-label="Open menu">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6" fill="currentColor"/><path d="M5 19.5c1.2-3.6 3.9-5.2 7-5.2s5.8 1.6 7 5.2" fill="currentColor"/></svg>
         </button>
       </div>
     </header>
@@ -62,9 +80,11 @@
   <!-- ============ Optional sign-in ============ -->
   <div class="modal-backdrop" id="auth-backdrop" hidden></div>
   <section id="auth-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="auth-title" hidden>
-    <button class="icon-btn modal-close" id="auth-close" aria-label="Close">✕</button>
+    <button class="icon-circle modal-close" id="auth-close" aria-label="Close">
+      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
+    </button>
     <h2 id="auth-title">Save your places</h2>
-    <p class="muted small">Optional. A profile keeps your people and past meetups on every device. Anything you've added so far comes with you.</p>
+    <p class="footnote">Optional. A profile keeps your people and past meetups on every device. Anything you've added so far comes with you.</p>
     <div class="segmented" role="tablist">
       <button type="button" role="tab" class="seg active" data-auth-mode="login" aria-selected="true">Sign in</button>
       <button type="button" role="tab" class="seg" data-auth-mode="signup" aria-selected="false">Create profile</button>
@@ -83,7 +103,7 @@
         <input id="auth-password" name="password" type="password" autocomplete="current-password" required minlength="6" placeholder="At least 6 characters">
       </label>
       <p class="form-error" id="auth-error" role="alert" hidden></p>
-      <button class="btn btn-primary btn-block" type="submit" id="auth-submit">Sign in</button>
+      <button class="btn btn-primary btn-block btn-lg" type="submit" id="auth-submit">Sign in</button>
     </form>
   </section>
 
@@ -91,20 +111,23 @@
   <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
   <nav class="drawer" id="drawer" aria-label="Menu" hidden>
     <div class="drawer-head">
-      <div>
+      <span class="avatar" id="drawer-avatar">G</span>
+      <div class="drawer-who">
         <div class="drawer-name" id="drawer-name"></div>
-        <div class="muted small" id="drawer-email"></div>
+        <div class="footnote" id="drawer-email"></div>
       </div>
-      <button class="icon-btn" id="drawer-close" aria-label="Close menu">✕</button>
+      <button class="icon-circle" id="drawer-close" aria-label="Close menu">
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
+      </button>
     </div>
     <div class="drawer-section" id="drawer-guest">
-      <p class="muted small">You're using Meet without a profile. Everything is saved in this browser.</p>
-      <button class="btn btn-primary btn-sm" id="btn-signin">Sign in or create a profile</button>
+      <p class="footnote">You're using Meet without a profile. Everything is saved in this browser.</p>
+      <button class="btn btn-primary btn-sm" id="btn-signin" style="margin-top:8px">Sign in or create a profile</button>
     </div>
     <div class="drawer-section">
       <h3>Starting point</h3>
-      <div class="small" id="drawer-home"></div>
-      <button class="btn-text small" id="btn-edit-home">Change</button>
+      <div id="drawer-home"></div>
+      <button class="btn btn-plain" id="btn-edit-home">Change</button>
     </div>
     <div class="drawer-section">
       <h3>Meeting point</h3>
@@ -112,7 +135,7 @@
         <button class="seg" data-value="fair">Fairest</button>
         <button class="seg" data-value="total">Least travel</button>
       </div>
-      <p class="muted small" id="mode-hint"></p>
+      <p class="footnote" id="mode-hint"></p>
     </div>
     <div class="drawer-section">
       <h3>Travel times</h3>
@@ -132,7 +155,7 @@
       </div>
     </div>
     <div class="drawer-section">
-      <h3>Theme</h3>
+      <h3>Appearance</h3>
       <div class="segmented small" id="set-theme">
         <button class="seg" data-value="auto">Auto</button>
         <button class="seg" data-value="light">Light</button>
@@ -144,7 +167,7 @@
       <ul class="history" id="history-list"></ul>
     </div>
     <div class="drawer-section" id="drawer-account">
-      <button class="btn-text" id="btn-logout">Sign out</button>
+      <button class="btn btn-plain" id="btn-logout" style="color:var(--red)">Sign out</button>
     </div>
   </nav>
 

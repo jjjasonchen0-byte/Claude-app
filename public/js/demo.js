@@ -18,84 +18,103 @@ const M_LON = 111320 * Math.cos((CENTER.lat * Math.PI) / 180);
 const toLL = (x, y) => ({ lat: CENTER.lat + y / M_LAT, lon: CENTER.lon + x / M_LON });
 
 const ROW_NAMES = ['Ash', 'Birch', 'Cedar', 'Dover', 'Elm', 'Fern', 'Garnet', 'Hazel', 'Iris', 'Juniper', 'Kestrel', 'Larch', 'Maple', 'Nettle', 'Oak', 'Poplar', 'Quarry', 'Rowan', 'Sorrel', 'Thistle', 'Upton', 'Vale', 'Willow', 'Yarrow', 'Alder', 'Bramble', 'Clover', 'Daisy', 'Ember', 'Foxglove', 'Gorse', 'Heather', 'Ivy', 'Jasmine', 'Kingfisher', 'Lavender', 'Meadow', 'Nightingale', 'Orchard', 'Primrose', 'Quince', 'Robin', 'Saffron', 'Tansy', 'Union', 'Violet', 'Wren', 'Yew', 'Acorn', 'Bluebell'];
-const COL_NAMES = ['Abbey', 'Bridge', 'Castle', 'Dock', 'Exchange', 'Ferry', 'Granary', 'Harbour', 'Inkwell', 'Jubilee', 'Keel', 'Lantern', 'Mill', 'Navigation', 'Observatory', 'Pier', 'Quay', 'Rope', 'Station', 'Tannery', 'Victoria', 'Wharf', 'Albion', 'Beacon', 'Chapel', 'Drapers', 'Eastgate', 'Foundry', 'Guild', 'Hythe', 'Kiln', 'Lighthouse', 'Market', 'Newgate', 'Orchard', 'Prospect', 'Regent', 'Salt', 'Tower', 'Upper', 'Vicarage', 'Weaver', 'Anchor', 'Brewer', 'Canal', 'Dyer', 'Elder', 'Fisher', 'Glover', 'Hatter', 'Iron', 'Joiner', 'Kings', 'Lock', 'Mason', 'North', 'Oyster', 'Potter', 'Queens', 'Rope Walk', 'Sail', 'Tide', 'Union', 'Vintner', 'Water'];
-const HOODS = [['Westwood', 'Northgate', 'Highfield'], ['Old Mill', 'Town Centre', 'Eastbank'], ['Southfields', 'Riverside', 'Harbour Quarter']];
+const COL_NAMES = ['Abbey', 'Bridge', 'Castle', 'Dock', 'Exchange', 'Ferry', 'Granary', 'Harbour', 'Inkwell', 'Jubilee', 'Keel', 'Lantern', 'Mill', 'Navigation', 'Observatory', 'Pier', 'Quay', 'Rope', 'Station', 'Tannery', 'Victoria', 'Wharf', 'Albion', 'Beacon', 'Chapel', 'Drapers', 'Eastgate', 'Foundry', 'Guild', 'Hythe', 'Kiln', 'Lighthouse', 'Market', 'Newgate', 'Orchard', 'Prospect', 'Regent', 'Salt', 'Tower', 'Ulster', 'Vicarage', 'Weaver', 'Anchor', 'Brewer', 'Canal', 'Dyer', 'Elder', 'Fisher', 'Glover', 'Hatter', 'Iron', 'Joiner', 'Kings', 'Lock', 'Mason', 'North', 'Oyster', 'Potter', 'Queens', 'Rope Walk', 'Sail', 'Tide', 'Union', 'Vintner', 'Water'];
 
 // ---------------------------------------------------------------- the town
 
+const W = 22000, H = 16000, S = 125; // metres: about 22 × 16 km, a street every 125 m
+const ROW_PREFIX = ['', 'Little ', 'Old '];
+const COL_PREFIX = ['', 'New ', 'Upper '];
+const HOODS4 = [
+  ['Northwood', 'Kingsbury', 'Highfield', 'Fairview', 'Ashby'],
+  ['Westwood', 'Old Mill', 'Town Centre', 'Eastbank', 'Millbrook'],
+  ['Southgate', 'Riverside', 'Market Quarter', 'Docklands', 'Saltmarsh'],
+  ['Seaview', 'Harbour Quarter', 'The Wharf', 'Lighthouse Point', 'Shell Bay'],
+];
+const PARK_NAMES = ['Westwood Common', 'Castle Gardens', 'Harbour Fields', 'Southfields Park', 'Eastbank Green', 'Kingsbury Heath', 'Lantern Gardens', 'Ashby Meadows', 'Millbrook Park', 'Fairview Rec', 'Oak Hollow', 'Botanic Gardens', 'Saltmarsh Reserve', 'Beacon Hill', 'Orchard Green', 'Quarry Woods', 'Juniper Park'];
+const kindOf = (i) => (i % 8 === 4 ? (i % 32 === 20 ? 2 : 1) : 0);
+const rowStreet = (r) => `${ROW_PREFIX[Math.floor(r / ROW_NAMES.length)] || ''}${ROW_NAMES[r % ROW_NAMES.length]} ${['Street', 'Road', 'Parkway'][kindOf(r)]}`;
+const colStreet = (c) => `${COL_PREFIX[Math.floor(c / COL_NAMES.length)] || ''}${COL_NAMES[c % COL_NAMES.length]} ${['Lane', 'Avenue', 'Boulevard'][kindOf(c)]}`;
+const hoodAt = (x, y) => HOODS4[Math.max(0, Math.min(3, Math.floor((H / 2 - y) / (H / 4))))][Math.max(0, Math.min(4, Math.floor((x + W / 2) / (W / 5))))];
+
 function buildTown() {
   const rand = rng(20261110);
-  const W = 7600, H = 5600, S = 118;
   const cols = Math.round(W / S), rows = Math.round(H / S);
-  const riverY = (x) => -350 + 650 * Math.sin(x / 1900 + 0.4) + 220 * Math.sin(x / 640);
-  const parks = [
-    { x: -2300, y: 1500, rx: 520, ry: 360, name: 'Westwood Common' },
-    { x: 1200, y: 1700, rx: 380, ry: 300, name: 'Castle Gardens' },
-    { x: 2700, y: -1700, rx: 560, ry: 340, name: 'Harbour Fields' },
-    { x: -800, y: -1900, rx: 420, ry: 300, name: 'Southfields Park' },
-    { x: 3000, y: 900, rx: 300, ry: 260, name: 'Eastbank Green' },
+  const riverY = (x) => 1100 * Math.sin(x / 4200 + 0.3) + 380 * Math.sin(x / 1300) + 140 * Math.sin(x / 520);
+  const coastY = (x) => -H / 2 + 2300 + 650 * Math.sin(x / 3000 + 1) + 280 * Math.sin(x / 1100 + 2);
+  const lakes = [
+    { x: -6800, y: 4600, rx: 950, ry: 560, name: 'Mirror Lake' },
+    { x: 7400, y: 5300, rx: 720, ry: 480, name: 'Heron Lake' },
   ];
-  const inPark = (x, y) => parks.find((p) => ((x - p.x) / p.rx) ** 2 + ((y - p.y) / p.ry) ** 2 < 1);
-  const bridgeCols = new Set();
-  for (let c = 4; c < cols; c += 9) bridgeCols.add(c);
+  const inEllipse = (e, x, y, k = 1) => ((x - e.x) / (e.rx * k)) ** 2 + ((y - e.y) / (e.ry * k)) ** 2 < 1;
+  const inRiver = (x, y) => Math.abs(y - riverY(x)) < 70;
+  const isWater = (x, y, m = 0) => Math.abs(y - riverY(x)) < 70 + m || y < coastY(x) + m || lakes.some((l) => inEllipse(l, x, y, 1 + m / 600));
+  const parks = [{ x: 1800, y: 2900, rx: 950, ry: 620, name: 'Verity Park' }];
+  for (let tries = 0; parks.length < PARK_NAMES.length + 1 && tries < 800; tries++) {
+    const p = { x: (rand() - 0.5) * (W - 2400), y: (rand() - 0.5) * (H - 2400), rx: 260 + rand() * 420, ry: 220 + rand() * 320 };
+    if (isWater(p.x, p.y, 500)) continue;
+    if (parks.some((q) => Math.hypot(q.x - p.x, q.y - p.y) < q.rx + p.rx + 900)) continue;
+    p.name = PARK_NAMES[parks.length - 1];
+    parks.push(p);
+  }
+  const inPark = (x, y) => parks.some((p) => inEllipse(p, x, y));
 
-  // Node positions on a gently warped grid.
+  // Street corners on a gently warped grid.
   const id = (r, c) => r * (cols + 1) + c;
   const n = (rows + 1) * (cols + 1);
   const X = new Float64Array(n), Y = new Float64Array(n), keep = new Uint8Array(n);
   for (let r = 0; r <= rows; r++) {
     for (let c = 0; c <= cols; c++) {
       let x = -W / 2 + c * S, y = -H / 2 + r * S;
-      x += 45 * Math.sin(y / 800) + (rand() - 0.5) * 26;
-      y += 35 * Math.sin(x / 950) + (rand() - 0.5) * 26;
+      x += 60 * Math.sin(y / 900) + 30 * Math.sin(y / 2300) + (rand() - 0.5) * 26;
+      y += 50 * Math.sin(x / 1100) + 25 * Math.sin(x / 3100) + (rand() - 0.5) * 26;
       const i = id(r, c);
       X[i] = x; Y[i] = y;
-      keep[i] = Math.abs(y - riverY(x)) > 70 && !inPark(x, y) ? 1 : 0;
+      keep[i] = !isWater(x, y) && !inPark(x, y) ? 1 : 0;
     }
   }
-  const art = (r, c, dir) => (dir === 'row' ? r % 8 === 4 : c % 8 === 4);
-  const A = [], B = [], kind = [];
-  const link = (a, b, k) => { A.push(a); B.push(b); kind.push(k); };
+  const A = [], B = [], kind = [], ename = [], eflag = [];
+  const link = (a, b, k, name = '', flag = false) => { A.push(a); B.push(b); kind.push(k); ename.push(name); eflag.push(flag ? 1 : 0); };
   const crossesRiver = (a, b) => Math.sign(Y[a] - riverY(X[a])) !== Math.sign(Y[b] - riverY(X[b]));
   for (let r = 0; r <= rows; r++) {
     for (let c = 0; c <= cols; c++) {
       const a = id(r, c);
       if (!keep[a]) continue;
       if (c < cols) {
-        const b = id(r, c + 1);
-        const major = art(r, c, 'row');
-        if (keep[b] && !crossesRiver(a, b) && (major || rand() > 0.06)) link(a, b, major ? 1 : 0);
+        const b = id(r, c + 1), k = kindOf(r);
+        if (keep[b] && !crossesRiver(a, b) && (k || rand() > 0.06)) link(a, b, k, rowStreet(r), c % 4 === 2);
       }
       if (r < rows) {
-        const major = art(r, c, 'col');
+        const k = kindOf(c);
         let r2 = r + 1;
-        // Bridges carry a few streets over the river.
-        if (bridgeCols.has(c)) while (r2 <= rows && !keep[id(r2, c)] && Math.abs(Y[id(r2, c)] - riverY(X[id(r2, c)])) <= 70) r2++;
+        // Every ninth street crosses the river on a bridge.
+        if (c % 9 === 4) while (r2 <= rows && !keep[id(r2, c)] && inRiver(X[id(r2, c)], Y[id(r2, c)])) r2++;
         if (r2 > rows) continue;
         const b = id(r2, c);
         if (!keep[b]) continue;
         const bridge = crossesRiver(a, b);
-        if (bridge && !bridgeCols.has(c)) continue;
-        if (bridge || major || rand() > 0.08) link(a, b, bridge || major ? 1 : 0);
+        if (bridge && c % 9 !== 4) continue;
+        if (bridge || k || rand() > 0.08) link(a, b, bridge ? Math.max(1, k) : k, colStreet(c), r % 4 === 2);
       }
     }
   }
-  // A diagonal boulevard through the centre.
-  for (let k = 0; k < Math.min(rows, cols) - 2; k++) {
-    const r = 3 + k, c = 18 + k;
-    if (r + 1 > rows || c + 1 > cols) break;
-    const a = id(r, c), b = id(r + 1, c + 1);
-    if (keep[a] && keep[b] && !crossesRiver(a, b)) link(a, b, 1);
-  }
+  // Two diagonal boulevards.
+  const diag = (r0, c0, dr, dc, len, name) => {
+    for (let k = 0; k < len; k++) {
+      const r = r0 + k * dr, c = c0 + k * dc, r1 = r + dr, c1 = c + dc;
+      if (r1 < 0 || r1 > rows || c1 > cols) break;
+      const a = id(r, c), b = id(r1, c1);
+      if (keep[a] && keep[b] && !crossesRiver(a, b)) link(a, b, 2, name, k % 6 === 3);
+    }
+  };
+  diag(8, 40, 1, 1, 110, 'Grand Boulevard');
+  diag(120, 34, -1, 1, 95, 'Crescent Boulevard');
 
   const lat = new Float64Array(n), lon = new Float64Array(n);
   for (let i = 0; i < n; i++) { const ll = toLL(X[i], Y[i]); lat[i] = ll.lat; lon[i] = ll.lon; }
   const graph = fromEdgeList(lat, lon, A, B, false);
 
-  // Addresses: every street corner is a house number on its east-west street.
-  const rowStreet = (r) => `${ROW_NAMES[r % ROW_NAMES.length]} ${r % 8 === 4 ? 'Road' : 'Street'}`;
-  const colStreet = (c) => `${COL_NAMES[c % COL_NAMES.length]} ${c % 8 === 4 ? 'Avenue' : 'Lane'}`;
-  const hood = (x, y) => HOODS[y > 900 ? 0 : y < -900 ? 2 : 1][x < -1300 ? 0 : x > 1300 ? 2 : 1];
+  // Addresses: every street corner gets a house number.
   const deg = new Int32Array(n);
   for (let k = 0; k < A.length; k++) { deg[A[k]]++; deg[B[k]]++; }
   const addresses = [];
@@ -103,44 +122,109 @@ function buildTown() {
     for (let c = 0; c <= cols; c++) {
       const i = id(r, c);
       if (!deg[i]) continue;
-      const useCol = r % 3 === 1 && c % 8 !== 4;
+      const useCol = r % 3 === 1 && kindOf(c) === 0;
       addresses.push({
-        node: i, lat: lat[i], lon: lon[i],
+        node: i, lat: lat[i], lon: lon[i], x: X[i], y: Y[i],
         num: useCol ? r * 2 + 1 : c * 4 + 2 + (r % 2),
         street: useCol ? colStreet(c) : rowStreet(r),
-        hood: hood(X[i], Y[i]),
+        hood: hoodAt(X[i], Y[i]),
       });
     }
   }
 
-  // Base-map geometry.
+  // Map shapes.
+  const ring = (e, k = 1, m = 48) => Array.from({ length: m }, (_, j) => toLL(e.x + e.rx * k * Math.cos((j / m) * 2 * Math.PI), e.y + e.ry * k * Math.sin((j / m) * 2 * Math.PI)));
   const river = [];
-  for (let x = -W / 2 - 600; x <= W / 2 + 600; x += 60) river.push(toLL(x, riverY(x)));
-  const parkPolys = parks.map((p) => ({
-    name: p.name, center: toLL(p.x, p.y),
-    ring: Array.from({ length: 40 }, (_, k) => toLL(p.x + p.rx * 0.98 * Math.cos((k / 40) * 2 * Math.PI), p.y + p.ry * 0.98 * Math.sin((k / 40) * 2 * Math.PI))),
-  }));
-  const labels = [];
-  HOODS.forEach((row, ri) => row.forEach((name, ci) => labels.push({ name, ...toLL((ci - 1) * 2500, (1 - ri) * 1900 + (ri === 1 ? 300 : 0)) })));
-  const sw = toLL(-W / 2 - 900, -H / 2 - 900), ne = toLL(W / 2 + 900, H / 2 + 900);
-  return { graph, A, B, kind, addresses, river, parks: parkPolys, labels, bounds: [[sw.lat, sw.lon], [ne.lat, ne.lon]], hood: (ll) => hood((ll.lon - CENTER.lon) * M_LON, (ll.lat - CENTER.lat) * M_LAT) };
+  for (let x = -W / 2 - 6000; x <= W / 2 + 6000; x += 50) river.push(toLL(x, riverY(x)));
+  const sea = [];
+  for (let x = -W / 2 - 60000; x <= W / 2 + 60000; x += 150) sea.push(toLL(x, coastY(x)));
+  sea.push(toLL(W / 2 + 60000, -H / 2 - 60000), toLL(-W / 2 - 60000, -H / 2 - 60000));
+
+  // Labels.
+  const angle = (ax, ay, bx, by) => {
+    let d = (Math.atan2(-(by - ay), bx - ax) * 180) / Math.PI;
+    if (d > 90) d -= 180;
+    if (d <= -90) d += 180;
+    return Math.round(d);
+  };
+  const hoodLabels = [];
+  const sums = new Map();
+  for (const a of addresses) {
+    const s = sums.get(a.hood) || { x: 0, y: 0, n: 0 };
+    s.x += a.x; s.y += a.y; s.n++;
+    sums.set(a.hood, s);
+  }
+  for (const [name, s] of sums) if (s.n > 60) hoodLabels.push({ name, ...toLL(s.x / s.n, s.y / s.n) });
+  const streetLabels = [];
+  for (let r = 0; r <= rows; r++) {
+    if (!kindOf(r)) continue;
+    for (let c = 6; c < cols; c += 10) {
+      const a = id(r, c), b = id(r, c + 1);
+      if (keep[a] && keep[b] && !crossesRiver(a, b)) streetLabels.push({ name: rowStreet(r), ...toLL((X[a] + X[b]) / 2, (Y[a] + Y[b]) / 2), angle: angle(X[a], Y[a], X[b], Y[b]) });
+    }
+  }
+  for (let c = 0; c <= cols; c++) {
+    if (!kindOf(c)) continue;
+    for (let r = 6; r < rows; r += 10) {
+      const a = id(r, c), b = id(r + 1, c);
+      if (keep[a] && keep[b] && !crossesRiver(a, b)) streetLabels.push({ name: colStreet(c), ...toLL((X[a] + X[b]) / 2, (Y[a] + Y[b]) / 2), angle: angle(X[a], Y[a], X[b], Y[b]) });
+    }
+  }
+  const waterLabels = [
+    ...lakes.map((l) => ({ name: l.name, ...toLL(l.x, l.y) })),
+    { name: 'Verity Bay', ...toLL(W * 0.12, -H / 2 + 500) },
+    ...[-7000, 0, 7000].map((x) => ({ name: 'River Vere', ...toLL(x, riverY(x)), angle: angle(x - 60, riverY(x - 60), x + 60, riverY(x + 60)) })),
+  ];
+  const bayLabel = waterLabels.find((l) => l.name === 'Verity Bay');
+
+  // Generous pan limits so the map can sit above a half-height sheet on phones.
+  const sw = toLL(-W / 2 - 6000, -H / 2 - 7000), ne = toLL(W / 2 + 6000, H / 2 + 5000);
+  return {
+    graph, A, B, kind, ename, eflag, addresses, river, sea,
+    lakes: lakes.map((l) => ({ ...l, ring: ring(l) })),
+    parks: parks.map((p) => ({ name: p.name, center: toLL(p.x, p.y), ring: ring(p, 0.97, 40) })),
+    labels: {
+      town: [{ name: TOWN, ...toLL(0, H / 2 + 1100) }], bay: [bayLabel], hood: hoodLabels, street: streetLabels,
+      water: waterLabels.filter((l) => l !== bayLabel), park: parks.map((p) => ({ name: p.name, ...toLL(p.x, p.y) })),
+    },
+    bounds: [[sw.lat, sw.lon], [ne.lat, ne.lon]],
+    hood: (ll) => hoodAt((ll.lon - CENTER.lon) * M_LON, (ll.lat - CENTER.lat) * M_LAT),
+  };
 }
 
 const town = buildTown();
 
+// Spatial index so "nearest address" stays fast in a big town.
+const CELL = 300;
+const addrIndex = new Map();
+for (const a of town.addresses) {
+  const k = `${Math.floor(a.x / CELL)},${Math.floor(a.y / CELL)}`;
+  if (!addrIndex.has(k)) addrIndex.set(k, []);
+  addrIndex.get(k).push(a);
+}
 function nearestAddress(lat, lon) {
-  let best = town.addresses[0], bd = Infinity;
-  for (const a of town.addresses) {
-    const d = (a.lat - lat) ** 2 + ((a.lon - lon) * 0.766) ** 2;
-    if (d < bd) { bd = d; best = a; }
+  const x = (lon - CENTER.lon) * M_LON, y = (lat - CENTER.lat) * M_LAT;
+  const cx = Math.floor(x / CELL), cy = Math.floor(y / CELL);
+  let best = null, bd = Infinity;
+  for (let ring = 0; ring < 60; ring++) {
+    for (let i = cx - ring; i <= cx + ring; i++) {
+      for (let j = cy - ring; j <= cy + ring; j++) {
+        if (Math.max(Math.abs(i - cx), Math.abs(j - cy)) !== ring) continue;
+        for (const a of addrIndex.get(`${i},${j}`) || []) {
+          const d = (a.x - x) ** 2 + (a.y - y) ** 2;
+          if (d < bd) { bd = d; best = a; }
+        }
+      }
+    }
+    if (best && ring >= 1) break;
   }
-  return best;
+  return best || town.addresses[0];
 }
 const fmtAddress = (a) => `${a.num} ${a.street}, ${a.hood}, ${TOWN}`;
 
 // ---------------------------------------------------------------- places of interest
 
-const NAMES = ['Rosa', 'Marco', 'Luca', 'Nonna', 'Bella', 'Sole', 'Verde', 'Porto', 'Aria', 'Gino', 'Mio', 'Kiku', 'Hana', 'Sora', 'Taj', 'Raja', 'Lotus', 'Saffron', 'Jade', 'Golden', 'Blue', 'Copper', 'Harbour', 'Lantern', 'Anchor', 'Mill', 'Quay', 'Driftwood', 'Tide', 'Ember', 'Juniper', 'Fox', 'Otter', 'Heron', 'Wren', 'Pepper', 'Basil', 'Olive', 'Fig', 'Clove'];
+const NAMES = ['Nova', 'Lumen', 'Bramble', 'Cobalt', 'Saltbox', 'Kettle', 'Marlow', 'Tamsin', 'Indigo', 'Corner', 'Linden', 'Hollis', 'Rosa', 'Marco', 'Luca', 'Nonna', 'Bella', 'Sole', 'Verde', 'Porto', 'Aria', 'Gino', 'Mio', 'Kiku', 'Hana', 'Sora', 'Taj', 'Raja', 'Lotus', 'Saffron', 'Jade', 'Golden', 'Blue', 'Copper', 'Harbour', 'Lantern', 'Anchor', 'Mill', 'Quay', 'Driftwood', 'Tide', 'Ember', 'Juniper', 'Fox', 'Otter', 'Heron', 'Wren', 'Pepper', 'Basil', 'Olive', 'Fig', 'Clove'];
 const TYPES = [
   { n: 22, tags: { amenity: 'restaurant', cuisine: 'italian' }, names: ['Trattoria {N}', 'Osteria {N}', 'Pasta {N}', "{N}'s Kitchen", 'Casa {N}'] },
   { n: 14, tags: { amenity: 'restaurant', cuisine: 'pizza' }, names: ['Pizzeria {N}', '{N} Pizza Co.', 'Slice of {N}'] },
@@ -199,14 +283,13 @@ function buildPoiElements() {
   let nid = 1;
   const used = new Set();
   for (const t of TYPES) {
-    for (let i = 0; i < t.n; i++) {
+    for (let i = 0; i < t.n * 6; i++) {
       let name;
       for (let tries = 0; tries < 8; tries++) { name = pick(t.names).replace('{N}', pick(NAMES)); if (!used.has(name)) break; }
       used.add(name);
-      const node = rand() < 0.6 ? pick(busy) : Math.floor(rand() * g.n);
-      if (!(g.adjStart[node + 1] > g.adjStart[node])) { i--; continue; }
-      const lat = g.lat[node] + (rand() - 0.5) * 0.0005;
-      const lon = g.lon[node] + (rand() - 0.5) * 0.0007;
+      const node = rand() < 0.6 ? pick(busy) : pick(town.addresses).node;
+      const lat = g.lat[node] + (rand() - 0.5) * 0.0004;
+      const lon = g.lon[node] + (rand() - 0.5) * 0.0005;
       const addr = nearestAddress(lat, lon);
       els.push({
         type: 'node', id: nid++, lat, lon,
@@ -382,94 +465,186 @@ export const api = {
 export function sampleGroup() {
   const at = (x, y) => { const ll = toLL(x, y); const a = nearestAddress(ll.lat, ll.lon); return { address: fmtAddress(a), lat: a.lat, lon: a.lon }; };
   return {
-    home: at(-2700, 1100),
-    friends: [['Sam', 2900, 1600], ['Priya', 2300, -2100], ['Leo', -1600, -1900]].map(([nickname, x, y]) => ({ ...at(x, y), nickname })),
+    home: at(-3600, 2600),
+    friends: [['Sam', 3400, 3300], ['Priya', 2600, -2800], ['Leo', -2800, -2400]].map(([nickname, x, y]) => ({ ...at(x, y), nickname })),
   };
 }
 
 // ---------------------------------------------------------------- base map
 
-/** Draw the town (land, parks, river, streets, district names) under Leaflet's panes. */
+/**
+ * Draw the town as real map tiles (Leaflet GridLayer), so panning, wheel and
+ * pinch zoom behave like any web map. Street, district, park and water names
+ * sit in their own pane and appear as you zoom in.
+ */
 export function addBasemap(map) {
-  const canvas = document.createElement('canvas');
-  canvas.className = 'basemap-canvas';
-  map.getContainer().prepend(canvas);
-  const ctx = canvas.getContext('2d');
   const crs = L.CRS.EPSG3857;
-  const P = (ll) => crs.latLngToPoint(L.latLng(ll.lat, ll.lon), 0);
+  const P0 = (p) => crs.latLngToPoint(L.latLng(p.lat, p.lon), 0);
   const g = town.graph;
-  const nodes = new Float64Array(g.n * 2);
-  for (let i = 0; i < g.n; i++) { const p = P({ lat: g.lat[i], lon: g.lon[i] }); nodes[i * 2] = p.x; nodes[i * 2 + 1] = p.y; }
-  const river = town.river.map(P);
-  const parks = town.parks.map((p) => ({ ...p, ring: p.ring.map(P), c: P(p.center) }));
-  const labels = town.labels.map((l) => ({ ...l, p: P(l) }));
-  let dpr = 1;
-  const css = () => {
+  const nx = new Float64Array(g.n), ny = new Float64Array(g.n);
+  for (let i = 0; i < g.n; i++) { const p = P0({ lat: g.lat[i], lon: g.lon[i] }); nx[i] = p.x; ny[i] = p.y; }
+
+  // Bucket edges so each tile only touches nearby streets.
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (let e = 0; e < town.A.length; e++) for (const v of [town.A[e], town.B[e]]) {
+    if (nx[v] < minX) minX = nx[v]; if (nx[v] > maxX) maxX = nx[v];
+    if (ny[v] < minY) minY = ny[v]; if (ny[v] > maxY) maxY = ny[v];
+  }
+  const cell = (maxX - minX) / 160;
+  const buckets = new Map();
+  for (let e = 0; e < town.A.length; e++) {
+    const a = town.A[e], b = town.B[e];
+    const bx0 = Math.floor((Math.min(nx[a], nx[b]) - minX) / cell), bx1 = Math.floor((Math.max(nx[a], nx[b]) - minX) / cell);
+    const by0 = Math.floor((Math.min(ny[a], ny[b]) - minY) / cell), by1 = Math.floor((Math.max(ny[a], ny[b]) - minY) / cell);
+    for (let bx = bx0; bx <= bx1; bx++) for (let by = by0; by <= by1; by++) {
+      const k = bx * 65536 + by;
+      if (!buckets.has(k)) buckets.set(k, []);
+      buckets.get(k).push(e);
+    }
+  }
+  const seen = new Int32Array(town.A.length);
+  let stamp = 0;
+  const sea = town.sea.map(P0), river = town.river.map(P0);
+  const lakes = town.lakes.map((l) => l.ring.map(P0)), parks = town.parks.map((p) => p.ring.map(P0));
+  const colors = () => {
     const s = getComputedStyle(document.documentElement);
     const v = (k) => s.getPropertyValue(k).trim();
-    return { land: v('--map-land'), park: v('--map-park'), water: v('--map-water'), road: v('--map-road'), casing: v('--map-casing'), major: v('--map-major'), label: v('--map-label'), halo: v('--map-halo') };
+    return { land: v('--map-land'), park: v('--map-park'), water: v('--map-water'), road: v('--map-road'), casing: v('--map-casing'), major: v('--map-major'), majorCasing: v('--map-major-casing'), label: v('--map-label'), halo: v('--map-halo'), font: s.getPropertyValue('--font') };
   };
-  function resize() {
-    const size = map.getSize();
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = size.x * dpr; canvas.height = size.y * dpr;
-    canvas.style.width = `${size.x}px`; canvas.style.height = `${size.y}px`;
-    draw();
-  }
-  function draw() {
-    if (!map._loaded) return; // no view yet
-    const c = css();
-    const z = map.getZoom();
-    const s = 2 ** z;
-    const o = map.getPixelBounds().min;
-    const tx = (x) => x * s - o.x, ty = (y) => y * s - o.y;
+  const mppAt0 = 156543.03 * Math.cos((CENTER.lat * Math.PI) / 180);
+
+  function drawTile(canvas, coords) {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = 256 * dpr; canvas.height = 256 * dpr;
+    const ctx = canvas.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const z = coords.z, s = 2 ** z, ox = coords.x * 256, oy = coords.y * 256;
+    const X = (x) => x * s - ox, Y = (y) => y * s - oy;
+    const c = colors();
+    const mpp = mppAt0 / s;
     ctx.fillStyle = c.land;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.fillStyle = c.park;
-    for (const p of parks) {
+    ctx.fillRect(0, 0, 256, 256);
+    const fill = (pts, color) => {
       ctx.beginPath();
-      p.ring.forEach((q, i) => (i ? ctx.lineTo(tx(q.x), ty(q.y)) : ctx.moveTo(tx(q.x), ty(q.y))));
+      pts.forEach((p, i) => (i ? ctx.lineTo(X(p.x), Y(p.y)) : ctx.moveTo(X(p.x), Y(p.y))));
+      ctx.closePath();
+      ctx.fillStyle = color;
       ctx.fill();
-    }
-    ctx.strokeStyle = c.water;
-    ctx.lineWidth = Math.max(6, 120 / (156543 * Math.cos((CENTER.lat * Math.PI) / 180) / s));
+    };
+    parks.forEach((p) => fill(p, c.park));
+    fill(sea, c.water);
+    lakes.forEach((l) => fill(l, c.water));
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
     ctx.beginPath();
-    river.forEach((q, i) => (i ? ctx.lineTo(tx(q.x), ty(q.y)) : ctx.moveTo(tx(q.x), ty(q.y))));
+    river.forEach((p, i) => (i ? ctx.lineTo(X(p.x), Y(p.y)) : ctx.moveTo(X(p.x), Y(p.y))));
+    ctx.strokeStyle = c.water;
+    ctx.lineWidth = Math.max(2.5, 130 / mpp);
     ctx.stroke();
-    const mpp = 156543 * Math.cos((CENTER.lat * Math.PI) / 180) / s; // metres per pixel
-    const minorW = Math.max(1, Math.min(7, 9 / mpp)), majorW = Math.max(2, Math.min(12, 16 / mpp));
-    const pass = (k, width, color) => {
-      ctx.beginPath();
-      for (let e = 0; e < town.A.length; e++) {
-        if (town.kind[e] !== k) continue;
-        const a = town.A[e], b = town.B[e];
-        ctx.moveTo(tx(nodes[a * 2]), ty(nodes[a * 2 + 1]));
-        ctx.lineTo(tx(nodes[b * 2]), ty(nodes[b * 2 + 1]));
+
+    const pad = 14 / s;
+    const x0 = ox / s - pad, x1 = (ox + 256) / s + pad, y0 = oy / s - pad, y1 = (oy + 256) / s + pad;
+    if (x1 < minX || x0 > maxX || y1 < minY || y0 > maxY) return;
+    stamp++;
+    const byKind = [[], [], []];
+    for (let bx = Math.max(0, Math.floor((x0 - minX) / cell)); bx <= Math.floor((x1 - minX) / cell); bx++) {
+      for (let by = Math.max(0, Math.floor((y0 - minY) / cell)); by <= Math.floor((y1 - minY) / cell); by++) {
+        for (const e of buckets.get(bx * 65536 + by) || []) {
+          if (seen[e] === stamp) continue;
+          seen[e] = stamp;
+          byKind[town.kind[e]].push(e);
+        }
       }
-      ctx.strokeStyle = color; ctx.lineWidth = width; ctx.stroke();
+    }
+    const stroke = (list, width, color) => {
+      if (!list.length) return;
+      ctx.beginPath();
+      for (const e of list) {
+        const a = town.A[e], b = town.B[e];
+        ctx.moveTo(X(nx[a]), Y(ny[a]));
+        ctx.lineTo(X(nx[b]), Y(ny[b]));
+      }
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.stroke();
     };
-    if (z >= 15) pass(0, minorW + 1.5, c.casing);
-    pass(0, minorW, c.road);
-    pass(1, majorW + 2, c.casing);
-    pass(1, majorW, c.major);
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    const text = (str, x, y, size, weight) => {
-      ctx.font = `${weight} ${size}px ui-sans-serif, system-ui, sans-serif`;
-      ctx.lineWidth = 4; ctx.strokeStyle = c.halo; ctx.strokeText(str, x, y);
-      ctx.fillStyle = c.label; ctx.fillText(str, x, y);
-    };
-    if (z <= 15) for (const l of labels) text(l.name.toUpperCase(), tx(l.p.x), ty(l.p.y), 12, 700);
-    if (z >= 14) for (const p of parks) text(p.name, tx(p.c.x), ty(p.c.y), 11, 600);
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const w0 = clamp(10 / mpp, 0.7, 9), w1 = clamp(15 / mpp, 1.5, 13), w2 = clamp(22 / mpp, 2.2, 18);
+    if (z >= 13) {
+      if (z >= 15) stroke(byKind[0], w0 + 1.6, c.casing);
+      ctx.globalAlpha = z >= 14 ? 1 : 0.75;
+      stroke(byKind[0], w0, c.road);
+      ctx.globalAlpha = 1;
+    }
+    stroke(byKind[1], w1 + 2, c.casing);
+    stroke(byKind[1], w1, c.road);
+    stroke(byKind[2], w2 + 2, c.majorCasing);
+    stroke(byKind[2], w2, c.major);
+
+    // Side-street names, written along the street, once you're zoomed right in.
+    if (z >= 17) {
+      ctx.font = `500 11px ${c.font}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = c.halo;
+      ctx.fillStyle = c.label;
+      for (const e of byKind[0]) {
+        if (!town.eflag[e]) continue;
+        const a = town.A[e], b = town.B[e];
+        const ax = X(nx[a]), ay = Y(ny[a]), bx = X(nx[b]), by = Y(ny[b]);
+        const mx = (ax + bx) / 2, my = (ay + by) / 2, len = Math.hypot(bx - ax, by - ay);
+        const text = town.ename[e];
+        const tw = ctx.measureText(text).width;
+        if (tw + 16 > len) continue;
+        let ang = Math.atan2(by - ay, bx - ax);
+        if (ang > Math.PI / 2) ang -= Math.PI;
+        if (ang < -Math.PI / 2) ang += Math.PI;
+        const hx = (tw / 2) * Math.abs(Math.cos(ang)) + 7 * Math.abs(Math.sin(ang)) + 2;
+        const hy = (tw / 2) * Math.abs(Math.sin(ang)) + 7 * Math.abs(Math.cos(ang)) + 2;
+        if (mx - hx < 0 || mx + hx > 256 || my - hy < 0 || my + hy > 256) continue; // keep labels whole
+        ctx.save();
+        ctx.translate(mx, my);
+        ctx.rotate(ang);
+        ctx.strokeText(text, 0, 0);
+        ctx.fillText(text, 0, 0);
+        ctx.restore();
+      }
+    }
   }
-  map.on('move zoom viewreset', draw);
-  map.on('resize', resize);
-  new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
-  resize();
-  map.whenReady(resize);
+
+  const Basemap = L.GridLayer.extend({
+    createTile(coords) {
+      const tile = document.createElement('canvas');
+      drawTile(tile, coords);
+      return tile;
+    },
+  });
+  const layer = new Basemap({ tileSize: 256, keepBuffer: 4, updateWhenZooming: false }).addTo(map);
+
+  // Names on the map.
+  map.createPane('labels');
+  const pane = map.getPane('labels');
+  pane.style.zIndex = 380;
+  pane.style.pointerEvents = 'none';
+  const label = (l, cls) => L.marker([l.lat, l.lon], {
+    pane: 'labels', interactive: false, keyboard: false,
+    icon: L.divIcon({ className: `map-label ${cls}`, iconSize: [0, 0], html: `<span style="transform:translate(-50%,-50%) rotate(${l.angle || 0}deg)">${l.name}</span>` }),
+  });
+  const groups = Object.fromEntries(Object.entries(town.labels).map(([k, list]) => [k, L.layerGroup(list.map((l) => label(l, k)))]));
+  const visible = { town: (z) => z < 12.25, bay: () => true, hood: (z) => z >= 12.25 && z < 15.5, water: (z) => z >= 12, park: (z) => z >= 13.5, street: (z) => z >= 15.5 };
+  const update = () => {
+    const z = map.getZoom();
+    for (const [k, grp] of Object.entries(groups)) {
+      if (visible[k](z)) { if (!map.hasLayer(grp)) grp.addTo(map); } else if (map.hasLayer(grp)) map.removeLayer(grp);
+    }
+  };
+  map.on('zoomend', update);
+  map.whenReady(update);
+
+  const redraw = () => layer.redraw();
+  new MutationObserver(redraw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', redraw);
 }
 
 export const bounds = town.bounds;

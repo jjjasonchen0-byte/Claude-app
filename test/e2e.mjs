@@ -117,7 +117,7 @@ try {
     await page.fill('#add-search input', q);
     await page.waitForSelector('#add-search .suggestions li[data-i]');
     await page.keyboard.press('Enter');
-    await page.waitForFunction((n) => [...document.querySelectorAll('.person .row-title')].some((e) => e.textContent.includes(n)), nick);
+    await page.waitForFunction((n) => [...document.querySelectorAll('.person .cell-title')].some((e) => e.textContent.includes(n)), nick);
   }
   await page.waitForTimeout(600);
   await shot('03-people');
@@ -128,11 +128,11 @@ try {
   await page.waitForSelector('.growth-canvas');
   await page.waitForTimeout(2600);
   await shot('04-growing');
-  await page.waitForSelector('.panel:not(.away) .tabs', { timeout: 20000 });
+  await page.waitForSelector('.panel:not(.away) .pills', { timeout: 20000 });
   await page.waitForTimeout(700);
   await shot('05-results');
   const italian = page.locator('[data-action=group]', { hasText: 'Italian' });
-  assert.equal((await italian.locator('.row-end').textContent()).trim(), '4', 'Italian count');
+  assert.equal((await italian.locator('.cell-end').textContent()).trim(), '4', 'Italian count');
 
   // Category → POI map
   await italian.click();
@@ -184,8 +184,8 @@ try {
   await page.waitForSelector('.growth-canvas');
   await page.waitForTimeout(3000);
   await shot('10-two-people-growing');
-  await page.waitForSelector('.panel:not(.away) .tabs', { timeout: 20000 });
-  assert.equal(await page.locator('.travel').count(), 2, 'two travellers');
+  await page.waitForSelector('.panel:not(.away) .pills', { timeout: 20000 });
+  assert.equal(await page.locator('.panel .trip').count(), 2, 'two travellers');
   await page.waitForTimeout(600);
   await shot('11-two-people-results');
 
