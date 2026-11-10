@@ -1,4 +1,4 @@
-// Midway server: static file hosting + a small JSON API for accounts,
+// Meet server: static file hosting + a small JSON API for accounts,
 // saved addresses and meetup history. Zero runtime dependencies besides
 // Leaflet, which is served to the browser from node_modules.
 import http from 'node:http';
@@ -322,7 +322,7 @@ export const server = http.createServer(async (req, res) => {
 });
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  server.listen(PORT, HOST, () => console.log(`Midway running at http://localhost:${PORT}`));
+  server.listen(PORT, HOST, () => console.log(`Meet running at http://localhost:${PORT}`));
   const shutdown = () => { store.flush(); process.exit(0); };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);

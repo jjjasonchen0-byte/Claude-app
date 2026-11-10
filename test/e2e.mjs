@@ -14,7 +14,7 @@ const { chromium } = await import('playwright').catch(() => createRequire(import
 const shotsDir = process.argv.includes('--shots') ? process.argv[process.argv.indexOf('--shots') + 1] : null;
 if (shotsDir) fs.mkdirSync(shotsDir, { recursive: true });
 const PORT = 3999;
-const dataFile = path.join(os.tmpdir(), `midway-e2e-${Date.now()}.json`);
+const dataFile = path.join(os.tmpdir(), `meet-e2e-${Date.now()}.json`);
 const server = spawn(process.execPath, ['server.js'], { env: { ...process.env, PORT, DATA_FILE: dataFile }, stdio: 'inherit' });
 await new Promise((r) => setTimeout(r, 600));
 
@@ -99,18 +99,9 @@ const shot = async (name) => shotsDir && page.screenshot({ path: path.join(shots
 
 try {
   await page.goto(`http://localhost:${PORT}/`);
-  await page.waitForSelector('#screen-auth:not([hidden])');
-  await shot('01-signin');
-
-  // Sign up
-  await page.click('[data-auth-mode=signup]');
-  await page.fill('[name=name]', 'Alex');
-  await page.fill('[name=email]', 'alex@example.com');
-  await page.fill('[name=password]', 'secret123');
-  await page.click('#auth-submit');
-
   // Home address
   await page.waitForSelector('#screen-home:not([hidden])');
+  await shot('01-start');
   await page.fill('#home-search input', 'Baker Street');
   await page.waitForSelector('#home-search .suggestions li[data-i]');
   await shot('02-home');
@@ -126,7 +117,7 @@ try {
     await page.fill('#add-search input', q);
     await page.waitForSelector('#add-search .suggestions li[data-i]');
     await page.keyboard.press('Enter');
-    await page.waitForFunction((n) => [...document.querySelectorAll('.person-name')].some((e) => e.textContent.includes(n)), nick);
+    await page.waitForFunction((n) => [...document.querySelectorAll('.person .row-title')].some((e) => e.textContent.includes(n)), nick);
   }
   await page.waitForTimeout(600);
   await shot('03-people');
@@ -140,8 +131,8 @@ try {
   await page.waitForSelector('.panel:not(.away) .tabs', { timeout: 20000 });
   await page.waitForTimeout(700);
   await shot('05-results');
-  const italian = page.locator('.group-btn', { hasText: 'Italian' });
-  assert.equal((await italian.locator('.n').textContent()).trim(), '4', 'Italian count');
+  const italian = page.locator('[data-action=group]', { hasText: 'Italian' });
+  assert.equal((await italian.locator('.row-end').textContent()).trim(), '4', 'Italian count');
 
   // Category → POI map
   await italian.click();
@@ -152,7 +143,7 @@ try {
   await shot('06-category');
 
   // Place → send location
-  await page.locator('.poi-pin').first().click();
+  await page.locator('.poi').first().click();
   await page.waitForSelector('[data-action=choose]');
   await page.waitForTimeout(600);
   await shot('07-place');
@@ -163,20 +154,32 @@ try {
   assert.match(text, /google\.com\/maps/);
   await shot('08-share');
 
-  // History persisted & visible in menu
+  // Guest history is visible in the menu; then create an optional profile.
   await page.click('#btn-menu');
   await page.waitForSelector('#history-list [data-hid]');
   await shot('09-menu');
-  await page.click('#drawer-close');
+  await page.click('#btn-signin');
+  await page.fill('#auth-name', 'Alex');
+  await page.fill('#auth-email', 'alex@example.com');
+  await page.fill('#auth-password', 'secret123');
+  await page.click('#auth-submit');
+  await page.waitForSelector('#auth-modal', { state: 'hidden' });
+  await page.waitForSelector('.person');
+  assert.equal(await page.locator('.person').count(), 3, 'guest people moved into the profile');
 
-  // Reload: session survives, addresses persist
+  // Reload: the server session survives and the profile has everything.
+  await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.waitForSelector('.person');
-  assert.equal(await page.locator('.person').count(), 3, 'addresses persisted');
+  assert.equal(await page.locator('.person').count(), 3, 'addresses persisted on the server');
+  await page.click('#btn-menu');
+  assert.equal(await page.textContent('#drawer-email'), 'alex@example.com');
+  assert.equal(await page.locator('#history-list [data-hid]').count(), 1, 'history moved into the profile');
+  await page.click('#drawer-close');
 
   // Exclude Jo and search again with just two people.
-  await page.locator('.person', { hasText: 'Jo' }).locator('.switch').click();
-  await page.waitForFunction(() => document.querySelector('.person-addr') && document.querySelectorAll('.person.inactive').length === 1);
+  await page.locator('.person', { hasText: 'Jo' }).locator('.switch span').click();
+  await page.waitForFunction(() => document.querySelectorAll('.person.inactive').length === 1);
   await page.click('[data-action=find]');
   await page.waitForSelector('.growth-canvas');
   await page.waitForTimeout(3000);

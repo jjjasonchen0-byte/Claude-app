@@ -1,14 +1,17 @@
-# Midway — meet in the middle
+# Meet
 
-Midway helps a group of friends find somewhere that's roughly as close for every one of them, with a press of a button.
+Find somewhere that's roughly as close for everyone in a group, with a press of a button.
 
-1. **Sign in** with an email and password (no verification).
-2. **Set your home address.** The map centres on it.
-3. **Add friends' addresses**, each with an optional nickname. You can type an address, tap the map, or drag a pin.
-4. Press **✨ Find places.** Routes branch out along the real streets from every address, growing at the same rate (an invisible circle measured along the roads). They only grow in directions that lead towards the other addresses. Where the branches meet is the meeting point.
-5. A **popup** lists what's nearby, sorted into tabs (Food, Drinks, Fun, Culture, Outdoors, Shopping). Each tab has listings with counts, e.g. `Italian 4`.
-6. Pick a listing to **expand the map**: the places appear as numbered, labelled pins. Each pin and list entry can be clicked.
-7. Choose a place and **send the location** using the share sheet, WhatsApp, Messages, Email, Telegram, copy, a calendar invite, or Google/Apple Maps.
+1. **Enter where you're starting from.** No account is needed. The map centres on your address.
+2. **Add the people you're meeting**, each with an optional name. You can type an address, tap the map, or drag a dot.
+3. Press **Find a place to meet.** Routes branch out along the real streets from every address, all growing at the same rate (an invisible circle measured along the roads). They only grow in directions that lead towards the others. Where they meet is the meeting point.
+4. A panel lists what's nearby in tabs (Food, Drinks, Fun, Culture, Outdoors, Shopping). Each tab has listings with counts, e.g. `Italian 4`.
+5. Pick a listing to **show those places on the map** as numbered, labelled pins you can click.
+6. Choose one and **send the location** by share sheet, WhatsApp, Messages, Email, Telegram, copy, a calendar invite, or Google/Apple Maps.
+
+**Profiles are optional.** Without one, everything is saved in the browser. Signing in or creating a profile (menu → *Sign in or create a profile*) keeps your people and past meetups on every device, and anything you set up as a guest moves into the profile.
+
+On phones the panel is a bottom sheet. Drag its handle to resize it, or tap the handle to collapse and expand it.
 
 ## Run it
 
@@ -17,40 +20,39 @@ npm install
 npm start            # http://localhost:3000
 ```
 
-Requires Node 18+. The only dependency is Leaflet, which is served from `node_modules`. Data is stored in `data/db.json`; set `DATA_FILE` to change where. Set `PORT` to change the port.
+Requires Node 18+. The only dependency is Leaflet, which is served from `node_modules`. Profiles are stored in `data/db.json`; set `DATA_FILE` to change where. Set `PORT` to change the port.
 
 ## Test version (no server, no internet)
 
-`node scripts/build-test.mjs` builds `dist/midway-test.html`, a single page that runs the same app code in a made-up town called Port Verity. The town has generated streets, a river with bridges, parks and about 380 places. Accounts and addresses are saved in the browser. Open the page and press **Try it with a sample group** to sign in to a ready-made account with three friends. The test-mode stand-ins live in `public/js/demo.js`.
+`node scripts/build-test.mjs` builds `dist/meet-test.html`, a single page that runs the same app code in a made-up town called Port Verity. The town has generated streets, a river with bridges, parks and about 380 places. Open the page and press **Try a sample group** to start with three friends already added. The test-mode stand-ins live in `public/js/demo.js`.
 
-## Quality-of-life extras
+## Extras
 
-- Toggle friends in or out of a search without deleting them. Rename them inline, and undo a delete.
-- Address autocomplete is biased towards your home, with keyboard navigation. "Use my current location" is available too.
+- Leave people out of a search without deleting them. Rename them, and undo a delete.
+- Address suggestions are biased towards your starting point and work with the keyboard.
 - **Two ways to pick the meeting point** (in the menu):
   - *Fairest*: the longest trip is as short as possible.
-  - *Least total travel*: the trips add up to the least overall.
-- Distance and an estimated travel time for each person, shown by walking, bike, transit or car.
-- Sort a category by *closest to the meeting point* or *fairest for everyone*.
-- Change the search radius (500 m – 5 km). The search also widens automatically when little is nearby.
-- 🎲 Surprise me, ↻ Replay animation, and Skip animation.
-- Place details: opening hours, phone, website, dietary and accessibility tags, and dashed lines from everyone.
-- **Past meetups** history, plus a calendar (.ics) invite with an optional date and time.
-- Light, dark and auto themes. Animation speed setting. Mobile bottom sheet / desktop side panel. Installable PWA manifest.
-- If street data can't be downloaded, or the friends are more than about 220 km apart, Midway falls back to an approximate network so it still works.
+  - *Least travel*: everyone's trips add up to the least overall.
+- Travel time and distance for each person, by walking, bike, transit or car.
+- Sort a category by *nearest* to the meeting point or *fairest* for everyone.
+- Search radius from 500 m to 5 km. The search also widens automatically when little is nearby.
+- Surprise me, Replay, and Skip animation.
+- Past meetups, light/dark/auto themes, animation speed, and an installable web-app manifest.
+- If street data can't be downloaded, or the group is more than about 220 km apart, Meet uses an approximate network and says so.
 
 ## How it works
 
 | File | What it does |
 | --- | --- |
-| `server.js` | Static hosting plus a JSON API for accounts (scrypt-hashed passwords, httpOnly session cookie), saved addresses, settings and history |
+| `server.js` | Static hosting plus a JSON API for optional profiles (scrypt-hashed passwords, httpOnly session cookie), saved addresses, settings and history |
+| `public/js/api.js` | One data API for the app: guest storage (`guest.js`) until someone signs in, then the server (`remote.js`), moving guest data across |
 | `public/js/network.js` | Downloads the road network from OpenStreetMap (Overpass) and builds a compact graph. The road classes it fetches depend on how spread out the group is |
-| `public/js/meet.js` | Runs Dijkstra from every address, each limited to a "towards the others" ellipse corridor (it widens automatically if the roads don't connect). The meeting point is the node that minimises the maximum (or the total) road distance |
-| `public/js/growth.js` | Canvas animation of each shortest-path tree, all clipped at one shared radius. Branches stop where they hit another friend's frontier |
-| `public/js/pois.js` | Fetches places near the meeting point from Overpass and groups them into tabs and listings (by cuisine and type) |
-| `public/js/share.js` | Share text, messaging deep links, map links and the `.ics` invite |
+| `public/js/meet.js` | Runs Dijkstra from every address, each limited to a "towards the others" corridor that widens automatically if roads don't connect. The meeting point is the node that minimises the longest (or total) road distance |
+| `public/js/growth.js` | Canvas animation of each shortest-path tree at one shared radius. Branches stop where they reach another person's frontier |
+| `public/js/pois.js` | Fetches places near the meeting point from Overpass and groups them into tabs and listings |
+| `public/js/share.js` | Share text, messaging links, map links and the `.ics` invite |
 
-Map data © OpenStreetMap contributors. Tiles, geocoding (Photon / Nominatim) and Overpass are called directly from the browser using the free public instances. These are fine for personal use. For real traffic, point them at your own instances or a commercial provider, as their usage policies ask.
+Map data © OpenStreetMap contributors. Tiles, geocoding (Photon / Nominatim) and Overpass use the free public instances, which suit personal use. For real traffic, use your own instances or a commercial provider, as their usage policies ask.
 
 ## Tests
 

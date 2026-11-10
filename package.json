@@ -1,5 +1,5 @@
 {
-  "name": "midway",
+  "name": "meet",
   "version": "1.0.0",
   "description": "Find a meeting place that is fair for every friend — routes grow out from each address and meet in the middle.",
   "main": "server.js",

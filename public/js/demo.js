@@ -1,4 +1,4 @@
-// Self-contained test mode for Midway.
+// Self-contained test mode for Meet.
 //
 // Replaces everything that needs the internet or a server with local
 // stand-ins, so the real app code can run inside a sandboxed page:
@@ -293,7 +293,7 @@ export async function loadNetwork(points, { onStatus = () => {} } = {}) {
 
 // ---------------------------------------------------------------- local "server"
 
-const KEY = 'midway-test-v1';
+const KEY = 'meet-test-accounts-v1';
 let memory = { users: {}, session: null };
 function load() {
   try { const raw = localStorage.getItem(KEY); if (raw) memory = JSON.parse(raw); } catch { /* storage blocked: keep in memory */ }
@@ -378,19 +378,13 @@ export const api = {
   async deleteHistory(id) { const { db, u } = me(); u.history = u.history.filter((x) => x.id !== id); save(db); return { ok: true }; },
 };
 
-/** A ready-made account: you plus three friends spread around town. */
-export async function sampleLogin() {
-  const email = 'sample@midway.test', password = 'midway-sample';
-  const db = load();
-  if (!db.users[email]) {
-    const at = (x, y) => { const ll = toLL(x, y); const a = nearestAddress(ll.lat, ll.lon); return { address: fmtAddress(a), lat: a.lat, lon: a.lon }; };
-    await api.signup(email, password, 'Alex');
-    await api.updateMe({ home: at(-2700, 1100) });
-    for (const [nickname, x, y] of [['Sam', 2900, 1600], ['Priya', 2300, -2100], ['Leo', -1600, -1900]]) {
-      await api.addPlace({ ...at(x, y), nickname });
-    }
-  }
-  return api.login(email, password);
+/** A ready-made group: you plus three friends spread around town. */
+export function sampleGroup() {
+  const at = (x, y) => { const ll = toLL(x, y); const a = nearestAddress(ll.lat, ll.lon); return { address: fmtAddress(a), lat: a.lat, lon: a.lon }; };
+  return {
+    home: at(-2700, 1100),
+    friends: [['Sam', 2900, 1600], ['Priya', 2300, -2100], ['Leo', -1600, -1900]].map(([nickname, x, y]) => ({ ...at(x, y), nickname })),
+  };
 }
 
 // ---------------------------------------------------------------- base map

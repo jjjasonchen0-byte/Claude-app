@@ -1,9 +1,9 @@
 {
-  "name": "Midway — meet in the middle",
-  "short_name": "Midway",
+  "name": "Meet",
+  "short_name": "Meet",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f4f5fb",
-  "theme_color": "#5b5bf0",
+  "background_color": "#ffffff",
+  "theme_color": "#141414",
   "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
 }

@@ -3,87 +3,91 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Midway — meet in the middle</title>
-  <meta name="description" content="Find a place that's fair for every friend. Routes grow out from each address and meet in the middle.">
-  <meta name="theme-color" content="#5b5bf0">
+  <title>Meet</title>
+  <meta name="description" content="Find a place that's fair for everyone. Routes grow out from each address and meet in the middle.">
+  <meta name="theme-color" content="#ffffff">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body>
-  <!-- ============ Sign in ============ -->
-  <section id="screen-auth" class="screen screen-centered" hidden>
-    <div class="auth-card card">
-      <div class="brand brand-lg"><span class="brand-mark" aria-hidden="true"></span>Midway</div>
-      <p class="tagline">Find the spot that's fair for everyone.</p>
-      <div class="segmented" role="tablist">
-        <button type="button" role="tab" class="seg active" data-auth-mode="login" aria-selected="true">Sign in</button>
-        <button type="button" role="tab" class="seg" data-auth-mode="signup" aria-selected="false">Create account</button>
-      </div>
-      <form id="auth-form" novalidate>
-        <label class="field" data-signup-only hidden>
-          <span>Your name <em>(optional)</em></span>
-          <input name="name" autocomplete="name" maxlength="60" placeholder="Alex">
-        </label>
-        <label class="field">
-          <span>Email</span>
-          <input name="email" type="email" autocomplete="email" required placeholder="you@example.com">
-        </label>
-        <label class="field">
-          <span>Password</span>
-          <div class="input-row">
-            <input name="password" type="password" autocomplete="current-password" required minlength="6" placeholder="At least 6 characters">
-            <button type="button" class="icon-btn" id="toggle-password" aria-label="Show password">👁</button>
-          </div>
-        </label>
-        <p class="form-error" id="auth-error" role="alert" hidden></p>
-        <button class="btn btn-primary btn-block" type="submit" id="auth-submit">Sign in</button>
-      </form>
-    </div>
-  </section>
-
-  <!-- ============ Home address ============ -->
+  <!-- ============ Start: your address ============ -->
   <section id="screen-home" class="screen screen-centered" hidden>
-    <div class="card onboard-card">
-      <div class="step">Step 1 of 2</div>
-      <h1>Where do you live?</h1>
-      <p class="muted">We'll centre the map here and use it as your starting point. Only you can see it.</p>
+    <div class="intro">
+      <div class="wordmark wordmark-lg">meet<i></i></div>
+      <h1>Where are you starting from?</h1>
+      <p class="muted">Add your address, then the people you're meeting. Meet finds the spot that's fair for everyone.</p>
       <div class="search" id="home-search">
-        <input type="search" placeholder="Start typing your address…" autocomplete="off" aria-label="Your address">
+        <input id="home-input" type="search" placeholder="Your address" autocomplete="off" aria-label="Your address">
         <ul class="suggestions" role="listbox" hidden></ul>
       </div>
-      <button class="btn btn-ghost btn-block" type="button" id="home-locate">📍 Use my current location</button>
-      <button class="btn btn-link" type="button" id="home-cancel" hidden>Cancel</button>
+      <div class="intro-actions">
+        <button class="btn-text" type="button" id="home-locate">Use my current location</button>
+        <button class="btn-text" type="button" id="home-cancel" hidden>Cancel</button>
+      </div>
+      <p class="intro-foot muted small" id="home-signin-row">Have a profile? <button class="btn-text" type="button" id="home-signin">Sign in</button></p>
     </div>
   </section>
 
-  <!-- ============ Main app ============ -->
+  <!-- ============ Main ============ -->
   <section id="screen-main" class="screen" hidden>
     <div id="map" aria-label="Map"></div>
 
     <header class="topbar">
-      <div class="brand"><span class="brand-mark" aria-hidden="true"></span>Midway</div>
+      <div class="wordmark">meet<i></i></div>
       <div class="topbar-actions">
-        <button class="icon-btn round" id="btn-recenter" title="Centre on home" aria-label="Centre on home">⌂</button>
-        <button class="icon-btn round" id="btn-menu" title="Menu" aria-label="Open menu">☰</button>
+        <button class="icon-btn round" id="btn-recenter" title="Show everyone" aria-label="Show everyone">
+          <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="10" cy="10" r="3" fill="currentColor"/><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+        </button>
+        <button class="icon-btn round" id="btn-menu" title="Menu" aria-label="Open menu">
+          <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M3 7h14M3 13h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
       </div>
     </header>
 
     <div class="status-chip" id="search-status" hidden>
       <span class="spinner" aria-hidden="true"></span>
       <span class="status-text">Finding routes…</span>
-      <button class="chip-btn" id="btn-skip" hidden>Skip ›</button>
+      <button class="chip-btn" id="btn-skip" hidden>Skip</button>
       <button class="chip-btn" id="btn-cancel-search">Cancel</button>
     </div>
 
     <aside class="panel" id="panel" aria-live="polite">
-      <button class="panel-handle" id="panel-handle" aria-label="Expand or collapse panel"></button>
+      <div class="panel-handle" id="panel-handle" role="button" tabindex="0" aria-label="Drag or tap to resize"><span></span></div>
       <div class="panel-body" id="panel-body"></div>
     </aside>
   </section>
 
-  <!-- ============ Menu drawer ============ -->
+  <!-- ============ Optional sign-in ============ -->
+  <div class="modal-backdrop" id="auth-backdrop" hidden></div>
+  <section id="auth-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="auth-title" hidden>
+    <button class="icon-btn modal-close" id="auth-close" aria-label="Close">✕</button>
+    <h2 id="auth-title">Save your places</h2>
+    <p class="muted small">Optional. A profile keeps your people and past meetups on every device. Anything you've added so far comes with you.</p>
+    <div class="segmented" role="tablist">
+      <button type="button" role="tab" class="seg active" data-auth-mode="login" aria-selected="true">Sign in</button>
+      <button type="button" role="tab" class="seg" data-auth-mode="signup" aria-selected="false">Create profile</button>
+    </div>
+    <form id="auth-form" novalidate>
+      <label class="field" data-signup-only hidden>
+        <span>Name <em>(optional)</em></span>
+        <input id="auth-name" name="name" autocomplete="name" maxlength="60">
+      </label>
+      <label class="field">
+        <span>Email</span>
+        <input id="auth-email" name="email" type="email" autocomplete="email" required>
+      </label>
+      <label class="field">
+        <span>Password</span>
+        <input id="auth-password" name="password" type="password" autocomplete="current-password" required minlength="6" placeholder="At least 6 characters">
+      </label>
+      <p class="form-error" id="auth-error" role="alert" hidden></p>
+      <button class="btn btn-primary btn-block" type="submit" id="auth-submit">Sign in</button>
+    </form>
+  </section>
+
+  <!-- ============ Menu ============ -->
   <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
   <nav class="drawer" id="drawer" aria-label="Menu" hidden>
     <div class="drawer-head">
@@ -93,34 +97,38 @@
       </div>
       <button class="icon-btn" id="drawer-close" aria-label="Close menu">✕</button>
     </div>
+    <div class="drawer-section" id="drawer-guest">
+      <p class="muted small">You're using Meet without a profile. Everything is saved in this browser.</p>
+      <button class="btn btn-primary btn-sm" id="btn-signin">Sign in or create a profile</button>
+    </div>
     <div class="drawer-section">
-      <h3>Home</h3>
-      <div class="muted small" id="drawer-home"></div>
-      <button class="btn btn-ghost btn-sm" id="btn-edit-home">Change home address</button>
+      <h3>Starting point</h3>
+      <div class="small" id="drawer-home"></div>
+      <button class="btn-text small" id="btn-edit-home">Change</button>
     </div>
     <div class="drawer-section">
       <h3>Meeting point</h3>
       <div class="segmented small" id="set-mode">
         <button class="seg" data-value="fair">Fairest</button>
-        <button class="seg" data-value="total">Least total travel</button>
+        <button class="seg" data-value="total">Least travel</button>
       </div>
       <p class="muted small" id="mode-hint"></p>
     </div>
     <div class="drawer-section">
-      <h3>Travel times shown for</h3>
+      <h3>Travel times</h3>
       <div class="segmented small" id="set-travel">
-        <button class="seg" data-value="walk">🚶 Walk</button>
-        <button class="seg" data-value="bike">🚲 Bike</button>
-        <button class="seg" data-value="transit">🚆 Transit</button>
-        <button class="seg" data-value="drive">🚗 Drive</button>
+        <button class="seg" data-value="walk">Walk</button>
+        <button class="seg" data-value="bike">Bike</button>
+        <button class="seg" data-value="transit">Transit</button>
+        <button class="seg" data-value="drive">Drive</button>
       </div>
     </div>
     <div class="drawer-section">
       <h3>Animation</h3>
       <div class="segmented small" id="set-speed">
-        <button class="seg" data-value="slow">Relaxed</button>
+        <button class="seg" data-value="slow">Slow</button>
         <button class="seg" data-value="normal">Normal</button>
-        <button class="seg" data-value="fast">Quick</button>
+        <button class="seg" data-value="fast">Fast</button>
       </div>
     </div>
     <div class="drawer-section">
@@ -135,14 +143,14 @@
       <h3>Past meetups</h3>
       <ul class="history" id="history-list"></ul>
     </div>
-    <div class="drawer-section">
-      <button class="btn btn-ghost btn-block" id="btn-logout">Sign out</button>
+    <div class="drawer-section" id="drawer-account">
+      <button class="btn-text" id="btn-logout">Sign out</button>
     </div>
   </nav>
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <noscript><p class="noscript">Midway needs JavaScript to run.</p></noscript>
+  <noscript><p class="noscript">Meet needs JavaScript to run.</p></noscript>
   <script src="/vendor/leaflet/leaflet.js"></script>
   <script type="module" src="/js/app.js"></script>
 </body>

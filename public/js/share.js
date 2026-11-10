@@ -13,12 +13,12 @@ export function mapLinks(place) {
 }
 
 export function shareText(place, { when, note } = {}) {
-  const lines = [`📍 Let's meet at ${place.name || 'this spot'}`];
+  const lines = [`Let's meet at ${place.name || 'this spot'}`];
   if (place.address) lines.push(place.address);
-  if (when) lines.push(`🕒 ${when.toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`);
+  if (when) lines.push(`${when.toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`);
   if (note) lines.push(note);
   lines.push(mapLinks(place).google);
-  lines.push('— found with Midway: the fair way to meet in the middle');
+  lines.push('Sent with Meet');
   return lines.join('\n');
 }
 
@@ -59,8 +59,8 @@ const icsEscape = (s) => String(s).replace(/\\/g, '\\\\').replace(/\n/g, '\\n').
 export function calendarInvite(place, start, minutes = 120) {
   const end = new Date(start.getTime() + minutes * 60000);
   const body = [
-    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Midway//Meetup//EN', 'BEGIN:VEVENT',
-    `UID:${Date.now()}-${Math.random().toString(36).slice(2)}@midway`,
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Meet//Meetup//EN', 'BEGIN:VEVENT',
+    `UID:${Date.now()}-${Math.random().toString(36).slice(2)}@meet`,
     `DTSTAMP:${icsDate(new Date())}`, `DTSTART:${icsDate(start)}`, `DTEND:${icsDate(end)}`,
     `SUMMARY:${icsEscape(`Meet up at ${place.name || 'the meeting spot'}`)}`,
     `LOCATION:${icsEscape(place.address || `${place.lat},${place.lon}`)}`,
