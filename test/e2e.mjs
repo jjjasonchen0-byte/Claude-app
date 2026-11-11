@@ -146,8 +146,9 @@ try {
   // Find places → the search animation: everyone's floods converge on the meeting point, then the routes.
   await page.click('[data-action=find]');
   await page.waitForSelector('.growth-canvas');
-  await page.waitForFunction(() => /All at once/.test(document.querySelector('#flood-hud .flood-phase')?.textContent)
-    && Number(document.querySelector('#flood-hud .flood-num').textContent.replace(/,/g, '')) > 0, null, { timeout: 20000 });
+  await page.waitForFunction(() => /Where should 3 friends meet\?/.test(document.querySelector('#flood-hud .flood-title')?.textContent)
+    && document.querySelector('.flood-base.on'), null, { timeout: 20000 });
+  assert.equal(await page.locator('#flood-hud .flood-count').count(), 0, 'no roads counter');
   assert.ok(streetTiles > 0, 'streets came from the map tiles');
   assert.equal(await page.locator('.flood-pill').count(), 3, 'a name tag over everyone');
   assert.match(await page.textContent('.flood-pill >> nth=1'), /^Sam · /);

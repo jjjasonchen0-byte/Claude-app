@@ -797,24 +797,19 @@ function floodMode(on, people = []) {
   const city = on ? groupCity(people) : '';
   $('#flood-city').hidden = !city;
   $('#flood-city').textContent = city;
-  if (!on) setHud({ phase: null });
+  if (!on) setHud({ title: null });
 }
 function setPill(i, text) {
   const el = pills[i]?.getElement()?.querySelector('.flood-pill');
   if (el) el.textContent = text;
 }
 
-/** The heading over the search map. Leave a field out to keep it; phase null hides it. */
-function setHud({ phase, intro, count, sub } = {}) {
+/** The heading over the search map. Leave a field out to keep it; title null hides it. */
+function setHud({ title, sub } = {}) {
   const h = $('#flood-hud');
-  if (phase === null) { h.hidden = true; return; }
+  if (title === null) { h.hidden = true; return; }
   h.hidden = false;
-  if (phase !== undefined) $('.flood-phase', h).textContent = phase;
-  if (intro !== undefined) h.classList.toggle('intro', intro);
-  if (count !== undefined) {
-    $('.flood-count', h).hidden = count == null;
-    if (count != null) $('.flood-num', h).textContent = count.toLocaleString('en');
-  }
+  if (title !== undefined) $('.flood-title', h).textContent = title;
   if (sub !== undefined) $('.flood-sub', h).textContent = sub;
 }
 
@@ -865,7 +860,7 @@ async function findPlaces({ replay = false } = {}) {
   setView('searching');
   fitTo(people.map((p) => [p.lat, p.lon]), { maxZoom: 16, animate: false });
   const rule = prev?.rule || (state.settings.mode === 'total' ? 'total' : 'similar');
-  const fx = anim = new FloodAnimation(map, { people, pace: PACE[state.settings.speed] || PACE.normal });
+  const fx = anim = new FloodAnimation(map, { people, pace: PACE[state.settings.speed] || PACE.normal, theme: isDark() ? 'dark' : 'light' });
   if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) fx.skip();
   const live = () => !ctrl.signal.aborted && anim === fx;
   floodMode(true, people);
@@ -880,7 +875,7 @@ async function findPlaces({ replay = false } = {}) {
     meetingP.catch(() => {});
     const roadsP = withTimeout(loadRoads(streetsArea(), { signal: ctrl.signal }), 8000).catch(() => null);
     status(prev ? 'Replaying the search' : 'Finding the fairest spot…');
-    setHud({ phase: `Where should ${people.length} friends meet?`, intro: true, count: null, sub: '' });
+    setHud({ title: `Where should ${people.length} friends meet?`, sub: '' });
     if (!(await fx.intro())) return;
     const roads = await roadsP;
     if (!live()) return;
@@ -907,14 +902,7 @@ async function findPlaces({ replay = false } = {}) {
     const routesP = search.routes ? Promise.resolve(search.routes)
       : Promise.all(people.map((p) => withTimeout(getDirections(p.mode, p, meet, { signal: ctrl.signal }), 10000).catch(() => null)));
     status('Finding everyone’s routes…');
-    setHud({ count: fx.net ? 0 : null });
-    const ok2 = await fx.allAtOnce(meet, {
-      onProgress: (t) => setHud({
-        phase: 'All at once', intro: false,
-        sub: t < 0.5 ? `All ${people.length} set off together` : 'The floods meet',
-      }),
-      onRoads: (n) => setHud({ count: n }),
-    });
+    const ok2 = await fx.allAtOnce(meet);
     if (!ok2 || !live()) return;
     search.routes = await routesP;
     // The meeting point's name, if it comes soon.
@@ -928,7 +916,7 @@ async function findPlaces({ replay = false } = {}) {
       zIndexOffset: 1000,
     }).bindTooltip(esc(name === 'the middle' ? 'Meeting point' : name), { permanent: true, direction: 'bottom', className: 'label meet-label', offset: [0, 14] }).addTo(resultLayer);
     const times = people.map((p, i) => tripSeconds(search.routes[i], meeting.times[i]));
-    setHud({ phase: fx.net ? 'All at once' : 'Found it', intro: false, sub: `Longest trip: ${mins(Math.max(...times))}` });
+    setHud({ sub: `Longest trip: ${mins(Math.max(...times))}` });
     status('Found the fairest spot');
     const tracks = people.map((p, i) => trackFor(p, search.routes[i], meet, meeting.times[i]));
     const ok3 = await fx.reveal(meet, tracks, {

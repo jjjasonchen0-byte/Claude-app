@@ -94,6 +94,7 @@ const ROAD = { motorway: 0, trunk: 1, primary: 2, secondary: 3, tertiary: 4, min
 const BRIDGE = 8, TUNNEL = 16;
 
 function buildRoads(all) {
+  const splitOf = new Map(); // a street segment split in two or more → its parts
   const nodeId = new Map();
   const lat = [], lon = [];
   const node = ([x, y]) => {
@@ -172,15 +173,99 @@ function buildRoads(all) {
       if (own !== null && (own & (BRIDGE | TUNNEL)) !== (kind & (BRIDGE | TUNNEL))) continue;
       const [a, b] = best.split(',').map(Number);
       edges.delete(best);
+      const parts = [];
       for (const [u, v] of [[a, n], [n, b]]) {
         const key = u < v ? `${u},${v}` : `${v},${u}`;
         edges.set(key, kind);
+        parts.push(key);
         for (const c of cellsOf(u, v)) { if (!grid.has(c)) grid.set(c, []); grid.get(c).push(key); }
       }
+      splitOf.set(best, parts);
       deg[n] += 2;
       joined++;
     }
     console.log(`joined ${joined} street ends across tile edges`);
+  }
+  // Map tiles drop the corner where two streets cross when a street is straight
+  // there, so the two don't connect and routes take long detours. Give every
+  // crossing at street level a corner, and join a street or path that ends on
+  // another (within a metre) into it. Bridges, tunnels and motorways only
+  // connect at their ends.
+  {
+    const kx = Math.cos((-33.87 * Math.PI) / 180) * 1.1132, ky = 1.1132; // metres per 1e-5 degree
+    const segs = [...edges].map(([key, kind]) => { const [a, b] = key.split(',').map(Number); return { key, a, b, kind, cuts: [] }; });
+    const CELL = 300;
+    const grid = new Map();
+    segs.forEach((g, i) => {
+      for (let x = Math.floor(Math.min(lon[g.a], lon[g.b]) / CELL); x <= Math.floor(Math.max(lon[g.a], lon[g.b]) / CELL); x++) {
+        for (let y = Math.floor(Math.min(lat[g.a], lat[g.b]) / CELL); y <= Math.floor(Math.max(lat[g.a], lat[g.b]) / CELL); y++) {
+          const c = `${x},${y}`;
+          if (!grid.has(c)) grid.set(c, []);
+          grid.get(c).push(i);
+        }
+      }
+    });
+    const P = (i) => [lon[i] * kx, lat[i] * ky];
+    const EPS = 1e-6;
+    // Where along g the corner n lies, if within a metre of g's middle part.
+    const onto = (g, n) => {
+      const [ax, ay] = P(g.a), [bx, by] = P(g.b), [px, py] = P(n);
+      const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy;
+      if (!len2) return null;
+      const t = ((px - ax) * dx + (py - ay) * dy) / len2;
+      if (t <= EPS || t >= 1 - EPS) return null;
+      return Math.hypot(ax + t * dx - px, ay + t * dy - py) <= 1 ? t : null;
+    };
+    const apart = (k) => (k & (BRIDGE | TUNNEL)) || (k & 7) === 0;
+    let crossings = 0, ends = 0;
+    for (const [cell, list] of grid) {
+      const [cx0, cy0] = cell.split(',').map(Number);
+      for (let i = 0; i < list.length; i++) {
+        for (let j = i + 1; j < list.length; j++) {
+          const g = segs[list[i]], h = segs[list[j]];
+          // Each pair once: in the cell where their boxes start to overlap.
+          const ox = Math.max(Math.min(lon[g.a], lon[g.b]), Math.min(lon[h.a], lon[h.b]));
+          const oy = Math.max(Math.min(lat[g.a], lat[g.b]), Math.min(lat[h.a], lat[h.b]));
+          if (Math.floor(ox / CELL) !== cx0 || Math.floor(oy / CELL) !== cy0) continue;
+          if (g.a === h.a || g.a === h.b || g.b === h.a || g.b === h.b) continue;
+          // A bridge or tunnel joins only the same kind of crossing at its ends.
+          if (((g.kind ^ h.kind) & (BRIDGE | TUNNEL)) === 0) {
+            let joined = false;
+            for (const [x, y] of [[g, h], [h, g]]) {
+              for (const n of [y.a, y.b]) { const t = onto(x, n); if (t !== null) { x.cuts.push([t, n]); joined = true; ends++; } }
+            }
+            if (joined) continue;
+          }
+          if (apart(g.kind) || apart(h.kind)) continue;
+          const [ax, ay] = P(g.a), [bx, by] = P(g.b), [cx, cy] = P(h.a), [dx, dy] = P(h.b);
+          const d = (bx - ax) * (dy - cy) - (by - ay) * (dx - cx);
+          if (!d) continue;
+          const t = ((cx - ax) * (dy - cy) - (cy - ay) * (dx - cx)) / d;
+          const u = ((cx - ax) * (by - ay) - (cy - ay) * (bx - ax)) / d;
+          if (t <= EPS || t >= 1 - EPS || u <= EPS || u >= 1 - EPS) continue;
+          const n = node([(lon[g.a] + t * (lon[g.b] - lon[g.a])) / Q, (lat[g.a] + t * (lat[g.b] - lat[g.a])) / Q]);
+          g.cuts.push([t, n]);
+          h.cuts.push([u, n]);
+          crossings++;
+        }
+      }
+    }
+    for (const g of segs) {
+      if (!g.cuts.length) continue;
+      edges.delete(g.key);
+      const parts = [];
+      let prev = g.a;
+      for (const [, n] of [...g.cuts.sort((p, r) => p[0] - r[0]), [1, g.b]]) {
+        if (n === prev) continue;
+        const key = prev < n ? `${prev},${n}` : `${n},${prev}`;
+        const old = edges.get(key);
+        if (old === undefined || g.kind < old) edges.set(key, g.kind);
+        parts.push(key);
+        prev = n;
+      }
+      splitOf.set(g.key, parts);
+    }
+    console.log(`joined ${crossings} street crossings and ${ends} streets ending on another`);
   }
   // Keep the largest connected network (drops lone footpaths inside buildings and the like).
   const parent = Int32Array.from({ length: lat.length }, (_, i) => i);
@@ -227,6 +312,20 @@ function buildRoads(all) {
     coord: (n) => [lat[order[n]] / Q, lon[order[n]] / Q],
     edgeList: E,
     nodeKey: (key) => { const i = nodeId.get(key); return i === undefined ? -1 : keep[i]; },
+    // The segment between two original corners as it ended up: itself, or the parts it was split into.
+    parts: (keyA, keyB) => {
+      const a = nodeId.get(keyA), b = nodeId.get(keyB);
+      if (a === undefined || b === undefined) return [];
+      const out = [];
+      const seen = new Set();
+      const walk = (key) => {
+        if (seen.has(key)) return;
+        seen.add(key);
+        if (splitOf.has(key) && !edges.has(key)) splitOf.get(key).forEach(walk); else out.push(key);
+      };
+      walk(a < b ? `${a},${b}` : `${b},${a}`);
+      return out.map((key) => key.split(',').map((v) => keep[Number(v)])).filter(([x, y]) => x >= 0 && y >= 0);
+    },
   };
 }
 
@@ -242,11 +341,11 @@ function nameStreets(all, roads) {
       let id = nameIdx.get(props.name);
       if (id === undefined) { id = names.length + 1; names.push(props.name); nameIdx.set(props.name, id); }
       for (const line of linesOf(geo)) {
-        let prev = -1;
+        let prev = null;
         for (const [x, y] of line) {
-          const i = roads.nodeKey(`${q(y)},${q(x)}`);
-          if (prev >= 0 && i >= 0) byPair.set(prev < i ? `${prev},${i}` : `${i},${prev}`, id);
-          prev = i;
+          const key = `${q(y)},${q(x)}`;
+          if (prev) for (const [a, b] of roads.parts(prev, key)) byPair.set(a < b ? `${a},${b}` : `${b},${a}`, id);
+          prev = key;
         }
       }
     }

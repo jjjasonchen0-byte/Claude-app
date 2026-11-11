@@ -1,4 +1,5 @@
-// The search animation. The map goes dark and its streets glow a dim gold.
+// The search animation. The map goes quiet (dark or light, with the app's
+// theme) and its streets show faintly.
 // Then everyone's reach floods out along the streets at once, each in their
 // colour behind a bright white front, converging until the floods meet at
 // the meeting point. Finally everyone's real route lights up and they
@@ -184,27 +185,42 @@ export function reachTime(net, fl, others) {
 
 // ---------------------------------------------------------------- drawing
 
-const BASE = { minor: 'rgba(196,158,86,0.26)', major: 'rgba(222,178,98,0.46)', minorW: 0.7, majorW: 1.2, scrim: 'rgba(2,2,5,0.95)' };
+// Colours for each theme. Dark: streets glow a dim gold, the floods glow and
+// their front is white. Light: a pale map with grey streets, the floods in
+// their colours with a deeper shade of it at the front.
+const THEMES = {
+  dark: {
+    scrim: 'rgba(2,2,5,0.95)', minor: 'rgba(196,158,86,0.26)', major: 'rgba(222,178,98,0.46)',
+    blend: 'lighter', shade: 0.22, front: () => '#fff', traveller: '#0b0b10',
+  },
+  light: {
+    scrim: 'rgba(246,244,240,0.94)', minor: 'rgba(120,112,100,0.24)', major: 'rgba(110,100,85,0.42)',
+    blend: 'source-over', shade: -0.08, front: (hex) => shade(hex, -0.42), traveller: '#ffffff',
+  },
+};
+const BASE = { minorW: 0.7, majorW: 1.2 };
 const FLOOD = { minorW: 1.05, majorW: 1.7, alpha: 0.88 };
-const FRONT = [1, 0.6, 0.3, 0.08]; // white over the newest … oldest quarter of the front
+const FRONT = [1, 0.6, 0.3, 0.08]; // the front colour over the newest … oldest quarter of the front
 const ROUTE = { halo: 13, core: 5, line: 3.6, casing: 3.5 };
 const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 
-/** A colour a little lighter, as glowing light on a dark map. */
-function glowColor(hex) {
+/** A colour mixed towards white (amount > 0) or black (amount < 0). */
+function shade(hex, amount) {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
   if (!m) return hex;
   const v = parseInt(m[1], 16);
-  const mix = (c) => Math.round(c + (255 - c) * 0.22);
+  const mix = (c) => Math.round(amount > 0 ? c + (255 - c) * amount : c * (1 + amount));
   return `rgb(${mix(v >> 16)},${mix((v >> 8) & 255)},${mix(v & 255)})`;
 }
 
 export class FloodAnimation {
   /**
    * people: [{ lat, lon, mode, color, name }]. pace: 1 normal, more is slower.
+   * theme: 'dark' or 'light'.
    */
-  constructor(map, { people, pace = 1 }) {
+  constructor(map, { people, pace = 1, theme = 'dark' }) {
     this.map = map;
+    this.theme = THEMES[theme] || THEMES.dark;
     this.people = people;
     this.pace = pace;
     this.net = null;
@@ -357,7 +373,7 @@ export class FloodAnimation {
     if (!size || !this.baseCanvas.isConnected) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, size.x, size.y);
-    ctx.fillStyle = BASE.scrim;
+    ctx.fillStyle = this.theme.scrim;
     ctx.fillRect(0, 0, size.x, size.y);
     if (!net) return;
     const { X, Y } = this.view();
@@ -369,8 +385,8 @@ export class FloodAnimation {
       p.lineTo(X(net.nx[b]), Y(net.ny[b]));
     }
     ctx.lineCap = 'round';
-    ctx.strokeStyle = BASE.minor; ctx.lineWidth = BASE.minorW; ctx.stroke(minor);
-    ctx.strokeStyle = BASE.major; ctx.lineWidth = BASE.majorW; ctx.stroke(major);
+    ctx.strokeStyle = this.theme.minor; ctx.lineWidth = BASE.minorW; ctx.stroke(minor);
+    ctx.strokeStyle = this.theme.major; ctx.lineWidth = BASE.majorW; ctx.stroke(major);
   }
 
   // ------------------------------------------------ floods
@@ -382,7 +398,8 @@ export class FloodAnimation {
    */
   showFloods(list, owner = null) {
     this.owner = owner;
-    this.shown = list.map((i) => ({ i, fl: this.flood(i), color: glowColor(this.people[i].color), c: 0, s: 0, e: 0, p0: 0, active: [], band: 1, frozen: false })).filter((f) => f.fl);
+    const th = this.theme;
+    this.shown = list.map((i) => ({ i, fl: this.flood(i), color: shade(this.people[i].color, th.shade), front: th.front(this.people[i].color), c: 0, s: 0, e: 0, p0: 0, active: [], band: 1, frozen: false })).filter((f) => f.fl);
     const { fill, top, dpr, size } = this;
     fill.setTransform(dpr, 0, 0, dpr, 0, 0);
     fill.clearRect(0, 0, size.x, size.y);
@@ -411,7 +428,7 @@ export class FloodAnimation {
   }
 
   strokeFlood(ctx, f, paths, alpha = FLOOD.alpha) {
-    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalCompositeOperation = this.theme.blend;
     ctx.globalAlpha = alpha;
     ctx.strokeStyle = f.color;
     ctx.lineCap = 'butt';
@@ -471,13 +488,13 @@ export class FloodAnimation {
       }
       f.active.length = w;
       this.strokeFlood(ctx, f, colour);
-      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalCompositeOperation = this.theme.blend;
       ctx.lineCap = 'round';
       ctx.strokeStyle = f.color;
       ctx.globalAlpha = 0.35 * fade;
       ctx.lineWidth = 5;
       ctx.stroke(glow);
-      ctx.strokeStyle = '#fff';
+      ctx.strokeStyle = f.front;
       FRONT.forEach((a, k) => { ctx.globalAlpha = a * fade; ctx.lineWidth = k === 0 ? 1.6 : 1.2; ctx.stroke(white[k]); });
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
@@ -528,7 +545,7 @@ export class FloodAnimation {
    * own trip, so they all reach the meeting point together: someone driving
    * floods out faster than someone walking, and the map divides into
    * territories that meet at the pin.
-   * onProgress(t) with t from 0 to 1; onRoads(total).
+   * onProgress(t) with t from 0 to 1; onRoads(total) with the number of roads searched.
    */
   async allAtOnce(meet, { onProgress, onRoads } = {}) {
     if (!this.net) return true;
@@ -569,7 +586,7 @@ export class FloodAnimation {
       const segs = [];
       for (const piece of t.pieces) addTimed(segs, piece.pts.filter(ok).map(proj), piece.t0, piece.t1, piece.walk);
       segs.sort((a, b) => a.s0 - b.s0);
-      return { color: t.color, glow: glowColor(t.color), initial: t.initial, duration: t.duration, segs };
+      return { color: t.color, glow: shade(t.color, this.theme.shade), initial: t.initial, duration: t.duration, segs };
     });
     this.routeClock = 0;
     this.gather = 0;
@@ -648,7 +665,7 @@ export class FloodAnimation {
       ctx.globalAlpha = g;
       ctx.shadowColor = h.r.glow; ctx.shadowBlur = 14;
       ctx.beginPath(); ctx.arc(x, y, 10.5, 0, Math.PI * 2);
-      ctx.fillStyle = '#0b0b10'; ctx.fill();
+      ctx.fillStyle = this.theme.traveller; ctx.fill();
       ctx.shadowBlur = 0;
       ctx.lineWidth = 2.6; ctx.strokeStyle = h.r.glow; ctx.stroke();
       ctx.fillStyle = h.r.glow;
