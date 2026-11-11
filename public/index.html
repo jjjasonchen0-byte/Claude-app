@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Meet</title>
-  <meta name="description" content="Find a place that's fair for everyone. Routes grow out from each address and meet in the middle.">
+  <meta name="description" content="Find a place that's fair for everyone. The streets flood out from each address and meet in the middle.">
   <meta name="theme-color" content="#f2f2f7">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="manifest" href="/manifest.webmanifest">
@@ -63,6 +63,12 @@
         </button>
       </div>
     </header>
+
+    <div class="flood-hud" id="flood-hud" aria-live="polite" hidden>
+      <div class="flood-title"><b class="flood-phase"></b><span class="flood-count" hidden><i aria-hidden="true">•</i><span class="flood-num"></span> <span class="flood-unit">roads</span></span></div>
+      <div class="flood-sub"></div>
+    </div>
+    <div class="flood-city" id="flood-city" hidden></div>
 
     <div class="status-chip" id="search-status" hidden>
       <span class="spinner" aria-hidden="true"></span>

@@ -3,8 +3,8 @@
 import { api } from './api.js';
 import { searchAddress, reverseGeocode, currentPosition } from './geocode.js';
 import { findMeetingPoint, estimateSeconds, SPEEDS } from './meetpoint.js';
-import { GrowthAnimation } from './growth.js';
-import { viaPoints, pickBranches } from './branches.js';
+import { FloodAnimation } from './flood.js';
+import { loadRoads } from './roads.js';
 import { TABS, findPois, groupPois } from './pois.js';
 import { ratingsSource, rateAll, thumbFor, detailsFor } from './rated.js';
 import { openStatus, weekTable } from './hours.js';
@@ -15,7 +15,7 @@ import { MODES, ATTRIBUTION, getDirections, getTravelTimes, navLinks, vehicleNam
 // ---------------------------------------------------------------- constants
 
 const COLORS = ['#007aff', '#ff9500', '#34c759', '#af52de', '#ff3b30', '#30b0c7', '#5856d6', '#ff2d55', '#a2845e', '#8e8e93'];
-const ANIM_MS = { slow: 8000, normal: 5000, fast: 2800 };
+const PACE = { slow: 1.45, normal: 1, fast: 0.6 }; // how long the search animation takes
 const RADII = [500, 1000, 2000, 5000];
 const PRICE = { 'Cheap Eats': '£', 'Mid Range': '££', 'Fine Dining': '£££' };
 const DEFAULT_SETTINGS = { mode: 'similar', travel: 'transit', speed: 'normal', theme: 'auto' };
@@ -63,7 +63,7 @@ const state = {
 };
 const sheet = { snap: 'mid', target: 0 };
 
-let map, baseLayer, peopleLayer, resultLayer, poiLayer, anim, searchAbort, homeSearchCtl;
+let map, baseLayer, peopleLayer, resultLayer, poiLayer, fxLayer, anim, searchAbort, homeSearchCtl;
 
 // ---------------------------------------------------------------- helpers
 
@@ -403,6 +403,7 @@ function initMap() {
   peopleLayer = L.layerGroup().addTo(map);
   resultLayer = L.layerGroup().addTo(map);
   poiLayer = L.layerGroup().addTo(map);
+  fxLayer = L.layerGroup().addTo(map);
 
   // Tap the map to add an address there.
   map.on('click', async (e) => {
@@ -463,7 +464,9 @@ function fitTo(latlngs, { maxZoom = 16, animate = true } = {}) {
   if (!latlngs.length) return;
   const panel = $('#panel');
   const hidden = panel.classList.contains('away');
-  let tl = [40, state.view === 'searching' ? 120 : 80], br = [40, 40];
+  // While searching, the heading sits at the top and the status at the bottom.
+  const searching = state.view === 'searching';
+  let tl = [40, searching ? 130 : 80], br = [40, searching ? 120 : 40];
   if (!hidden) {
     if (isMobile()) br = [30, (sheet.target || panel.offsetHeight) + 24];
     else tl = [panel.offsetWidth + 50, 80];
@@ -726,6 +729,7 @@ function setStatus(text, { skip = false, spinner = true } = {}) {
 function clearSearchVisuals() {
   anim?.destroy();
   anim = null;
+  floodMode(false);
   radiusCircle = null;
   resultLayer?.clearLayers();
   poiLayer?.clearLayers();
@@ -748,47 +752,106 @@ function cancelSearch() {
 const withTimeout = (promise, ms) => Promise.race([promise, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
 const routeMode = (r) => (r?.options ? 'transit' : r?.mode);
 
-/**
- * One person's routes for the race animation: their best route plus other
- * routes that also head to the meeting point (a straight dotted line if there
- * is no route at all). The best route is the one that arrives first.
- */
-function trackFor(person, route, extra, meet, estimate) {
-  const door = [person.lat, person.lon], end = [meet.lat, meet.lon];
-  if (!route) return { color: person.color, best: 0, branches: [{ duration: estimate, pieces: [{ pts: [door, end], t0: 0, t1: estimate, walk: true }] }] };
-  if (route.options) {
-    // Public transport: each journey option is a branch, timed from the earliest departure,
-    // so the one that gets there first (the one shown in directions) wins.
-    const starts = route.options.map((o) => Date.parse(o.start)).filter(Number.isFinite);
-    const base = starts.length ? Math.min(...starts) : NaN;
-    const branches = route.options.map((o) => {
-      const off = Number.isFinite(base) && Number.isFinite(Date.parse(o.start)) ? (Date.parse(o.start) - base) / 1000 : 0;
-      let t = off;
-      const pieces = o.legs.filter((l) => l.geometry.length > 1).map((l) => {
-        const a = Date.parse(l.from.time);
-        const t0 = Number.isFinite(a) && Number.isFinite(base) ? Math.max(t, (a - base) / 1000) : t;
-        t = t0 + l.duration;
-        return { pts: l.geometry, t0, t1: t, walk: isWalkLeg(l) };
-      });
-      if (pieces.length) pieces.unshift({ pts: [door, pieces[0].pts[0]], t0: off, t1: off, walk: true });
-      const endAt = Date.parse(o.end);
-      return { pieces, duration: Number.isFinite(endAt) && Number.isFinite(base) ? Math.max(t, (endAt - base) / 1000) : Math.max(t, off + o.duration) };
-    }).filter((b) => b.pieces.length);
-    if (!branches.length) return trackFor(person, null, [], meet, estimate);
-    return { color: person.color, branches, best: 0 };
+// ------------------------------------------------ the search animation's captions
+
+const STREETISH = /\d|\b(street|st|road|rd|avenue|ave|lane|ln|way|drive|dr|parade|pde|place|pl|terrace|tce|highway|hwy|crescent|cres|close|court|ct|boulevard|blvd|square|sq|row|walk|esplanade)\b/i;
+/** The suburb or area of an address ("12 King St, Newtown, Sydney, …" → "Newtown"). */
+function placeOf(address) {
+  const parts = String(address || '').split(', ').map((x) => x.trim()).filter(Boolean);
+  return parts.slice(1).find((x) => !STREETISH.test(x)) || parts[1] || parts[0] || '';
+}
+/** The town or city of an address: the part before the state and country. */
+const cityOf = (address) => {
+  const parts = String(address || '').split(', ').filter(Boolean);
+  return parts.length >= 4 ? parts[parts.length - 3] : parts.length === 3 ? parts[1] : '';
+};
+/** The city most of the group is in, for the corner of the map. */
+function groupCity(people) {
+  const n = new Map();
+  for (const p of people) { const c = cityOf(p.address); if (c) n.set(c, (n.get(c) || 0) + 1); }
+  return [...n].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+}
+/** A person's name if they have one (no street address: the area instead). */
+const whoOf = (p) => p.nickname || (p.isHome ? 'You' : '');
+const pillText = (p, extra) => (extra ? `${whoOf(p) || placeOf(p.address)} · ${extra}` : [whoOf(p), placeOf(p.address)].filter(Boolean).join(' · '));
+
+/** What the meeting point is near: a park or landmark right there, or the street. */
+function meetName(search) {
+  const d = (p) => haversine(p.lat, p.lon, search.meet.lat, search.meet.lon);
+  const near = (search.pois || []).filter((p) => ['outdoors', 'culture'].includes(p.tab) && d(p) < 250).sort((a, b) => d(a) - d(b))[0];
+  if (near) return near.name;
+  const first = (search.area || '').split(', ')[0].trim();
+  if (!first || /^-?\d+(\.\d+)?$/.test(first)) return 'the middle';
+  return first.replace(/^\d+[a-z]?(-\d+[a-z]?)?\s+/i, '');
+}
+
+let pills = [];
+/** The dark search map on or off: heading, the city's name, name tags over everyone. */
+function floodMode(on, people = []) {
+  $('#screen-main').classList.toggle('flooding', on);
+  fxLayer?.clearLayers();
+  pills = on ? people.map((p) => L.marker([p.lat, p.lon], {
+    icon: L.divIcon({ className: 'flood-pill-icon', html: `<span class="flood-pill" style="--c:${p.color}">${esc(pillText(p))}</span>`, iconSize: [0, 0], iconAnchor: [0, 0] }),
+    interactive: false, keyboard: false, zIndexOffset: 2000,
+  }).addTo(fxLayer)) : [];
+  const city = on ? groupCity(people) : '';
+  $('#flood-city').hidden = !city;
+  $('#flood-city').textContent = city;
+  if (!on) setHud({ phase: null });
+}
+function setPill(i, text) {
+  const el = pills[i]?.getElement()?.querySelector('.flood-pill');
+  if (el) el.textContent = text;
+}
+
+/** The heading over the search map. Leave a field out to keep it; phase null hides it. */
+function setHud({ phase, intro, count, sub } = {}) {
+  const h = $('#flood-hud');
+  if (phase === null) { h.hidden = true; return; }
+  h.hidden = false;
+  if (phase !== undefined) $('.flood-phase', h).textContent = phase;
+  if (intro !== undefined) h.classList.toggle('intro', intro);
+  if (count !== undefined) {
+    $('.flood-count', h).hidden = count == null;
+    if (count != null) $('.flood-num', h).textContent = count.toLocaleString('en');
   }
-  // Walk, bike, drive: the best route, the routing service's alternatives and
-  // routes through points to either side, keeping those that head to the meeting point.
-  const walk = person.mode === 'walk';
-  const branch = (r, minDuration = 0) => ({
-    geometry: r.geometry,
-    duration: Math.max(r.duration, minDuration),
-    pieces: [{ pts: [door, ...r.geometry, end], t0: 0, t1: Math.max(r.duration, minDuration), walk }],
-  });
-  const main = branch(route);
-  // Nothing may beat the best route: a side route can't be quicker in reality.
-  const others = [...(route.alternatives || []), ...(extra || [])].map((r) => branch(r, route.duration + 1));
-  return { color: person.color, branches: pickBranches(main, others, { target: meet }), best: 0 };
+  if (sub !== undefined) $('.flood-sub', h).textContent = sub;
+}
+
+/** The streets the animation floods: what's on screen and a little more. */
+function streetsArea() {
+  const b = map.getBounds().pad(0.08);
+  return { s: b.getSouth(), w: b.getWest(), n: b.getNorth(), e: b.getEast() };
+}
+
+/** A trip's length in seconds: the route's, else the estimate the meeting point came with. */
+const tripSeconds = (route, estimate) => (route?.options ? route.options[0]?.duration : route?.duration) ?? estimate;
+
+/**
+ * One person's route for the animation, timed in seconds after setting off
+ * (a straight dotted line if there is no route at all).
+ */
+function trackFor(person, route, meet, estimate) {
+  const door = [person.lat, person.lon], end = [meet.lat, meet.lon];
+  const base = { color: person.color, initial: initial(person.name) };
+  const straight = { ...base, duration: estimate, pieces: [{ pts: [door, end], t0: 0, t1: estimate, walk: true }] };
+  if (!route) return straight;
+  if (route.options) {
+    // Public transport: the journey shown in directions, each leg at its real times.
+    const o = route.options[0];
+    const t00 = Date.parse(o?.start);
+    let t = 0;
+    const pieces = (o?.legs || []).filter((l) => l.geometry.length > 1).map((l) => {
+      const a = Date.parse(l.from.time);
+      const t0 = Number.isFinite(a) && Number.isFinite(t00) ? Math.max(t, (a - t00) / 1000) : t;
+      t = t0 + l.duration;
+      return { pts: l.geometry, t0, t1: t, walk: isWalkLeg(l) };
+    });
+    if (!pieces.length) return straight;
+    pieces.unshift({ pts: [door, pieces[0].pts[0]], t0: 0, t1: 0, walk: true });
+    return { ...base, pieces, duration: Math.max(t, o.duration || 0) };
+  }
+  return { ...base, duration: route.duration, pieces: [{ pts: [door, ...route.geometry, end], t0: 0, t1: route.duration, walk: person.mode === 'walk' }] };
 }
 
 async function findPlaces({ replay = false } = {}) {
@@ -801,58 +864,88 @@ async function findPlaces({ replay = false } = {}) {
   clearSearchVisuals();
   setView('searching');
   fitTo(people.map((p) => [p.lat, p.lon]), { maxZoom: 16, animate: false });
+  const rule = prev?.rule || (state.settings.mode === 'total' ? 'total' : 'similar');
+  const fx = anim = new FloodAnimation(map, { people, pace: PACE[state.settings.speed] || PACE.normal });
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) fx.skip();
+  const live = () => !ctrl.signal.aborted && anim === fx;
+  floodMode(true, people);
+  const status = (text) => setStatus(text, { skip: true });
 
   try {
-    // 1. The fairest spot, from real travel times (a few small requests).
-    const meeting = prev ? prev.meeting : await findMeetingPoint(people, {
-      rule: state.settings.mode === 'total' ? 'total' : 'similar', travelTimes: getTravelTimes, directions: getDirections, signal: ctrl.signal,
-      onStatus: (t) => setStatus(t),
+    // Started together: the fairest spot (a few small requests to the routing
+    // service) and the streets, which flood one person at a time meanwhile.
+    const meetingP = prev ? Promise.resolve(prev.meeting) : findMeetingPoint(people, {
+      rule, travelTimes: getTravelTimes, directions: getDirections, signal: ctrl.signal, onStatus: status,
     });
-    if (ctrl.signal.aborted) return;
+    meetingP.catch(() => {});
+    const roadsP = withTimeout(loadRoads(streetsArea(), { signal: ctrl.signal }), 8000).catch(() => null);
+    status(prev ? 'Replaying the search' : 'Finding the fairest spot…');
+    setHud({ phase: `Where should ${people.length} friends meet?`, intro: true, count: null, sub: '' });
+    if (!(await fx.intro())) return;
+    const roads = await roadsP;
+    if (!live()) return;
+    fx.setRoads(roads);
+    const ok1 = await fx.oneByOne({
+      // The count carries on from one search to the next.
+      onSearch: (i) => setHud({ phase: 'One by one', intro: false, ...(i === 0 ? { count: 0 } : {}), sub: `Search ${i + 1} of ${people.length} · ${whoOf(people[i]) || placeOf(people[i].address)}` }),
+      onRoads: (n) => setHud({ count: n }),
+    });
+    if (!ok1 || !live()) return;
+
+    const meeting = await meetingP;
+    if (!live()) return;
     const meet = meeting.meet;
     if (!Number.isFinite(meet?.lat) || !Number.isFinite(meet?.lon)) throw new Error('Couldn’t place a meeting point. Try again, or move someone’s pin.');
+    // Keep the meeting point in view (it can lie a little outside the group).
+    if (!map.getBounds().pad(-0.06).contains([meet.lat, meet.lon])) fitTo([...people.map((p) => [p.lat, p.lon]), [meet.lat, meet.lon]], { maxZoom: 16, animate: false });
     const search = state.search = {
-      people, meeting, meet, routes: prev?.routes || null, extras: prev?.extras || null,
-      rule: prev?.rule || (state.settings.mode === 'total' ? 'total' : 'similar'),
+      people, meeting, meet, routes: prev?.routes || null, rule,
       pois: prev?.pois || null, grouped: prev?.grouped || null, radius: prev?.radius || null, tab: prev?.tab || null,
       group: null, place: null, area: prev?.area || null, poiError: prev?.poiError || null, sort: prev?.sort, showRadius: prev?.showRadius,
     };
 
-    // 2. Places and the area's name load while the routes come in and animate.
+    // Places, the area's name and everyone's route load while the floods meet.
     const poisPromise = prev?.pois ? Promise.resolve() : loadPois(search, ctrl.signal);
-    if (!search.area) {
-      reverseGeocode(meet.lat, meet.lon, { signal: ctrl.signal })
-        .then((r) => { search.area = r.address; if (state.view === 'results') render({ keepScroll: true }); })
-        .catch(() => {});
-    }
-
-    // 3. Everyone's real route there, plus other routes that also head there
-    //    (through points to either side), all asked for at once.
-    if (!search.routes) {
-      setStatus('Finding everyone’s routes…');
-      const ask = (p, opts, ms) => withTimeout(getDirections(p.mode, p, meet, { ...opts, signal: ctrl.signal }), ms).catch(() => null);
-      [search.routes, search.extras] = await Promise.all([
-        Promise.all(people.map((p) => ask(p, { alternatives: true }, 10000))),
-        Promise.all(people.map((p) => (p.mode === 'transit' ? []
-          : Promise.all(viaPoints(p, meet).map((via) => ask(p, { via }, 7000))).then((rs) => rs.filter(Boolean))))),
-      ]);
-      if (ctrl.signal.aborted) return;
-    }
-    const tracks = people.map((p, i) => trackFor(p, search.routes[i], search.extras?.[i], meet, meeting.times[i]));
-    anim = new GrowthAnimation(map, tracks);
-    const tried = anim.branchCount;
-    const done = await anim.play({
-      duration: ANIM_MS[state.settings.speed] || ANIM_MS.normal,
-      onProgress: (sec, total) => setStatus(sec >= total
-        ? 'Picked the quickest routes'
-        : `Racing ${tried} routes · ${fmtTime(Math.max(1, Math.round(sec / 60)))}`, { skip: sec < total }),
+    const areaP = search.area ? Promise.resolve() : reverseGeocode(meet.lat, meet.lon, { signal: ctrl.signal })
+      .then((r) => { search.area = r.address; if (state.view === 'results') render({ keepScroll: true }); })
+      .catch(() => {});
+    const routesP = search.routes ? Promise.resolve(search.routes)
+      : Promise.all(people.map((p) => withTimeout(getDirections(p.mode, p, meet, { signal: ctrl.signal }), 10000).catch(() => null)));
+    status('Finding everyone’s routes…');
+    const ok2 = await fx.allAtOnce(meet, {
+      onProgress: (t) => setHud({
+        phase: 'All at once', intro: false,
+        sub: t < 0.5 ? `All ${people.length} set off together` : 'The floods meet',
+      }),
+      onRoads: (n) => setHud({ count: n }),
     });
-    if (!done || ctrl.signal.aborted) return;
+    if (!ok2 || !live()) return;
+    search.routes = await routesP;
+    // The meeting point's name, if it comes soon.
+    await Promise.race([areaP, new Promise((r) => setTimeout(r, 1200))]);
+    if (!live()) return;
 
-    L.marker([meet.lat, meet.lon], {
+    // The meeting point, then everyone travels there along their route.
+    const name = meetName(search);
+    const pin = L.marker([meet.lat, meet.lon], {
       icon: L.divIcon({ className: '', html: '<div class="meet-dot"></div>', iconSize: [22, 22], iconAnchor: [11, 11] }),
       zIndexOffset: 1000,
-    }).bindTooltip('Meeting point', { permanent: true, direction: 'top', className: 'label', offset: [0, -14] }).addTo(resultLayer);
+    }).bindTooltip(esc(name === 'the middle' ? 'Meeting point' : name), { permanent: true, direction: 'bottom', className: 'label meet-label', offset: [0, 14] }).addTo(resultLayer);
+    const times = people.map((p, i) => tripSeconds(search.routes[i], meeting.times[i]));
+    setHud({ phase: fx.net ? 'All at once' : 'Found it', intro: false, sub: `Longest trip: ${mins(Math.max(...times))}` });
+    status('Found the fairest spot');
+    const tracks = people.map((p, i) => trackFor(p, search.routes[i], meet, meeting.times[i]));
+    const ok3 = await fx.reveal(meet, tracks, {
+      onArrive: () => {
+        setHud({ sub: `Meet near ${name}` });
+        people.forEach((p, i) => setPill(i, pillText(p, mins(times[i]))));
+      },
+    });
+    if (!ok3 || !live()) return;
+    floodMode(false);
+    setStatus('');
+    if (!(await fx.outro()) || !live()) return;
+    pin.unbindTooltip().bindTooltip('Meeting point', { permanent: true, direction: 'top', className: 'label', offset: [0, -14] });
 
     setStatus('Finding places nearby…');
     await poisPromise;

@@ -37,6 +37,8 @@ app = replaceOnce(app, 'map.attributionControl.setPrefix(false);', "map.attribut
 app = replaceOnce(app, '      <button class="btn btn-tinted" data-action="calendar">Calendar</button>\n', '', 'calendar button');
 // The test version has no timetables, so start on walking directions.
 app = replaceOnce(app, "const DEFAULT_SETTINGS = { mode: 'similar', travel: 'transit',", "const DEFAULT_SETTINGS = { mode: 'similar', travel: 'walk',", 'default travel mode');
+// Every address here is in Sydney (the test version's addresses don't name the city).
+app = replaceOnce(app, "const cityOf = (address) => {", "const cityOf = () => 'Sydney'; const cityOfAddress = (address) => {", 'city name');
 // Directions come from the streets built into the page, not the real routing services.
 app = app.replace(/ {2}map\.attributionControl\.addAttribution\(`Routes[^\n]*\n/, '');
 app = replaceOnce(app, '    <p class="footnote attrib">${credits}</p>',
@@ -83,8 +85,7 @@ const modules = [
   ['geo', 'public/js/geo.js'],
   ['graph', 'public/js/graph.js'],
   ['meetpoint', 'public/js/meetpoint.js'],
-  ['growth', 'public/js/growth.js'],
-  ['branches', 'public/js/branches.js'],
+  ['flood', 'public/js/flood.js'],
   ['pois', 'public/js/pois.js'],
   ['hours', 'public/js/hours.js'],
   ['rated', 'public/js/rated.js'],
@@ -104,6 +105,7 @@ js += `// ---- test-mode wiring: local stand-ins for the server and map services
   __m.rated = { ...__m.rated, ...d.rated };
   __m.pois = { ...__m.pois, findPois: d.findPois };
   __m.directions = { ...__m.directions, getDirections: d.directions, getTravelTimes: d.travelTimes };
+  __m.roads = { loadRoads: d.roads };
 })();
 `;
 js += wrapModule('api', read('public/js/api.js'));
@@ -125,7 +127,7 @@ document.getElementById('demo-sample').addEventListener('click', async (e) => {
 if (js.includes('</script')) throw new Error('build-test: script contains </script');
 
 const out = `<title>Meet</title>
-<meta name="description" content="Find a fair place to meet: routes grow from every friend's address and meet in the middle.">
+<meta name="description" content="Find a fair place to meet: the streets flood out from every friend's address and meet in the middle.">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <style>
 ${css}

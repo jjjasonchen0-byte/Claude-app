@@ -1,6 +1,6 @@
-// A compact road graph and shortest paths. Only the offline test town uses
-// this now: the real app asks routing services for travel times instead of
-// downloading the streets.
+// A compact road graph and shortest paths: the test version's routing, and
+// the streets the search animation floods in both versions (the real app's
+// meeting point and routes come from routing services).
 import { haversine } from './geo.js';
 
 /** Small deterministic PRNG (mulberry32). */
@@ -75,13 +75,15 @@ class Heap {
 
 /**
  * Dijkstra from `start`: { dist, parent }. With `allowed` (a 256-entry table
- * indexed by edge kind), streets whose kind is not allowed are skipped.
+ * indexed by edge kind), streets whose kind is not allowed are skipped. With
+ * `cost` (also by edge kind), each street's length is multiplied by its kind's
+ * cost, for example seconds per metre.
  */
-export function dijkstra(g, start, allowed = null) {
+export function dijkstra(g, start, allowed = null, cost = null) {
   const dist = new Float64Array(g.n).fill(Infinity);
   const parent = new Int32Array(g.n).fill(-1);
   const heap = new Heap();
-  const kinds = allowed && g.adjKind;
+  const kinds = (allowed || cost) && g.adjKind;
   dist[start] = 0;
   heap.push(0, start);
   while (heap.size) {
@@ -89,9 +91,9 @@ export function dijkstra(g, start, allowed = null) {
     const du = heap.lastKey;
     if (du > dist[u]) continue;
     for (let e = g.adjStart[u]; e < g.adjStart[u + 1]; e++) {
-      if (kinds && !allowed[kinds[e]]) continue;
+      if (allowed && kinds && !allowed[kinds[e]]) continue;
       const v = g.adjNode[e];
-      const nd = du + g.adjLen[e];
+      const nd = du + (cost && kinds ? g.adjLen[e] * cost[kinds[e]] : g.adjLen[e]);
       if (nd < dist[v]) { dist[v] = nd; parent[v] = u; heap.push(nd, v); }
     }
   }

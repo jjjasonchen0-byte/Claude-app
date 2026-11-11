@@ -480,6 +480,21 @@ export async function travelTimes(mode, sources, destinations) {
   return { durations, distances, destinations: targets.map((t) => (t >= 0 ? [g.lat[t], g.lon[t]] : null)) };
 }
 
+/** The streets in an area ({ s, w, n, e }) for the search animation, without footpaths (like the real app's). */
+export async function roads(b) {
+  const c = ensure();
+  const g = c.graph;
+  const id = new Int32Array(g.n).fill(-1);
+  const lat = [], lon = [], A = [], B = [], kinds = [];
+  const inside = (i) => g.lat[i] >= b.s && g.lat[i] <= b.n && g.lon[i] >= b.w && g.lon[i] <= b.e;
+  const node = (i) => { if (id[i] < 0) { id[i] = lat.length; lat.push(g.lat[i]); lon.push(g.lon[i]); } return id[i]; };
+  for (let k = 0; k < c.A.length; k++) {
+    if ((c.kinds[k] & 7) === 7 || (!inside(c.A[k]) && !inside(c.B[k]))) continue;
+    A.push(node(c.A[k])); B.push(node(c.B[k])); kinds.push(c.kinds[k]);
+  }
+  return { lat: Float64Array.from(lat), lon: Float64Array.from(lon), A: Int32Array.from(A), B: Int32Array.from(B), kinds: Uint8Array.from(kinds) };
+}
+
 /** A ready-made group: you in Newtown, friends in Pyrmont, Paddington and across the bridge in North Sydney. */
 export function sampleGroup() {
   const at = (lat, lon) => { const a = nearestAddress(lat, lon, 400); return a ? { address: fmtAddress(a), lat: a.lat, lon: a.lon } : { address: `${ensure().hood(lat, lon)} NSW`, lat, lon }; };

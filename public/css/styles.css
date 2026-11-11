@@ -216,9 +216,55 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .spinner { width: 16px; height: 16px; border-radius: 50%; border: 2.5px solid var(--accent-tint); border-top-color: var(--accent); animation: spin 0.8s linear infinite; flex: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.growth-canvas { position: absolute; inset: 0; z-index: 450; pointer-events: none; transform-origin: 0 0; transition: opacity 0.3s; }
+.growth-canvas { position: absolute; left: 0; top: 0; z-index: 450; pointer-events: none; transform-origin: 0 0; transition: opacity 0.3s; }
 .growth-canvas.zooming { transition: transform 0.25s cubic-bezier(0, 0, 0.25, 1), opacity 0.3s; }
 .growth-canvas.dim { opacity: 0.25; }
+
+/* ---------------------------------------------------------------- search animation: the dark flood map */
+.flood-layer { position: absolute; pointer-events: none; transition: opacity 0.6s; }
+.flood-base { z-index: 447; opacity: 0; }
+.flood-base.on { opacity: 1; }
+.flood-fill { z-index: 448; transition: opacity 0.25s; }
+.topbar { transition: opacity 0.3s; }
+#screen-main.flooding .topbar { opacity: 0; pointer-events: none; }
+#screen-main.flooding .topbar > * { pointer-events: none; }
+.flood-hud {
+  position: absolute; z-index: 1001; top: calc(14px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%);
+  width: min(calc(100vw - 24px), 680px); text-align: center; pointer-events: none; color: #fff; animation: hud-in 0.45s ease both;
+}
+.flood-title { display: flex; justify-content: center; align-items: baseline; flex-wrap: wrap; column-gap: 12px; font: 800 clamp(27px, 7.6vw, 42px)/1.1 var(--font-display); letter-spacing: -0.025em; }
+.flood-phase { background: linear-gradient(90deg, #ff2d95, #ff52d9); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.flood-hud.intro .flood-phase { background-image: linear-gradient(90deg, #2ee6f5, #8f6bff); font-size: clamp(24px, 6.6vw, 38px); }
+.flood-count { white-space: nowrap; font: 700 clamp(21px, 5.8vw, 31px)/1 ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace; color: #ff3fa4; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.flood-count i { font: 700 0.7em/1 var(--font); font-style: normal; color: rgba(255, 255, 255, 0.5); margin-right: 10px; vertical-align: 0.15em; }
+.flood-unit { font: 600 clamp(15px, 4.3vw, 22px)/1 var(--font); color: #a1a1aa; letter-spacing: 0; }
+.flood-sub { margin-top: 7px; min-height: 1.3em; font: 700 clamp(15px, 4.3vw, 19px)/1.3 var(--font); text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8); }
+.flood-city {
+  position: absolute; z-index: 1001; left: 50%; transform: translateX(-50%); bottom: calc(74px + env(safe-area-inset-bottom, 0px));
+  color: #fff; font: 800 19px/1 var(--font-display); letter-spacing: 0.34em; padding-left: 0.34em; text-transform: uppercase; pointer-events: none; white-space: nowrap;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9); animation: hud-in 0.6s ease both;
+}
+@keyframes hud-in { from { opacity: 0; } }
+#screen-main.flooding .status-chip {
+  top: auto; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); background: rgba(24, 24, 28, 0.86); color: #fff; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+#screen-main.flooding .chip-btn { background: rgba(255, 255, 255, 0.13); color: #fff; }
+#screen-main.flooding .chip-btn:first-of-type { background: rgba(255, 63, 164, 0.22); color: #ff9ad0; }
+#screen-main.flooding .spinner { border-color: rgba(255, 255, 255, 0.2); border-top-color: #fff; }
+/* Everyone as a glowing ring with their name tag; the meeting point keeps its label. */
+.flooding .avatar-pin {
+  background: #0b0b10; color: color-mix(in srgb, var(--c) 70%, #fff); border-color: color-mix(in srgb, var(--c) 78%, #fff);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--c) 75%, transparent), 0 0 0 2px rgba(0, 0, 0, 0.55);
+}
+.flooding .avatar-pin::after { border-top-color: color-mix(in srgb, var(--c) 78%, #fff); }
+.flooding .leaflet-tooltip.label:not(.meet-label) { display: none; }
+.flooding .leaflet-tooltip.meet-label { background: #fff; color: #111; font-size: 13px; font-weight: 700; padding: 4px 10px; border-radius: 6px; box-shadow: 0 0 14px rgba(255, 255, 255, 0.35); }
+.flood-pill-icon { width: 0; height: 0; }
+.flood-pill {
+  position: absolute; left: 0; bottom: 56px; transform: translateX(-50%); white-space: nowrap; padding: 3px 8px; border-radius: 6px;
+  border: 1.5px solid color-mix(in srgb, var(--c) 80%, #fff); background: rgba(8, 8, 12, 0.88); color: color-mix(in srgb, var(--c) 45%, #fff);
+  font: 700 12.5px/1.25 var(--font); box-shadow: 0 0 12px color-mix(in srgb, var(--c) 50%, transparent); animation: hud-in 0.4s ease both;
+}
 
 /* ---------------------------------------------------------------- inset grouped lists */
 .sheet-title { display: flex; align-items: center; gap: 12px; margin: 2px 4px 14px; }

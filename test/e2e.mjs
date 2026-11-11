@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
+import { encodeTile } from './helpers/mvt-encode.mjs';
 
 // Use a local Playwright if installed, else a global one (via NODE_PATH).
 const { chromium } = await import('playwright').catch(() => createRequire(import.meta.url)('playwright'));
@@ -26,26 +27,20 @@ const ADDRESSES = {
 };
 const feature = (a) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [a.lon, a.lat] }, properties: { name: a.name, city: a.city, country: 'United Kingdom' } });
 
-function roadNetwork(query) {
-  const [s, w, n, e] = query.match(/\(([-\d.]+),([-\d.]+),([-\d.]+),([-\d.]+)\)/).slice(1).map(Number);
-  const els = [];
-  const rows = 70, cols = 90;
-  let id = 1;
-  const ids = [];
-  for (let r = 0; r <= rows; r++) {
-    ids.push([]);
-    for (let c = 0; c <= cols; c++) {
-      const jitter = Math.sin(r * 12.9898 + c * 78.233) * 0.3;
-      els.push({ type: 'node', id, lat: s + ((r + jitter) / rows) * (n - s), lon: w + ((c - jitter) / cols) * (e - w) });
-      ids[r].push(id++);
-    }
+// Map tiles for the search animation's streets: a slightly wavy grid in every tile,
+// with a main road every fourth street. Streets run edge to edge so tiles join up.
+const STREET_TILE = (() => {
+  const lines = [];
+  for (let k = 0; k <= 16; k++) {
+    const at = k * 256;
+    const props = { class: k % 4 === 0 ? 'primary' : 'minor' };
+    // Straight where they cross a tile edge, so they meet the next tile's streets.
+    const wave = (i) => (k % 16 ? Math.round(Math.sin((i / 16) * Math.PI * (2 + (k % 3))) * 40) : 0);
+    lines.push({ props, lines: [Array.from({ length: 17 }, (_, i) => [i * 256, at + wave(i)])] });
+    lines.push({ props, lines: [Array.from({ length: 17 }, (_, i) => [at - wave(i), i * 256])] });
   }
-  let wid = 1;
-  for (let r = 0; r <= rows; r++) els.push({ type: 'way', id: wid++, nodes: ids[r] });
-  for (let c = 0; c <= cols; c++) if (c % 2 === 0 || c % 7 === 3) els.push({ type: 'way', id: wid++, nodes: ids.map((row) => row[c]) });
-  for (let k = 0; k < 12; k++) els.push({ type: 'way', id: wid++, nodes: ids.slice(0, 50).map((row, r) => row[Math.min(cols, k * 8 + r)]) });
-  return { elements: els };
-}
+  return Buffer.from(encodeTile({ transportation: lines }));
+})();
 
 function pois(query) {
   const [lat, lon] = query.match(/around:\d+,([-\d.]+),([-\d.]+)/).slice(1).map(Number);
@@ -76,7 +71,14 @@ const TILE = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAQAAAAEAAQMAAABmvDolAAAAA1BMVE
 const browser = await chromium.launch();
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 820 }, deviceScaleFactor: 1 });
 // The base map: a plain stand-in style for the vector map (and tiles for the no-WebGL fallback).
-await ctx.route('https://tiles.openfreemap.org/**', (r) => r.fulfill({ json: { version: 8, sources: {}, layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#eeece8' } }] } }));
+// The same tiles give the search animation its streets.
+let streetTiles = 0;
+await ctx.route('https://tiles.openfreemap.org/**', (r) => {
+  const url = r.request().url();
+  if (url.endsWith('/planet')) return r.fulfill({ json: { tiles: ['https://tiles.openfreemap.org/planet/test/{z}/{x}/{y}.pbf'] } });
+  if (url.endsWith('.pbf')) { streetTiles++; return r.fulfill({ body: STREET_TILE, contentType: 'application/x-protobuf' }); }
+  return r.fulfill({ json: { version: 8, sources: {}, layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#eeece8' } }] } });
+});
 await ctx.route('https://tile.openstreetmap.org/**', (r) => r.fulfill({ body: TILE, contentType: 'image/png' }));
 await ctx.route('https://photon.komoot.io/**', (r) => {
   const u = new URL(r.request().url());
@@ -106,7 +108,7 @@ await ctx.route('**/api/traveltimes?**', (r) => {
 await ctx.route(/overpass/, async (r) => {
   const q = new URLSearchParams(r.request().postData()).get('data');
   await new Promise((res) => setTimeout(res, 150));
-  return r.fulfill({ json: q.includes('highway') ? roadNetwork(q) : pois(q) });
+  return r.fulfill({ json: pois(q) });
 });
 
 const page = await ctx.newPage();
@@ -141,12 +143,25 @@ try {
   await shot('03-people');
   assert.equal(await page.locator('.person').count(), 3);
 
-  // Find places → animation
+  // Find places → the search animation: each person's flood on its own, then all at once, then the routes.
   await page.click('[data-action=find]');
   await page.waitForSelector('.growth-canvas');
-  await page.waitForTimeout(2600);
-  await shot('04-growing');
-  await page.waitForSelector('.panel:not(.away) .pills', { timeout: 20000 });
+  await page.waitForFunction(() => /One by one/.test(document.querySelector('#flood-hud .flood-phase')?.textContent)
+    && Number(document.querySelector('#flood-hud .flood-num').textContent.replace(/,/g, '')) > 0, null, { timeout: 15000 });
+  assert.ok(streetTiles > 0, 'streets came from the map tiles');
+  assert.equal(await page.locator('.flood-pill').count(), 3, 'a name tag over everyone');
+  assert.match(await page.textContent('.flood-pill >> nth=1'), /^Sam · /);
+  await page.waitForTimeout(700);
+  await shot('04-one-by-one');
+  await page.waitForFunction(() => /All at once/.test(document.querySelector('#flood-hud .flood-phase')?.textContent), null, { timeout: 20000 });
+  await page.waitForTimeout(1500);
+  await shot('04b-all-at-once');
+  await page.waitForFunction(() => /Meet near/.test(document.querySelector('#flood-hud .flood-sub')?.textContent), null, { timeout: 20000 });
+  await page.waitForTimeout(800);
+  await shot('04c-meet');
+  await page.waitForSelector('.panel:not(.away) .pills', { timeout: 30000 });
+  assert.equal(await page.locator('.flood-base').count(), 0, 'the dark map is gone');
+  assert.equal(await page.locator('#screen-main.flooding').count(), 0);
   await page.waitForTimeout(700);
   await shot('05-results');
   // Edit people sits right under the people; there is no "Surprise me" any more.
@@ -243,6 +258,7 @@ try {
   await page.waitForSelector('.growth-canvas');
   await page.waitForTimeout(3000);
   await shot('10-two-people-growing');
+  await page.click('#btn-skip');
   await page.waitForSelector('.panel:not(.away) .pills', { timeout: 20000 });
   assert.equal(await page.locator('.panel .trip').count(), 2, 'two travellers');
   await page.waitForTimeout(600);
@@ -252,7 +268,7 @@ try {
   await page.click('#btn-menu');
   await page.click('#set-mode [data-value=total]');
   await page.waitForSelector('#drawer', { state: 'hidden' });
-  await page.waitForFunction(() => /Least total travel/.test(document.querySelector('.panel:not(.away) .result-head .eyebrow')?.textContent || ''), null, { timeout: 30000 });
+  await page.waitForFunction(() => /Least total travel/.test(document.querySelector('.panel:not(.away) .result-head .eyebrow')?.textContent || ''), null, { timeout: 45000 });
 
   // Mobile layout check
   await page.setViewportSize({ width: 390, height: 844 });
