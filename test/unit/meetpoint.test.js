@@ -123,3 +123,32 @@ test('the spot snapped onto a road by the routing service becomes the meeting po
   const r = await findMeetingPoint(london, { travelTimes });
   assert.ok(returned.has(`${r.meet.lat},${r.meet.lon}`));
 });
+
+test('someone the routing service cannot route from is estimated, not a dead end for the group', async () => {
+  const { travelTimes: base } = fakeRouter();
+  // The second person's streets don't join anyone else's: every time comes back empty.
+  const travelTimes = async (mode, sources, destinations) => {
+    const t = await base(mode, sources, destinations);
+    const k = sources.findIndex((s) => s.lat === london[1].lat);
+    if (k >= 0) { t.durations[k] = t.durations[k].map(() => null); t.distances[k] = t.distances[k].map(() => null); }
+    return t;
+  };
+  const r = await findMeetingPoint(london, { travelTimes });
+  assert.equal(r.approx, true, 'marked as an estimate');
+  assert.ok(r.times.every((t) => Number.isFinite(t) && t > 0));
+});
+
+test('groups whose streets do not join at all still get a spot, marked as an estimate', async () => {
+  const { travelTimes: base } = fakeRouter();
+  // Each person can only reach spots on their own side of a line (like two islands).
+  const travelTimes = async (mode, sources, destinations) => {
+    const t = await base(mode, sources, destinations);
+    sources.forEach((s, k) => destinations.forEach((d, j) => {
+      if ((s.lon < -0.12) !== (d.lon < -0.12)) { t.durations[k][j] = null; t.distances[k][j] = null; }
+    }));
+    return t;
+  };
+  const r = await findMeetingPoint(london, { travelTimes });
+  assert.equal(r.approx, true);
+  assert.ok(Number.isFinite(r.meet.lat) && r.times.every(Number.isFinite));
+});

@@ -1781,15 +1781,33 @@ async function evaluate(people, cands, { travelTimes, signal }) {
     } catch (err) {
       if (signal?.aborted) throw err;
       approx = true;
-      for (const pi of idx) {
-        cands.forEach((c, j) => {
-          const m = haversine(people[pi].lat, people[pi].lon, c.lat, c.lon);
-          dists[pi][j] = m * DETOUR;
-          times[pi][j] = estimateSeconds(people[pi].mode, m);
-        });
-      }
+      for (const pi of idx) estimate(pi);
     }
   }));
+  // Someone the routing service can't route from at all (their address isn't
+  // joined to the others' streets for their way of travelling): estimate
+  // their trips from distance rather than give up on the whole group.
+  function estimate(pi) {
+    cands.forEach((c, j) => {
+      const m = haversine(people[pi].lat, people[pi].lon, c.lat, c.lon);
+      dists[pi][j] = m * DETOUR;
+      times[pi][j] = estimateSeconds(people[pi].mode, m);
+    });
+  }
+  people.forEach((_, pi) => {
+    if (times[pi].every((t) => t == null)) { estimate(pi); approx = true; }
+  });
+  // And if no spot is reachable by everyone (say, two people on streets that
+  // don't join up), fill the gaps with estimates too.
+  if (!cands.some((_, j) => times.every((row) => row[j] != null))) {
+    people.forEach((p, pi) => cands.forEach((c, j) => {
+      if (times[pi][j] != null) return;
+      const m = haversine(p.lat, p.lon, c.lat, c.lon);
+      dists[pi][j] = m * DETOUR;
+      times[pi][j] = estimateSeconds(p.mode, m);
+      approx = true;
+    }));
+  }
   const points = cands.map((c, j) => (snapped?.[j] ? { lat: snapped[j][0], lon: snapped[j][1] } : { lat: c.lat, lon: c.lon }));
   return points.map((pt, j) => ({ ...pt, times: times.map((row) => row[j]), dists: dists.map((row) => row[j]), approx }));
 }
@@ -3198,11 +3216,26 @@ function ensure() {
   const edgeName = Int32Array.from(unpackInts(SYDNEY.edgeNames));
   const graph = fromEdgeList(lat, lon, A, B, kinds);
 
-  // Which corners each way of travelling can start from (bit 1: on foot or bike, bit 2: by car).
+  // Which corners each way of travelling can start from (bit 1: on foot or
+  // bike, bit 2: by car): only those in that way's largest connected network.
+  // A lane reachable only through a motorway tunnel, or a car park joined to
+  // the streets only by a footpath, would otherwise be a dead end.
   const reach = new Uint8Array(n);
-  for (let k = 0; k < m; k++) {
-    const bits = (ALLOWED.walk[kinds[k]] ? 1 : 0) | (ALLOWED.drive[kinds[k]] ? 2 : 0);
-    reach[A[k]] |= bits; reach[B[k]] |= bits;
+  for (const [bit, allowed] of [[1, ALLOWED.walk], [2, ALLOWED.drive]]) {
+    const parent = Int32Array.from({ length: n }, (_, i) => i);
+    const find = (i) => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
+    const touched = new Uint8Array(n);
+    for (let k = 0; k < m; k++) {
+      if (!allowed[kinds[k]]) continue;
+      touched[A[k]] = touched[B[k]] = 1;
+      const ra = find(A[k]), rb = find(B[k]);
+      if (ra !== rb) parent[ra] = rb;
+    }
+    const size = new Map();
+    for (let i = 0; i < n; i++) if (touched[i]) { const r = find(i); size.set(r, (size.get(r) || 0) + 1); }
+    let main = -1, best = 0;
+    for (const [r, s] of size) if (s > best) { best = s; main = r; }
+    for (let i = 0; i < n; i++) if (touched[i] && find(i) === main) reach[i] |= bit;
   }
   const nodeGrid = new Map();
   for (let i = 0; i < n; i++) {

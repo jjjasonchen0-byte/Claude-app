@@ -100,15 +100,33 @@ async function evaluate(people, cands, { travelTimes, signal }) {
     } catch (err) {
       if (signal?.aborted) throw err;
       approx = true;
-      for (const pi of idx) {
-        cands.forEach((c, j) => {
-          const m = haversine(people[pi].lat, people[pi].lon, c.lat, c.lon);
-          dists[pi][j] = m * DETOUR;
-          times[pi][j] = estimateSeconds(people[pi].mode, m);
-        });
-      }
+      for (const pi of idx) estimate(pi);
     }
   }));
+  // Someone the routing service can't route from at all (their address isn't
+  // joined to the others' streets for their way of travelling): estimate
+  // their trips from distance rather than give up on the whole group.
+  function estimate(pi) {
+    cands.forEach((c, j) => {
+      const m = haversine(people[pi].lat, people[pi].lon, c.lat, c.lon);
+      dists[pi][j] = m * DETOUR;
+      times[pi][j] = estimateSeconds(people[pi].mode, m);
+    });
+  }
+  people.forEach((_, pi) => {
+    if (times[pi].every((t) => t == null)) { estimate(pi); approx = true; }
+  });
+  // And if no spot is reachable by everyone (say, two people on streets that
+  // don't join up), fill the gaps with estimates too.
+  if (!cands.some((_, j) => times.every((row) => row[j] != null))) {
+    people.forEach((p, pi) => cands.forEach((c, j) => {
+      if (times[pi][j] != null) return;
+      const m = haversine(p.lat, p.lon, c.lat, c.lon);
+      dists[pi][j] = m * DETOUR;
+      times[pi][j] = estimateSeconds(p.mode, m);
+      approx = true;
+    }));
+  }
   const points = cands.map((c, j) => (snapped?.[j] ? { lat: snapped[j][0], lon: snapped[j][1] } : { lat: c.lat, lon: c.lon }));
   return points.map((pt, j) => ({ ...pt, times: times.map((row) => row[j]), dists: dists.map((row) => row[j]), approx }));
 }

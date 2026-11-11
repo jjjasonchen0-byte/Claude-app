@@ -80,11 +80,26 @@ function ensure() {
   const edgeName = Int32Array.from(unpackInts(SYDNEY.edgeNames));
   const graph = fromEdgeList(lat, lon, A, B, kinds);
 
-  // Which corners each way of travelling can start from (bit 1: on foot or bike, bit 2: by car).
+  // Which corners each way of travelling can start from (bit 1: on foot or
+  // bike, bit 2: by car): only those in that way's largest connected network.
+  // A lane reachable only through a motorway tunnel, or a car park joined to
+  // the streets only by a footpath, would otherwise be a dead end.
   const reach = new Uint8Array(n);
-  for (let k = 0; k < m; k++) {
-    const bits = (ALLOWED.walk[kinds[k]] ? 1 : 0) | (ALLOWED.drive[kinds[k]] ? 2 : 0);
-    reach[A[k]] |= bits; reach[B[k]] |= bits;
+  for (const [bit, allowed] of [[1, ALLOWED.walk], [2, ALLOWED.drive]]) {
+    const parent = Int32Array.from({ length: n }, (_, i) => i);
+    const find = (i) => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
+    const touched = new Uint8Array(n);
+    for (let k = 0; k < m; k++) {
+      if (!allowed[kinds[k]]) continue;
+      touched[A[k]] = touched[B[k]] = 1;
+      const ra = find(A[k]), rb = find(B[k]);
+      if (ra !== rb) parent[ra] = rb;
+    }
+    const size = new Map();
+    for (let i = 0; i < n; i++) if (touched[i]) { const r = find(i); size.set(r, (size.get(r) || 0) + 1); }
+    let main = -1, best = 0;
+    for (const [r, s] of size) if (s > best) { best = s; main = r; }
+    for (let i = 0; i < n; i++) if (touched[i] && find(i) === main) reach[i] |= bit;
   }
   const nodeGrid = new Map();
   for (let i = 0; i < n; i++) {
