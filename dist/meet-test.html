@@ -4642,8 +4642,11 @@ function drawPeople() {
   peopleLayer.clearLayers();
   for (const p of everyone()) {
     if (!p.active && state.view !== 'people') continue;
+    // Names sit above the pins; someone added without a name gets no label
+    // (their street address shows only when you point at the pin).
+    const named = p.isHome || p.nickname;
     const m = L.marker([p.lat, p.lon], { icon: pinIcon(p), draggable: state.view === 'people', opacity: p.active ? 1 : 0.4, riseOnHover: true })
-      .bindTooltip(esc(p.name), { permanent: true, direction: 'top', className: 'label', offset: [0, -48] })
+      .bindTooltip(esc(p.name), { permanent: !!named, direction: 'top', className: 'label', offset: [0, -48] })
       .addTo(peopleLayer);
     m.on('dragend', () => moveAddress(p, m.getLatLng()));
   }
