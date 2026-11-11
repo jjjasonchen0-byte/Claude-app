@@ -977,7 +977,6 @@ function renderResults() {
         <h2>${esc(s.area ? shortAddr(s.area) : 'Your meeting point')}</h2>
       </div>
     </div>
-    ${modeSwitch('trip-mode')}
     <ul class="group icons">${s.people.map((p, i) => tripRow(p, s.routes?.[i]?.distance ?? s.meeting.dists[i], s.meetTimes?.values[i])).join('')}
       <li><button class="cell cell-btn" data-action="edit-people">${tile('pencil')}<span class="cell-main cell-title">Edit people</span>${CHEV}</button></li>
       <li><button class="cell cell-btn" data-action="meet-place">${tile('meet')}<span class="cell-main cell-title">Routes to this spot &amp; send it</span>${CHEV}</button></li></ul>
@@ -1661,7 +1660,6 @@ function initPanel() {
       case 'sort': s.sort = el.dataset.sort; render(); break;
       case 'place': openPlace(id); break;
       case 'back-group': s.markersKey = null; setView('group'); break;
-      case 'trip-mode':
       case 'dir-mode':
         setEveryoneMode(el.dataset.mode);
         break;

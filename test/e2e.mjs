@@ -152,6 +152,7 @@ try {
   // Edit people sits right under the people; there is no "Surprise me" any more.
   assert.equal(await page.locator('.trip + li [data-action=edit-people]').count(), 1, 'Edit people right under the people');
   assert.equal(await page.locator('[data-action=surprise]').count(), 0);
+  assert.equal(await page.locator('.panel .modes').count(), 0, 'no travel-mode bar on the results screen');
   // Picking a radius draws it as a circle around the meeting point.
   assert.equal(await page.locator('.radius-ring').count(), 0);
   await page.click('[data-action=radius][data-r="1000"]');
