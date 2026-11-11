@@ -149,6 +149,16 @@ try {
   await page.waitForSelector('.panel:not(.away) .pills', { timeout: 20000 });
   await page.waitForTimeout(700);
   await shot('05-results');
+  // Edit people sits right under the people; there is no "Surprise me" any more.
+  assert.equal(await page.locator('.trip + li [data-action=edit-people]').count(), 1, 'Edit people right under the people');
+  assert.equal(await page.locator('[data-action=surprise]').count(), 0);
+  // Picking a radius draws it as a circle around the meeting point.
+  assert.equal(await page.locator('.radius-ring').count(), 0);
+  await page.click('[data-action=radius][data-r="1000"]');
+  await page.waitForSelector('.radius-ring');
+  await page.waitForSelector('[data-action=radius][data-r="1000"].active');
+  await page.waitForTimeout(700);
+  await shot('05b-radius');
   const italian = page.locator('[data-action=group]', { hasText: 'Italian' });
   assert.equal((await italian.locator('.cell-end').textContent()).trim(), '4', 'Italian count');
 
@@ -190,7 +200,6 @@ try {
       && others.every((r) => r.querySelector('.line-badge'));
   });
   assert.equal(await page.locator('.modes .seg.active').count(), 0, 'mixed modes: the everyone bar shows no single mode');
-  assert.ok(await page.locator('.mixed-note').isVisible());
   await page.waitForTimeout(400);
   await shot('07c-place-mixed');
   await page.click('[data-action=choose]');

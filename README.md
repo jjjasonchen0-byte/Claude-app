@@ -96,8 +96,8 @@ The browser asks the Meet server for directions (`/api/directions`, `/api/travel
   - *Least travel*: everyone's trips add up to the least overall.
 - Travel time and distance for each person in their own mode. The menu sets the default mode for people you add.
 - Opening hours read from OpenStreetMap: "Open · Closes 22:00", "Closes soon", "Closed · Opens Tue 09:00", and a weekly table.
-- Search radius from 500 m to 5 km. The search also widens automatically when little is nearby.
-- Surprise me, Replay, and Skip animation.
+- Search radius from 500 m to 5 km, drawn as a circle around the meeting point when you pick one. The search also widens automatically when little is nearby.
+- Replay and Skip animation.
 - Past meetups, light/dark/auto themes (the map follows), animation speed, and an installable web-app manifest.
 - If the routing service can't be reached, Meet picks the spot from distances and says it's an estimate.
 

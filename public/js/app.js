@@ -571,6 +571,33 @@ function setView(view, { pop = false } = {}) {
   if (SHEET_DEFAULT[view]) setSheet(SHEET_DEFAULT[view]);
 }
 
+/**
+ * The search area as a circle around the meeting point, once a radius has
+ * been picked. Shown with the categories and with a category's places;
+ * hidden on a place's page.
+ */
+let radiusCircle = null;
+function drawRadius({ fit = false } = {}) {
+  const s = state.search;
+  const r = s?.showRadius;
+  if (!r || !s.meet || !['results', 'group'].includes(state.view)) {
+    if (radiusCircle) resultLayer.removeLayer(radiusCircle);
+    radiusCircle = null;
+    return;
+  }
+  if (!radiusCircle || radiusCircle.getRadius() !== r || !resultLayer.hasLayer(radiusCircle)) {
+    if (radiusCircle) resultLayer.removeLayer(radiusCircle);
+    radiusCircle = L.circle([s.meet.lat, s.meet.lon], {
+      radius: r, color: '#007aff', weight: 1.5, opacity: 0.75, dashArray: '6 6',
+      fillColor: '#007aff', fillOpacity: 0.07, interactive: false, className: 'radius-ring',
+    }).addTo(resultLayer);
+  }
+  if (fit) {
+    const dLat = r / 111320, dLon = r / (111320 * Math.cos((s.meet.lat * Math.PI) / 180));
+    fitTo([[s.meet.lat - dLat, s.meet.lon - dLon], [s.meet.lat + dLat, s.meet.lon + dLon]], { maxZoom: 17 });
+  }
+}
+
 const afterRender = {};
 function render({ keepScroll = false } = {}) {
   const body = $('#panel-body');
@@ -583,6 +610,7 @@ function render({ keepScroll = false } = {}) {
     if (isMobile() && sheet.snap) setSheet(sheet.snap);
   }
   drawPeople();
+  drawRadius();
 }
 
 // ------------------------------------------------ people view
@@ -693,6 +721,7 @@ function setStatus(text, { skip = false, spinner = true } = {}) {
 function clearSearchVisuals() {
   anim?.destroy();
   anim = null;
+  radiusCircle = null;
   resultLayer?.clearLayers();
   poiLayer?.clearLayers();
 }
@@ -761,7 +790,7 @@ async function findPlaces({ replay = false } = {}) {
     const search = state.search = {
       people, meeting, meet, routes: prev?.routes || null,
       pois: prev?.pois || null, grouped: prev?.grouped || null, radius: prev?.radius || null, tab: prev?.tab || null,
-      group: null, place: null, area: prev?.area || null, poiError: prev?.poiError || null, sort: prev?.sort,
+      group: null, place: null, area: prev?.area || null, poiError: prev?.poiError || null, sort: prev?.sort, showRadius: prev?.showRadius,
     };
 
     // 2. Places and the area's name load while the routes come in and animate.
@@ -890,7 +919,7 @@ function modeSwitch(action) {
   const common = people.length && people.every((p) => p.mode === people[0].mode) ? people[0].mode : null;
   return `<div class="segmented modes" role="group" aria-label="Set how everyone travels">
   ${MODES.map((m) => `<button class="seg${m.id === common ? ' active' : ''}" data-action="${action}" data-mode="${m.id}" aria-pressed="${m.id === common}">${glyph(m.id, 15)}<span>${m.label}</span></button>`).join('')}
-</div>${common ? '' : '<p class="footnote mixed-note">Everyone travels their own way. Tap a mode above to set everyone, or a person\'s pill to change just them.</p>'}`;
+</div>`;
 }
 
 /** Real travel times from everyone to the meeting point, each in their own mode. */
@@ -950,15 +979,14 @@ function renderResults() {
     </div>
     ${modeSwitch('trip-mode')}
     <ul class="group icons">${s.people.map((p, i) => tripRow(p, s.routes?.[i]?.distance ?? s.meeting.dists[i], s.meetTimes?.values[i])).join('')}
+      <li><button class="cell cell-btn" data-action="edit-people">${tile('pencil')}<span class="cell-main cell-title">Edit people</span>${CHEV}</button></li>
       <li><button class="cell cell-btn" data-action="meet-place">${tile('meet')}<span class="cell-main cell-title">Routes to this spot &amp; send it</span>${CHEV}</button></li></ul>
     ${s.meeting.approx ? '<p class="notice">Travel times could not be checked right now, so this spot is estimated from distance.</p>' : ''}
     <div class="pills" role="tablist">${tabs}</div>
     ${list}
     <div class="radius-row"><span class="footnote">${total} places within</span><div class="segmented">${radius}</div></div>
     <div class="actions">
-      <button class="btn btn-tinted" data-action="surprise" ${total ? '' : 'disabled'}>Surprise me</button>
       <button class="btn btn-tinted" data-action="replay">Replay</button>
-      <button class="btn btn-tinted" data-action="edit-people">Edit people</button>
     </div>`;
 }
 
@@ -1603,17 +1631,15 @@ function initPanel() {
       case 'tab': s.tab = el.dataset.tab; render(); break;
       case 'group': s.markersKey = null; s.group = el.dataset.group; s.sort = s.sort || 'near'; setView('group'); break;
       case 'radius': {
+        const r = Number(el.dataset.r);
+        s.showRadius = r;
+        drawRadius({ fit: true });
+        for (const b of $$('[data-action=radius]')) b.classList.toggle('active', b === el);
         el.textContent = '…';
         const ctrl = new AbortController();
         searchAbort = ctrl;
-        await loadPois(s, ctrl.signal, Number(el.dataset.r)).catch(() => {});
+        await loadPois(s, ctrl.signal, r).catch(() => {});
         render();
-        break;
-      }
-      case 'surprise': {
-        const pick = s.pois[Math.floor(Math.random() * s.pois.length)];
-        s.tab = pick.tab; s.group = pick.group;
-        openPlace(pick.id);
         break;
       }
       case 'replay': findPlaces({ replay: true }); break;
