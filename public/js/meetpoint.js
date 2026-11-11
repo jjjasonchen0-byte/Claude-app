@@ -127,7 +127,9 @@ async function evaluate(people, cands, { travelTimes, signal }) {
       approx = true;
     }));
   }
-  const points = cands.map((c, j) => (snapped?.[j] ? { lat: snapped[j][0], lon: snapped[j][1] } : { lat: c.lat, lon: c.lon }));
+  // The spot as snapped onto a street, when the service gave a usable one.
+  const okPt = (s) => Array.isArray(s) && Number.isFinite(s[0]) && Number.isFinite(s[1]);
+  const points = cands.map((c, j) => (okPt(snapped?.[j]) ? { lat: snapped[j][0], lon: snapped[j][1] } : { lat: c.lat, lon: c.lon }));
   return points.map((pt, j) => ({ ...pt, times: times.map((row) => row[j]), dists: dists.map((row) => row[j]), approx }));
 }
 

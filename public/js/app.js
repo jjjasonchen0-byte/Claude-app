@@ -810,6 +810,7 @@ async function findPlaces({ replay = false } = {}) {
     });
     if (ctrl.signal.aborted) return;
     const meet = meeting.meet;
+    if (!Number.isFinite(meet?.lat) || !Number.isFinite(meet?.lon)) throw new Error('Couldn’t place a meeting point. Try again, or move someone’s pin.');
     const search = state.search = {
       people, meeting, meet, routes: prev?.routes || null, extras: prev?.extras || null,
       rule: prev?.rule || (state.settings.mode === 'total' ? 'total' : 'similar'),

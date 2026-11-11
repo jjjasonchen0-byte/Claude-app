@@ -110,7 +110,8 @@ function ensure() {
   // Named street segments, for "which street is this on?".
   const streetGrid = new Map();
   for (let k = 0; k < m; k++) {
-    if (!edgeName[k] || (kinds[k] & 7) === 7) continue; // streets, not footpaths or cycleways
+    // Streets you can stand on: not footpaths or cycleways, motorways or tunnels.
+    if (!edgeName[k] || (kinds[k] & 7) === 7 || (kinds[k] & 7) === 0 || kinds[k] & TUNNEL) continue;
     const key = cellKey((lat[A[k]] + lat[B[k]]) / 2, (lon[A[k]] + lon[B[k]]) / 2);
     if (!streetGrid.has(key)) streetGrid.set(key, []);
     streetGrid.get(key).push(k);
@@ -475,7 +476,8 @@ export async function travelTimes(mode, sources, destinations) {
     distances.push(targets.map((t) => (Number.isFinite(dist[t]) ? Math.round(dist[t]) : null)));
     durations.push(targets.map((t) => (Number.isFinite(dist[t]) ? seconds(mode, dist[t]) : null)));
   }
-  return { durations, distances, destinations: targets.map((t) => [g.lat[t], g.lon[t]]) };
+  // A spot with no street near it (far out to sea, past the edge of the map) has no snapped position.
+  return { durations, distances, destinations: targets.map((t) => (t >= 0 ? [g.lat[t], g.lon[t]] : null)) };
 }
 
 /** A ready-made group: you in Newtown, friends in Pyrmont, Paddington and across the bridge in North Sydney. */

@@ -1808,7 +1808,9 @@ async function evaluate(people, cands, { travelTimes, signal }) {
       approx = true;
     }));
   }
-  const points = cands.map((c, j) => (snapped?.[j] ? { lat: snapped[j][0], lon: snapped[j][1] } : { lat: c.lat, lon: c.lon }));
+  // The spot as snapped onto a street, when the service gave a usable one.
+  const okPt = (s) => Array.isArray(s) && Number.isFinite(s[0]) && Number.isFinite(s[1]);
+  const points = cands.map((c, j) => (okPt(snapped?.[j]) ? { lat: snapped[j][0], lon: snapped[j][1] } : { lat: c.lat, lon: c.lon }));
   return points.map((pt, j) => ({ ...pt, times: times.map((row) => row[j]), dists: dists.map((row) => row[j]), approx }));
 }
 
@@ -1930,11 +1932,13 @@ class GrowthAnimation {
     this.now = performance.now();
     const crs = L.CRS.EPSG3857;
     const proj = ([lat, lon]) => crs.latLngToPoint(L.latLng(lat, lon), 0);
+    const usable = (p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]);
     this.tracks = tracks.map((t) => {
       const best = t.best ?? 0;
       const branches = t.branches.map((b) => {
         const segs = [];
-        for (const piece of b.pieces) addTimed(segs, piece.pts.map(proj), piece.t0, piece.t1, piece.walk);
+        // Points without a position (should never happen) are skipped rather than stop the animation.
+        for (const piece of b.pieces) addTimed(segs, piece.pts.filter(usable).map(proj), piece.t0, piece.t1, piece.walk);
         segs.sort((x, y) => x.s0 - y.s0);
         return { segs, duration: b.duration };
       });
@@ -3246,7 +3250,8 @@ function ensure() {
   // Named street segments, for "which street is this on?".
   const streetGrid = new Map();
   for (let k = 0; k < m; k++) {
-    if (!edgeName[k] || (kinds[k] & 7) === 7) continue; // streets, not footpaths or cycleways
+    // Streets you can stand on: not footpaths or cycleways, motorways or tunnels.
+    if (!edgeName[k] || (kinds[k] & 7) === 7 || (kinds[k] & 7) === 0 || kinds[k] & TUNNEL) continue;
     const key = cellKey((lat[A[k]] + lat[B[k]]) / 2, (lon[A[k]] + lon[B[k]]) / 2);
     if (!streetGrid.has(key)) streetGrid.set(key, []);
     streetGrid.get(key).push(k);
@@ -3611,7 +3616,8 @@ async function travelTimes(mode, sources, destinations) {
     distances.push(targets.map((t) => (Number.isFinite(dist[t]) ? Math.round(dist[t]) : null)));
     durations.push(targets.map((t) => (Number.isFinite(dist[t]) ? seconds(mode, dist[t]) : null)));
   }
-  return { durations, distances, destinations: targets.map((t) => [g.lat[t], g.lon[t]]) };
+  // A spot with no street near it (far out to sea, past the edge of the map) has no snapped position.
+  return { durations, distances, destinations: targets.map((t) => (t >= 0 ? [g.lat[t], g.lon[t]] : null)) };
 }
 
 /** A ready-made group: you in Newtown, friends in Pyrmont, Paddington and across the bridge in North Sydney. */
@@ -4719,6 +4725,7 @@ async function findPlaces({ replay = false } = {}) {
     });
     if (ctrl.signal.aborted) return;
     const meet = meeting.meet;
+    if (!Number.isFinite(meet?.lat) || !Number.isFinite(meet?.lon)) throw new Error('Couldn’t place a meeting point. Try again, or move someone’s pin.');
     const search = state.search = {
       people, meeting, meet, routes: prev?.routes || null, extras: prev?.extras || null,
       rule: prev?.rule || (state.settings.mode === 'total' ? 'total' : 'similar'),

@@ -30,11 +30,13 @@ export class GrowthAnimation {
     this.now = performance.now();
     const crs = L.CRS.EPSG3857;
     const proj = ([lat, lon]) => crs.latLngToPoint(L.latLng(lat, lon), 0);
+    const usable = (p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]);
     this.tracks = tracks.map((t) => {
       const best = t.best ?? 0;
       const branches = t.branches.map((b) => {
         const segs = [];
-        for (const piece of b.pieces) addTimed(segs, piece.pts.map(proj), piece.t0, piece.t1, piece.walk);
+        // Points without a position (should never happen) are skipped rather than stop the animation.
+        for (const piece of b.pieces) addTimed(segs, piece.pts.filter(usable).map(proj), piece.t0, piece.t1, piece.walk);
         segs.sort((x, y) => x.s0 - y.s0);
         return { segs, duration: b.duration };
       });

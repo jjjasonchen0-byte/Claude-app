@@ -152,3 +152,22 @@ test('groups whose streets do not join at all still get a spot, marked as an est
   assert.equal(r.approx, true);
   assert.ok(Number.isFinite(r.meet.lat) && r.times.every(Number.isFinite));
 });
+
+test('spots the routing service could not place on a street never become a meeting point without a position', async () => {
+  const { travelTimes: base } = fakeRouter();
+  // Like the test version past the edge of its map: some spots come back unplaced
+  // ([undefined, undefined] or null) and unreachable, and one person can reach nothing,
+  // so estimates fill the gaps.
+  const travelTimes = async (mode, sources, destinations) => {
+    const t = await base(mode, sources, destinations);
+    t.destinations = t.destinations.map((d, j) => (j % 3 === 0 ? [undefined, undefined] : j % 3 === 1 ? null : d));
+    sources.forEach((s, k) => destinations.forEach((_, j) => {
+      if (j % 3 !== 2 || s.lat === london[2].lat) { t.durations[k][j] = null; t.distances[k][j] = null; }
+    }));
+    return t;
+  };
+  for (let i = 0; i < 3; i++) {
+    const r = await findMeetingPoint(london, { travelTimes });
+    assert.ok(Number.isFinite(r.meet.lat) && Number.isFinite(r.meet.lon), `meeting point ${JSON.stringify(r.meet)}`);
+  }
+});
