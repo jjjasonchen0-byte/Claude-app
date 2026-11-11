@@ -1955,11 +1955,11 @@ __m["meetpoint"] = { SPEEDS, transitFromWalk, estimateSeconds, grid, makeScore, 
 // ---- flood
 (() => {
 // The search animation. The map goes dark and its streets glow a dim gold.
-// Then each friend's reach floods out along the streets in their colour,
-// behind a bright white front: first one by one, then all at once until the
-// floods meet at the meeting point. Finally everyone's real route lights up
-// and they travel along it to the pin, and the map turns back to normal
-// with the routes left on it.
+// Then everyone's reach floods out along the streets at once, each in their
+// colour behind a bright white front, converging until the floods meet at
+// the meeting point. Finally everyone's real route lights up and they
+// travel along it to the pin, and the map turns back to normal with the
+// routes left on it.
 //
 // The floods are shortest-path searches over the streets (graph.js), timed
 // in seconds at each person's way of travelling, so where the floods meet is
@@ -2465,17 +2465,6 @@ class FloodAnimation {
     ctx.clearRect(0, 0, size.x, size.y);
   }
 
-  /** Fade the flood canvas out and back in empty (between searches). */
-  async wipe() {
-    this.floodCanvas.style.opacity = '0';
-    this.canvas.style.opacity = '0';
-    const ok = await this.run(220);
-    this.showFloods([]);
-    this.floodCanvas.style.opacity = '';
-    this.canvas.style.opacity = '';
-    return ok;
-  }
-
   // ------------------------------------------------ the phases
 
   /** The map goes dark and the streets appear. */
@@ -2484,35 +2473,9 @@ class FloodAnimation {
     return this.run(450);
   }
 
-  /**
-   * Each person's flood on its own, until it has reached everyone else.
-   * onSearch(i) when person i's search starts; onRoads(total) as streets are covered.
-   */
-  async oneByOne({ onSearch, onRoads } = {}) {
-    if (!this.net) return true;
-    const n = this.people.length;
-    const ms = Math.max(900, Math.min(1400, 4200 / n));
-    let total = 0;
-    for (let i = 0; i < n; i++) {
-      if (this.skipping) return true;
-      const fl = this.flood(i);
-      if (!fl) continue;
-      const end = reachTime(this.net, fl, this.people.filter((_, j) => j !== i));
-      onSearch?.(i);
-      this.showFloods([i]);
-      const f = this.shown[0];
-      const ok = await this.run(ms, (t) => {
-        const c = end * easeInOut(t);
-        this.advance(f, c, end * 0.09);
-        this.clearTop();
-        this.drawFronts();
-        onRoads?.(total + roadsBy(fl, c));
-      });
-      if (!ok) return false;
-      total += roadsBy(fl, end);
-      if (!(await this.wipe())) return false;
-    }
-    return true;
+  /** Work out everyone's flood now (a moment's work each), so the floods start smoothly later. */
+  prepare() {
+    if (this.net) this.people.forEach((_, i) => this.flood(i));
   }
 
   /**
@@ -5273,7 +5236,7 @@ async function findPlaces({ replay = false } = {}) {
 
   try {
     // Started together: the fairest spot (a few small requests to the routing
-    // service) and the streets, which flood one person at a time meanwhile.
+    // service) and the streets for the animation.
     const meetingP = prev ? Promise.resolve(prev.meeting) : findMeetingPoint(people, {
       rule, travelTimes: getTravelTimes, directions: getDirections, signal: ctrl.signal, onStatus: status,
     });
@@ -5285,12 +5248,7 @@ async function findPlaces({ replay = false } = {}) {
     const roads = await roadsP;
     if (!live()) return;
     fx.setRoads(roads);
-    const ok1 = await fx.oneByOne({
-      // The count carries on from one search to the next.
-      onSearch: (i) => setHud({ phase: 'One by one', intro: false, ...(i === 0 ? { count: 0 } : {}), sub: `Search ${i + 1} of ${people.length} · ${whoOf(people[i]) || placeOf(people[i].address)}` }),
-      onRoads: (n) => setHud({ count: n }),
-    });
-    if (!ok1 || !live()) return;
+    fx.prepare();
 
     const meeting = await meetingP;
     if (!live()) return;
@@ -5312,6 +5270,7 @@ async function findPlaces({ replay = false } = {}) {
     const routesP = search.routes ? Promise.resolve(search.routes)
       : Promise.all(people.map((p) => withTimeout(getDirections(p.mode, p, meet, { signal: ctrl.signal }), 10000).catch(() => null)));
     status('Finding everyone’s routes…');
+    setHud({ count: fx.net ? 0 : null });
     const ok2 = await fx.allAtOnce(meet, {
       onProgress: (t) => setHud({
         phase: 'All at once', intro: false,

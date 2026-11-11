@@ -143,19 +143,16 @@ try {
   await shot('03-people');
   assert.equal(await page.locator('.person').count(), 3);
 
-  // Find places → the search animation: each person's flood on its own, then all at once, then the routes.
+  // Find places → the search animation: everyone's floods converge on the meeting point, then the routes.
   await page.click('[data-action=find]');
   await page.waitForSelector('.growth-canvas');
-  await page.waitForFunction(() => /One by one/.test(document.querySelector('#flood-hud .flood-phase')?.textContent)
-    && Number(document.querySelector('#flood-hud .flood-num').textContent.replace(/,/g, '')) > 0, null, { timeout: 15000 });
+  await page.waitForFunction(() => /All at once/.test(document.querySelector('#flood-hud .flood-phase')?.textContent)
+    && Number(document.querySelector('#flood-hud .flood-num').textContent.replace(/,/g, '')) > 0, null, { timeout: 20000 });
   assert.ok(streetTiles > 0, 'streets came from the map tiles');
   assert.equal(await page.locator('.flood-pill').count(), 3, 'a name tag over everyone');
   assert.match(await page.textContent('.flood-pill >> nth=1'), /^Sam · /);
-  await page.waitForTimeout(700);
-  await shot('04-one-by-one');
-  await page.waitForFunction(() => /All at once/.test(document.querySelector('#flood-hud .flood-phase')?.textContent), null, { timeout: 20000 });
-  await page.waitForTimeout(1500);
-  await shot('04b-all-at-once');
+  await page.waitForTimeout(900);
+  await shot('04-converging');
   await page.waitForFunction(() => /Meet near/.test(document.querySelector('#flood-hud .flood-sub')?.textContent), null, { timeout: 20000 });
   await page.waitForTimeout(800);
   await shot('04c-meet');

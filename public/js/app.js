@@ -873,7 +873,7 @@ async function findPlaces({ replay = false } = {}) {
 
   try {
     // Started together: the fairest spot (a few small requests to the routing
-    // service) and the streets, which flood one person at a time meanwhile.
+    // service) and the streets for the animation.
     const meetingP = prev ? Promise.resolve(prev.meeting) : findMeetingPoint(people, {
       rule, travelTimes: getTravelTimes, directions: getDirections, signal: ctrl.signal, onStatus: status,
     });
@@ -885,12 +885,7 @@ async function findPlaces({ replay = false } = {}) {
     const roads = await roadsP;
     if (!live()) return;
     fx.setRoads(roads);
-    const ok1 = await fx.oneByOne({
-      // The count carries on from one search to the next.
-      onSearch: (i) => setHud({ phase: 'One by one', intro: false, ...(i === 0 ? { count: 0 } : {}), sub: `Search ${i + 1} of ${people.length} · ${whoOf(people[i]) || placeOf(people[i].address)}` }),
-      onRoads: (n) => setHud({ count: n }),
-    });
-    if (!ok1 || !live()) return;
+    fx.prepare();
 
     const meeting = await meetingP;
     if (!live()) return;
@@ -912,6 +907,7 @@ async function findPlaces({ replay = false } = {}) {
     const routesP = search.routes ? Promise.resolve(search.routes)
       : Promise.all(people.map((p) => withTimeout(getDirections(p.mode, p, meet, { signal: ctrl.signal }), 10000).catch(() => null)));
     status('Finding everyone’s routes…');
+    setHud({ count: fx.net ? 0 : null });
     const ok2 = await fx.allAtOnce(meet, {
       onProgress: (t) => setHud({
         phase: 'All at once', intro: false,

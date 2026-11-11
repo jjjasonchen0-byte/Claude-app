@@ -1,9 +1,9 @@
 // The search animation. The map goes dark and its streets glow a dim gold.
-// Then each friend's reach floods out along the streets in their colour,
-// behind a bright white front: first one by one, then all at once until the
-// floods meet at the meeting point. Finally everyone's real route lights up
-// and they travel along it to the pin, and the map turns back to normal
-// with the routes left on it.
+// Then everyone's reach floods out along the streets at once, each in their
+// colour behind a bright white front, converging until the floods meet at
+// the meeting point. Finally everyone's real route lights up and they
+// travel along it to the pin, and the map turns back to normal with the
+// routes left on it.
 //
 // The floods are shortest-path searches over the streets (graph.js), timed
 // in seconds at each person's way of travelling, so where the floods meet is
@@ -510,17 +510,6 @@ export class FloodAnimation {
     ctx.clearRect(0, 0, size.x, size.y);
   }
 
-  /** Fade the flood canvas out and back in empty (between searches). */
-  async wipe() {
-    this.floodCanvas.style.opacity = '0';
-    this.canvas.style.opacity = '0';
-    const ok = await this.run(220);
-    this.showFloods([]);
-    this.floodCanvas.style.opacity = '';
-    this.canvas.style.opacity = '';
-    return ok;
-  }
-
   // ------------------------------------------------ the phases
 
   /** The map goes dark and the streets appear. */
@@ -529,35 +518,9 @@ export class FloodAnimation {
     return this.run(450);
   }
 
-  /**
-   * Each person's flood on its own, until it has reached everyone else.
-   * onSearch(i) when person i's search starts; onRoads(total) as streets are covered.
-   */
-  async oneByOne({ onSearch, onRoads } = {}) {
-    if (!this.net) return true;
-    const n = this.people.length;
-    const ms = Math.max(900, Math.min(1400, 4200 / n));
-    let total = 0;
-    for (let i = 0; i < n; i++) {
-      if (this.skipping) return true;
-      const fl = this.flood(i);
-      if (!fl) continue;
-      const end = reachTime(this.net, fl, this.people.filter((_, j) => j !== i));
-      onSearch?.(i);
-      this.showFloods([i]);
-      const f = this.shown[0];
-      const ok = await this.run(ms, (t) => {
-        const c = end * easeInOut(t);
-        this.advance(f, c, end * 0.09);
-        this.clearTop();
-        this.drawFronts();
-        onRoads?.(total + roadsBy(fl, c));
-      });
-      if (!ok) return false;
-      total += roadsBy(fl, end);
-      if (!(await this.wipe())) return false;
-    }
-    return true;
+  /** Work out everyone's flood now (a moment's work each), so the floods start smoothly later. */
+  prepare() {
+    if (this.net) this.people.forEach((_, i) => this.flood(i));
   }
 
   /**

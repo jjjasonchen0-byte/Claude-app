@@ -5,8 +5,7 @@ Find somewhere that's roughly as close for everyone in a group, with a press of 
 1. **Enter where you're starting from.** No account is needed. The map centres on your address.
 2. **Add the people you're meeting**, each with an optional name. You can type an address, tap the map, or drag a dot. Everyone has their own **way of travelling** (public transport, walk, bike or drive): tap the pill next to a name to change it. It's remembered.
 3. Press **Find a place to meet.** Meet asks a routing service for real travel times from everyone to a grid of spots around the group, keeps the best one and zooms in around it, so everyone's **travel times are as similar as possible**: someone driving is asked to go further than someone walking. For public transport the two best spots are checked against real timetables. Meanwhile the search plays out on a **dark map of the area's streets**, glowing a dim gold:
-   - **One by one:** each friend's reach floods out along the streets in their colour, behind a bright white front, until it has reached everyone else. A counter shows how many roads have been searched.
-   - **All at once:** everyone sets off together, each flood timed as progress through that person's own trip. The map divides into territories that meet at the meeting point.
+   - **All at once:** everyone's reach floods out along the streets together, each in their colour behind a bright white front, converging on the meeting point. Each flood is timed as progress through that person's own trip, so the map divides into territories that meet at the pin. A counter shows how many roads have been searched.
    - **The meeting point:** a pin drops, labelled with a park or landmark right there (or the street). Everyone's real route lights up and they travel along it, gathering above the pin with their trip times on their name tags.
 
    Then the map turns back to normal with the routes on it. The floods are shortest-path searches over the streets in view, which come from the same OpenFreeMap vector tiles as the map. **Skip** jumps to the end, and the animation speed is in the menu.
@@ -116,7 +115,7 @@ The Sydney data comes from OpenStreetMap via [OpenFreeMap](https://openfreemap.o
 | `lib/tripadvisor.js` | Tripadvisor Terra client: matches places by name and distance, keeps the allowlist up to date, batches rating lookups, and enforces the daily limit |
 | `public/js/api.js` | One data API for the app: guest storage (`guest.js`) until someone signs in, then the server (`remote.js`), moving guest data across |
 | `public/js/meetpoint.js` | Finds the meeting point from travel-time tables: a 7 × 7 grid over the group, then finer grids around the best spot, one request per way of travelling each round; public transport checked against timetables |
-| `public/js/flood.js` | The search animation: floods over the streets (shortest paths timed at each person's speed), one by one then all at once, then the routes and travellers, on three canvases in their own map pane |
+| `public/js/flood.js` | The search animation: floods over the streets (shortest paths timed at each person's speed) converging on the meeting point, then the routes and travellers, on three canvases in their own map pane |
 | `public/js/roads.js`, `mvt.js` | The streets for the animation: picks the vector tiles covering the view, reads their lines, cuts them to each tile and joins them up again where streets cross (tiles drop those corners) |
 | `public/js/pois.js` | Places near the meeting point from Overpass, raced against Photon, grouped into tabs and listings |
 | `public/js/rated.js` | Ratings, photos and reviews: Tripadvisor through the server, free photos from Wikimedia |
