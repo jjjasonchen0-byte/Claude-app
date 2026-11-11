@@ -75,6 +75,8 @@ const TILE = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAQAAAAEAAQMAAABmvDolAAAAA1BMVE
 // ---- run ---------------------------------------------------------------------
 const browser = await chromium.launch();
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 820 }, deviceScaleFactor: 1 });
+// The base map: a plain stand-in style for the vector map (and tiles for the no-WebGL fallback).
+await ctx.route('https://tiles.openfreemap.org/**', (r) => r.fulfill({ json: { version: 8, sources: {}, layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#eeece8' } }] } }));
 await ctx.route('https://tile.openstreetmap.org/**', (r) => r.fulfill({ body: TILE, contentType: 'image/png' }));
 await ctx.route('https://photon.komoot.io/**', (r) => {
   const u = new URL(r.request().url());

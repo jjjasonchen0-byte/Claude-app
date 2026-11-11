@@ -2,19 +2,21 @@
 // optional sign-in and the draggable bottom sheet on phones.
 import { api } from './api.js';
 import { searchAddress, reverseGeocode, currentPosition } from './geocode.js';
-import { loadNetwork } from './network.js';
-import { solveMeeting, roadDistanceTo } from './meet.js';
+import { findMeetingPoint, estimateSeconds, SPEEDS } from './meetpoint.js';
 import { GrowthAnimation } from './growth.js';
 import { TABS, findPois, groupPois } from './pois.js';
+import { ratingsSource, rateAll, thumbFor, detailsFor } from './rated.js';
+import { openStatus, weekTable } from './hours.js';
+import { haversine } from './geo.js';
 import { mapLinks, shareText, messagingLinks, nativeShare, copyText, calendarInvite, download } from './share.js';
 import { MODES, ATTRIBUTION, getDirections, getTravelTimes, navLinks, vehicleName, isWalkLeg } from './directions.js';
 
 // ---------------------------------------------------------------- constants
 
 const COLORS = ['#007aff', '#ff9500', '#34c759', '#af52de', '#ff3b30', '#30b0c7', '#5856d6', '#ff2d55', '#a2845e', '#8e8e93'];
-const SPEEDS = { walk: 1.35, bike: 4.2, transit: 6.5, drive: 9.5 }; // m/s, urban averages
-const ANIM_MS = { slow: 9000, normal: 6000, fast: 3200 };
+const ANIM_MS = { slow: 8000, normal: 5000, fast: 2800 };
 const RADII = [500, 1000, 2000, 5000];
+const PRICE = { 'Cheap Eats': '£', 'Mid Range': '££', 'Fine Dining': '£££' };
 const DEFAULT_SETTINGS = { mode: 'fair', travel: 'transit', speed: 'normal', theme: 'auto' };
 const SHEET_DEFAULT = { people: 'mid', results: 'mid', group: 'mid', place: 'mid', share: 'full' };
 
@@ -35,6 +37,12 @@ const GLYPH = {
   bike: '<circle cx="6" cy="16" r="3.4"/><circle cx="18" cy="16" r="3.4"/><path d="M6 16l3.8-7h6.2l2 7M8.5 6h3M12 9l-2.2 7"/>',
   drive: '<path d="M5 15l1.5-4.6A2 2 0 0 1 8.4 9h7.2a2 2 0 0 1 1.9 1.4L19 15M4 15h16v3a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H7v1a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/>',
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
+  phone: '<path d="M6.6 3.5h2.6l1.5 4.2-2 1.3a11 11 0 0 0 6.3 6.3l1.3-2 4.2 1.5v2.6a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.6 5.7a2 2 0 0 1 2-2.2z"/>',
+  globe: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.3 3.5 5.2 3.5 8.5s-1.1 6.2-3.5 8.5c-2.4-2.3-3.5-5.2-3.5-8.5s1.1-6.2 3.5-8.5z"/>',
+  send: '<path d="M20.5 3.5L3.5 10.6l7.3 2.6 2.6 7.3z"/>',
+  route: '<circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="6" r="2.2"/><path d="M8 18h6.5a3.5 3.5 0 0 0 0-7h-5a3.5 3.5 0 0 1 0-7H16"/>',
+  menu: '<path d="M6 3.5h12v17H6zM9 8h6M9 12h6M9 16h4"/>',
+  photo: '<rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><circle cx="9" cy="10.5" r="1.8"/><path d="M20.5 15.5l-5-5-8.5 8"/>',
 };
 GLYPH.meet = GLYPH.pin;
 const glyph = (id, size = 16, width = 2.2) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${GLYPH[id]}</svg>`;
@@ -54,7 +62,7 @@ const state = {
 };
 const sheet = { snap: 'mid', target: 0 };
 
-let map, peopleLayer, resultLayer, poiLayer, anim, searchAbort, homeSearchCtl;
+let map, baseLayer, peopleLayer, resultLayer, poiLayer, anim, searchAbort, homeSearchCtl;
 
 // ---------------------------------------------------------------- helpers
 
@@ -68,7 +76,7 @@ function fmtDist(m) {
   return `${(m / 1000).toFixed(m < 9500 ? 1 : 0)} km`;
 }
 function travelMinutes(m, mode = state.settings.travel) {
-  return Math.round(m / SPEEDS[mode] / 60 + (mode === 'transit' ? 6 : 0));
+  return Math.round(estimateSeconds(mode, m / 1.3) / 60);
 }
 function fmtTime(min) {
   if (min < 60) return `${Math.max(1, min)} min`;
@@ -280,14 +288,114 @@ function initHome() {
 
 // ---------------------------------------------------------------- map
 
+const isDark = () => state.settings.theme === 'dark' || (state.settings.theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+// basemap:start
+// A clean, quiet base map in the spirit of Apple Maps: OpenFreeMap's vector
+// map (free, no key) drawn with MapLibre, with shop and restaurant icons
+// hidden so Meet's own pins stand out; its dark style at night. Devices
+// without WebGL get the standard OpenStreetMap map, toned down.
+const STYLES = { light: 'https://tiles.openfreemap.org/styles/liberty', dark: 'https://tiles.openfreemap.org/styles/dark' };
+// Left out: shop and café icons, bus stops, road numbers, one-way arrows, 3D buildings.
+const QUIET = /^(poi_r\d+|building-3d|highway-name-path|highway-shield.*|road_shield.*|road_one_way_arrow.*|.*_hatching)$/;
+// Softer colours: white streets, pale land, light blue water, gentle greens.
+const SOFT = {
+  background: { 'background-color': '#f6f4f0' },
+  landuse_residential: { 'fill-opacity': 0.35 },
+  park: { 'fill-color': '#d3eac5' },
+  water: { 'fill-color': '#a6d2f5' },
+  waterway_river: { 'line-color': '#a6d2f5' },
+  building: { 'fill-color': '#eae7e1' },
+  landuse_hospital: { 'fill-color': '#f7e8ed' },
+};
+for (const k of ['road', 'bridge', 'tunnel']) {
+  for (const id of ['secondary_tertiary', 'trunk_primary', 'link']) {
+    SOFT[`${k}_${id}`] = { 'line-color': '#ffffff' };
+    SOFT[`${k}_${id}_casing`] = { 'line-color': '#e2ddd4' };
+  }
+  SOFT[`${k}_motorway`] = { 'line-color': '#fbd994' };
+  SOFT[`${k}_motorway_link`] = { 'line-color': '#fbd994' };
+  SOFT[`${k}_motorway_casing`] = { 'line-color': '#eec47a' };
+  SOFT[`${k}_motorway_link_casing`] = { 'line-color': '#eec47a' };
+}
+// At night: dark grey land, deep blue water, dark green parks, readable streets.
+const DARK = {
+  background: { 'background-color': '#1c1c1e' },
+  landuse_residential: { 'fill-color': '#202022' },
+  water: { 'fill-color': '#1a2d42' },
+  waterway: { 'line-color': '#1a2d42' },
+  landuse_park: { 'fill-color': '#1c2b20' },
+  landcover_wood: { 'fill-color': '#1c2b20' },
+  building: { 'fill-color': '#262628' },
+  highway_path: { 'line-color': '#29292b' },
+  highway_minor: { 'line-color': '#2e2e31' },
+  highway_major_casing: { 'line-color': 'rgba(72,72,76,0.8)' },
+  highway_major_inner: { 'line-color': '#3a3a3d' },
+  highway_major_subtle: { 'line-color': '#343437' },
+  highway_motorway_subtle: { 'line-color': '#4a4136' },
+  railway: { 'line-color': '#333336' },
+  railway_transit: { 'line-color': '#333336' },
+  railway_minor: { 'line-color': '#333336' },
+  water_name: { 'text-color': '#6b93bd' },
+  highway_name_other: { 'text-color': '#8e8e93' },
+  highway_name_motorway: { 'text-color': '#a1a1a6' },
+};
+for (const id of ['other', 'suburb', 'village', 'town', 'city', 'city_large', 'state']) DARK[`place_${id}`] = { 'text-color': '#a1a1a6' };
+
+function quieten(gl, light) {
+  for (const layer of gl.getStyle().layers) {
+    try {
+      if (QUIET.test(layer.id)) gl.setLayoutProperty(layer.id, 'visibility', 'none');
+      if (layer.id === 'poi_transit') gl.setFilter(layer.id, ['match', ['get', 'class'], ['airport', 'rail'], true, false]); // stations, not bus stops
+      for (const [prop, value] of Object.entries((light ? SOFT : DARK)[layer.id] || {})) gl.setPaintProperty(layer.id, prop, value);
+    } catch { /* a layer this style does not have */ }
+  }
+}
+const OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+const OFM_ATTR = `<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> &copy; <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a> ${OSM_ATTR}`;
+let mapLibre = null;
+function loadMapLibre() {
+  mapLibre ||= (async () => {
+    const gl = document.createElement('canvas').getContext('webgl2') || document.createElement('canvas').getContext('webgl');
+    if (!gl) throw new Error('WebGL unavailable');
+    const css = Object.assign(document.createElement('link'), { rel: 'stylesheet', href: '/vendor/maplibre/maplibre-gl.css' });
+    document.head.append(css);
+    const mod = await import('/vendor/maplibre/maplibre-gl.mjs');
+    window.maplibregl = mod.default || mod;
+    await new Promise((resolve, reject) => {
+      const s = Object.assign(document.createElement('script'), { src: '/vendor/maplibre-leaflet/leaflet-maplibre-gl.js', onload: resolve, onerror: reject });
+      document.head.append(s);
+    });
+  })();
+  return mapLibre;
+}
+function addBasemap() {
+  const want = isDark() ? 'dark' : 'light';
+  if (baseLayer?.meetId === want) return;
+  loadMapLibre().then(() => {
+    if (baseLayer?.meetId === want) return;
+    baseLayer?.remove();
+    baseLayer = L.maplibreGL({ style: STYLES[want], attributionControl: { customAttribution: OFM_ATTR } });
+    baseLayer.meetId = want;
+    baseLayer.addTo(map);
+    const gl = baseLayer.getMaplibreMap();
+    gl.on('style.load', () => quieten(gl, want === 'light'));
+  }).catch(() => {
+    // No WebGL (or the library could not load): plain map tiles instead.
+    const id = `osm|${want}`;
+    if (baseLayer?.meetId === id) return;
+    baseLayer?.remove();
+    baseLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, className: `osm-tiles${want === 'dark' ? ' dark' : ''}`, attribution: OSM_ATTR });
+    baseLayer.meetId = id;
+    baseLayer.addTo(map).bringToBack();
+  });
+}
+// basemap:end
+
 function initMap() {
   map = L.map('map', { zoomControl: false, worldCopyJump: true });
   L.control.zoom({ position: 'bottomright' }).addTo(map);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    className: 'osm-tiles',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-  }).addTo(map);
+  addBasemap();
   map.attributionControl.setPrefix(false);
   map.attributionControl.addAttribution(`Routes <a href="${ATTRIBUTION.routing.url}" target="_blank" rel="noopener">FOSSGIS OSRM</a> · Public transport <a href="${ATTRIBUTION.transit.url}" target="_blank" rel="noopener">Transitous</a>`);
   peopleLayer = L.layerGroup().addTo(map);
@@ -603,6 +711,34 @@ function cancelSearch() {
   fitTo(activePeople().map((p) => [p.lat, p.lon]), { maxZoom: 15 });
 }
 
+const withTimeout = (promise, ms) => Promise.race([promise, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
+const routeMode = (r) => (r?.options ? 'transit' : r?.mode);
+
+/** One person's route as timed pieces for the animation (a straight dotted line if there is no route). */
+function trackFor(person, route, meet, estimate) {
+  const door = [person.lat, person.lon], end = [meet.lat, meet.lon];
+  if (!route) return { color: person.color, duration: estimate, pieces: [{ pts: [door, end], t0: 0, t1: estimate, walk: true }], alts: [] };
+  if (route.options) {
+    const o = route.options[0];
+    const start = Date.parse(o.start);
+    let t = 0;
+    const pieces = o.legs.filter((l) => l.geometry.length > 1).map((l) => {
+      const a = Date.parse(l.from.time);
+      const t0 = Number.isFinite(a) && Number.isFinite(start) ? Math.max(t, (a - start) / 1000) : t;
+      t = t0 + l.duration;
+      return { pts: l.geometry, t0, t1: t, walk: isWalkLeg(l) };
+    });
+    if (pieces.length) pieces.unshift({ pts: [door, pieces[0].pts[0]], t0: 0, t1: 0, walk: true });
+    return { color: person.color, duration: Math.max(t, o.duration), pieces, alts: route.options.slice(1).map((x) => x.legs.flatMap((l) => l.geometry)) };
+  }
+  return {
+    color: person.color,
+    duration: route.duration,
+    pieces: [{ pts: [door, ...route.geometry, end], t0: 0, t1: route.duration, walk: route.mode === 'walk' }],
+    alts: route.alternatives || [],
+  };
+}
+
 async function findPlaces({ replay = false } = {}) {
   const prev = replay ? state.search : null;
   const people = prev ? prev.people : activePeople();
@@ -615,43 +751,42 @@ async function findPlaces({ replay = false } = {}) {
   fitTo(people.map((p) => [p.lat, p.lon]), { maxZoom: 16, animate: false });
 
   try {
-    let net, solution;
-    if (prev) {
-      net = { graph: prev.graph, source: prev.source, reason: prev.reason };
-      solution = prev.solution;
-    } else {
-      setStatus('Loading streets…');
-      net = await loadNetwork(people, { signal: ctrl.signal, onStatus: (s) => setStatus(s) });
-      if (ctrl.signal.aborted) return;
-      setStatus('Working out routes…');
-      await new Promise((r) => setTimeout(r, 30));
-      solution = solveMeeting(net.graph, people, { mode: state.settings.mode, speeds: people.map((p) => SPEEDS[p.mode] || SPEEDS.transit) });
-    }
+    // 1. The fairest spot, from real travel times (a few small requests).
+    const meeting = prev ? prev.meeting : await findMeetingPoint(people, {
+      rule: state.settings.mode, travelTimes: getTravelTimes, directions: getDirections, signal: ctrl.signal,
+      onStatus: (t) => setStatus(t),
+    });
     if (ctrl.signal.aborted) return;
-
+    const meet = meeting.meet;
     const search = state.search = {
-      people, graph: net.graph, solution, source: net.source, reason: net.reason,
+      people, meeting, meet, routes: prev?.routes || null,
       pois: prev?.pois || null, grouped: prev?.grouped || null, radius: prev?.radius || null, tab: prev?.tab || null,
-      group: null, place: null, area: prev?.area || null, poiError: prev?.poiError || null,
-      poiDist: prev?.poiDist || new Map(), sort: prev?.sort,
+      group: null, place: null, area: prev?.area || null, poiError: prev?.poiError || null, sort: prev?.sort,
     };
 
-    // Fetch places and the area name while the routes animate.
+    // 2. Places and the area's name load while the routes come in and animate.
     const poisPromise = prev?.pois ? Promise.resolve() : loadPois(search, ctrl.signal);
     if (!search.area) {
-      reverseGeocode(solution.meet.lat, solution.meet.lon, { signal: ctrl.signal })
-        .then((r) => { search.area = r.address; if (state.view === 'results') render(); })
+      reverseGeocode(meet.lat, meet.lon, { signal: ctrl.signal })
+        .then((r) => { search.area = r.address; if (state.view === 'results') render({ keepScroll: true }); })
         .catch(() => {});
     }
 
-    anim = new GrowthAnimation(map, net.graph, solution, people.map((p) => p.color));
+    // 3. Everyone's real route there.
+    if (!search.routes) {
+      setStatus('Getting everyone’s routes…');
+      search.routes = await Promise.all(people.map((p) => withTimeout(getDirections(p.mode, p, meet, { alternatives: true, signal: ctrl.signal }), 10000).catch(() => null)));
+      if (ctrl.signal.aborted) return;
+    }
+    const tracks = people.map((p, i) => trackFor(p, search.routes[i], meet, meeting.times[i]));
+    anim = new GrowthAnimation(map, tracks);
     const done = await anim.play({
       duration: ANIM_MS[state.settings.speed] || ANIM_MS.normal,
-      onProgress: (r) => setStatus(`Routes spreading · ${fmtTime(Math.max(1, Math.round(r / 60)))}`, { skip: true }),
+      onProgress: (sec) => setStatus(`Everyone on their way · ${fmtTime(Math.max(1, Math.round(sec / 60)))}`, { skip: true }),
     });
     if (!done || ctrl.signal.aborted) return;
 
-    L.marker([solution.meet.lat, solution.meet.lon], {
+    L.marker([meet.lat, meet.lon], {
       icon: L.divIcon({ className: '', html: '<div class="meet-dot"></div>', iconSize: [22, 22], iconAnchor: [11, 11] }),
       zIndexOffset: 1000,
     }).bindTooltip('Meeting point', { permanent: true, direction: 'top', className: 'label', offset: [0, -14] }).addTo(resultLayer);
@@ -661,7 +796,7 @@ async function findPlaces({ replay = false } = {}) {
     if (ctrl.signal.aborted) return;
     setStatus('');
     setView('results', { pop: true });
-    fitTo([...people.map((p) => [p.lat, p.lon]), [solution.meet.lat, solution.meet.lon]], { maxZoom: 16 });
+    fitTo([...people.map((p) => [p.lat, p.lon]), [meet.lat, meet.lon]], { maxZoom: 16 });
   } catch (err) {
     if (ctrl.signal.aborted) return;
     console.error(err);
@@ -675,7 +810,7 @@ async function findPlaces({ replay = false } = {}) {
 async function loadPois(search, signal, radius) {
   search.poiError = null;
   try {
-    const { pois, radius: used } = await findPois(search.solution.meet, { radius, signal });
+    const { pois, radius: used } = await findPois(search.meet, { radius, signal });
     search.pois = pois;
     search.radius = used;
     search.grouped = groupPois(pois);
@@ -691,12 +826,8 @@ async function loadPois(search, signal, radius) {
   }
 }
 
-/** Road distances from every person to a place (cached). */
-function distancesTo(poi) {
-  const s = state.search;
-  if (!s.poiDist.has(poi.id)) s.poiDist.set(poi.id, s.solution.people.map((person) => roadDistanceTo(s.graph, person, poi)));
-  return s.poiDist.get(poi.id);
-}
+/** Rough road distance from every person to a place (real times load separately). */
+const distancesTo = (poi) => state.search.people.map((person) => haversine(person.lat, person.lon, poi.lat, poi.lon) * 1.3);
 
 const modeLabel = (m) => MODES.find((x) => x.id === m)?.label || 'Transit';
 const CARET = '<svg class="caret" viewBox="0 0 10 6" width="8" height="5" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -765,17 +896,20 @@ function modeSwitch(action) {
 /** Real travel times from everyone to the meeting point, each in their own mode. */
 function loadMeetTimes() {
   const s = state.search;
-  const meet = s.solution.meet;
+  const meet = s.meet;
   const key = `${s.people.map((p) => p.mode).join(',')}|${meet.lat},${meet.lon}`;
   if (s.meetTimes?.key === key) return;
   const mt = s.meetTimes = { key, values: s.people.map(() => null) };
   const refresh = () => { if (state.search === s && s.meetTimes === mt && state.view === 'results') render({ keepScroll: true }); };
+  // The routes already fetched for the animation give most of these.
+  const known = s.people.map((person, i) => routeMode(s.routes?.[i]) === person.mode);
+  known.forEach((k, i) => { if (k) mt.values[i] = s.routes[i].duration; });
   s.people.forEach((person, i) => {
-    if (person.mode !== 'transit') return;
+    if (person.mode !== 'transit' || known[i]) return;
     getDirections('transit', person, meet).then((d) => { mt.values[i] = d.duration; refresh(); }).catch(() => {});
   });
   for (const mode of ['walk', 'bike', 'drive']) {
-    const idx = s.people.map((p, i) => (p.mode === mode ? i : -1)).filter((i) => i >= 0);
+    const idx = s.people.map((p, i) => (p.mode === mode && !known[i] ? i : -1)).filter((i) => i >= 0);
     if (!idx.length) continue;
     getTravelTimes(mode, idx.map((i) => s.people[i]), [meet])
       .then((t) => { t.durations.forEach((row, k) => { mt.values[idx[k]] = row[0]; }); refresh(); }).catch(() => {});
@@ -786,7 +920,6 @@ function loadMeetTimes() {
 
 function renderResults() {
   const s = state.search;
-  const { solution } = s;
   loadMeetTimes();
   const total = s.pois.length;
   const tabs = TABS.map((t) => {
@@ -816,9 +949,9 @@ function renderResults() {
       </div>
     </div>
     ${modeSwitch('trip-mode')}
-    <ul class="group icons">${s.people.map((p, i) => tripRow(p, solution.people[i].reach, s.meetTimes?.values[i])).join('')}
+    <ul class="group icons">${s.people.map((p, i) => tripRow(p, s.routes?.[i]?.distance ?? s.meeting.dists[i], s.meetTimes?.values[i])).join('')}
       <li><button class="cell cell-btn" data-action="meet-place">${tile('meet')}<span class="cell-main cell-title">Routes to this spot &amp; send it</span>${CHEV}</button></li></ul>
-    ${s.source === 'synthetic' ? `<p class="notice">${esc(s.reason)} Distances are estimates.</p>` : ''}
+    ${s.meeting.approx ? '<p class="notice">Travel times could not be checked right now, so this spot is estimated from distance.</p>' : ''}
     <div class="pills" role="tablist">${tabs}</div>
     ${list}
     <div class="radius-row"><span class="footnote">${total} places within</span><div class="segmented">${radius}</div></div>
@@ -827,6 +960,85 @@ function renderResults() {
       <button class="btn btn-tinted" data-action="replay">Replay</button>
       <button class="btn btn-tinted" data-action="edit-people">Edit people</button>
     </div>`;
+}
+
+// ------------------------------------------------ ratings & photos
+
+let ratingsOn = false; // the server has ratings (checked at start)
+let ratingsName = ''; // who they come from, for the credit line
+
+const thumbArt = (p) => `<span class="thumb-art" style="--c:${TAB_COLOR[p.tab] || '#8e8e93'}">${glyph(p.tab === 'meet' ? 'pin' : p.tab, 22, 1.9)}</span>`;
+const stars = (x) => `<span class="stars" style="--r:${Math.max(0, Math.min(100, (x / 5) * 100))}%" aria-hidden="true">★★★★★</span>`;
+
+/** "4.5 ●●●●◐ (1,234)": Tripadvisor's bubble picture when we have it, else stars. */
+function ratingHtml(r, { big = false, number = true } = {}) {
+  if (!r || r.rating == null) return '';
+  const pic = r.ratingImage
+    ? `<img class="bubbles" src="${esc(r.ratingImage)}" alt="" width="${big ? 88 : 66}" height="${big ? 17 : 13}">`
+    : stars(r.rating);
+  const count = r.count ? `<span class="r-count">(${Number(r.count).toLocaleString()})</span>` : '';
+  return `<span class="rating${big ? ' big' : ''}" aria-label="Rated ${Number(r.rating).toFixed(1)} out of 5${r.count ? ` from ${r.count} reviews` : ''}">${number ? `<b>${Number(r.rating).toFixed(1)}</b>` : ''}${pic}${count}</span>`;
+}
+
+/** "Open · Closes 22:00" with the first word coloured. */
+function statusHtml(st) {
+  if (!st) return '';
+  const [first, ...rest] = st.text.split(' · ');
+  const cls = st.open ? (st.soon ? 'soon' : 'open') : 'closed';
+  return `<span class="st ${cls}">${esc(first)}</span>${rest.length ? ` · ${esc(rest.join(' · '))}` : ''}`;
+}
+
+const hrefOf = (url) => (!url ? '' : /^https?:\/\//i.test(url) ? url : `https://${url}`);
+const poiById = (id) => state.search?.pois?.find((p) => p.id === id);
+
+// Rows coming into view get their rating (a batch at a time) and their photo.
+let rowObserver = null;
+const ratingQueue = new Set();
+let ratingTimer = 0;
+let ratingsPausedShown = false;
+function queueRating(p) {
+  if (!ratingsOn || p.rating !== undefined || p.ratingPending) return;
+  ratingQueue.add(p);
+  clearTimeout(ratingTimer);
+  ratingTimer = setTimeout(() => {
+    const batch = [...ratingQueue].slice(0, 12);
+    for (const x of batch) ratingQueue.delete(x);
+    const s = state.search;
+    rateAll(batch)
+      .catch((err) => { if (!ratingsPausedShown) { ratingsPausedShown = true; toast(err.message, { error: true }); } })
+      .finally(() => {
+        if (state.search !== s) return;
+        if (['group', 'place'].includes(state.view)) render({ keepScroll: true });
+        if (ratingQueue.size) queueRating([...ratingQueue][0]);
+      });
+  }, 120);
+}
+
+function loadThumb(el) {
+  const p = poiById(el.dataset.thumb);
+  if (!p || el.dataset.loading) return;
+  if (ratingsOn && p.rating === undefined) { queueRating(p); return; }
+  if (p.thumb === null || el.querySelector('img')) return;
+  el.dataset.loading = '1';
+  thumbFor(p).then((url) => {
+    if (!url || !el.isConnected || el.querySelector('img')) return;
+    const img = new Image();
+    img.alt = '';
+    img.decoding = 'async';
+    img.onload = () => img.classList.add('in');
+    img.onerror = () => { img.remove(); p.thumb = null; };
+    img.src = url;
+    el.prepend(img);
+  }).catch(() => {}).finally(() => { delete el.dataset.loading; });
+}
+
+function observeRows() {
+  rowObserver?.disconnect();
+  if (!('IntersectionObserver' in window)) { $$('[data-thumb]').forEach(loadThumb); return; }
+  rowObserver = new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) loadThumb(e.target);
+  }, { root: $('#panel-body'), rootMargin: '120px 0px' });
+  for (const el of $$('[data-thumb]')) rowObserver.observe(el);
 }
 
 // ------------------------------------------------ group (category) view
@@ -845,10 +1057,12 @@ function groupItems() {
       real = false;
       return travelMinutes(ds[pi], person.mode);
     });
-    return { ...p, ds, worstMin: Math.round(Math.max(...per)), real };
+    return { p, ds, worstMin: Math.round(Math.max(...per)), real };
   });
+  const rated = (x) => (x.p.rating?.rating ?? -1) * 100000 + (x.p.rating?.count || 0);
   if (s.sort === 'fair') enriched.sort((a, b) => a.worstMin - b.worstMin);
-  else enriched.sort((a, b) => a.fromCenter - b.fromCenter);
+  else if (s.sort === 'top') enriched.sort((a, b) => rated(b) - rated(a) || a.p.fromCenter - b.p.fromCenter);
+  else enriched.sort((a, b) => a.p.fromCenter - b.p.fromCenter);
   return enriched;
 }
 
@@ -870,28 +1084,43 @@ function loadGroupTimes(items) {
   return gt.durations;
 }
 
+function poiRow({ p, worstMin, real }, i) {
+  const s = state.search;
+  const r = p.rating;
+  const ratingPart = r?.rating != null ? ratingHtml(r) : ratingsOn && r === undefined ? '<span class="skel" style="width:92px"></span>' : '';
+  const line2 = [ratingPart, esc(PRICE[r?.priceLevel] || '')].filter(Boolean).join('<span class="dot">·</span>');
+  const where = [s.group === '*' ? p.group : '', p.address].filter(Boolean).map(esc).join(' · ');
+  const st = statusHtml(openStatus(p.hours));
+  return `<li><button class="cell cell-btn poi" data-action="place" data-id="${esc(p.id)}">
+      <span class="thumb" data-thumb="${esc(p.id)}">${p.thumb ? `<img class="in" src="${esc(p.thumb)}" alt="">` : ''}${thumbArt(p)}<span class="num" style="--c:${TAB_COLOR[p.tab]}">${i + 1}</span></span>
+      <span class="cell-main"><span class="cell-title">${esc(p.name)}</span>
+        ${line2 ? `<span class="cell-meta">${line2}</span>` : ''}
+        <span class="cell-sub">${where || 'Near the meeting point'}</span>
+        ${st ? `<span class="cell-sub">${st}</span>` : ''}</span>
+      <span class="cell-end"><b>${fmtDist(p.fromCenter)}</b>max ${real ? '' : '≈ '}${fmtTime(worstMin)}</span>
+    </button></li>`;
+}
+
 function renderGroup() {
   const s = state.search;
   const items = groupItems();
+  s.groupList = items.map((x) => x.p);
   const title = s.group === '*' ? `All ${TABS.find((t) => t.id === s.tab).label.toLowerCase()}` : s.group;
-  const color = TAB_COLOR[s.tab];
-  const markersKey = `${s.tab}|${s.group}|${s.sort}|${items.map((p) => p.id).join(',')}`;
-  if (s.markersKey !== markersKey) { s.markersKey = markersKey; drawPoiMarkers(items); }
+  const markersKey = `${s.tab}|${s.group}|${s.sort}|${items.map((x) => x.p.id).join(',')}`;
+  if (s.markersKey !== markersKey) { s.markersKey = markersKey; drawPoiMarkers(items.map((x) => x.p)); }
+  const anyTa = items.some((x) => x.p.rating?.rating != null);
+  const anyFree = items.some((x) => x.p.thumb && !x.p.rating?.id);
+  const credits = [anyTa && (ratingsName === 'Tripadvisor' ? 'Ratings and photos from Tripadvisor' : ratingsName), anyFree && 'Some photos from Wikimedia Commons'].filter(Boolean).join(' · ');
   return `
     ${backBtn('back-results', 'Categories')}
     <div class="sheet-title">${tile(s.tab, 'lg')}<div style="flex:1;min-width:0"><h2>${esc(title)}</h2><div class="footnote">${items.length} place${items.length === 1 ? '' : 's'} nearby</div></div></div>
     <div class="segmented" style="margin-top:0">
-      <button class="seg${s.sort !== 'fair' ? ' active' : ''}" data-action="sort" data-sort="near">Nearest</button>
-      <button class="seg${s.sort === 'fair' ? ' active' : ''}" data-action="sort" data-sort="fair">Fairest for everyone</button>
+      <button class="seg${!['fair', 'top'].includes(s.sort) ? ' active' : ''}" data-action="sort" data-sort="near">Nearest</button>
+      <button class="seg${s.sort === 'fair' ? ' active' : ''}" data-action="sort" data-sort="fair">Fairest</button>
+      ${ratingsOn ? `<button class="seg${s.sort === 'top' ? ' active' : ''}" data-action="sort" data-sort="top">Top rated</button>` : ''}
     </div>
-    <ul class="group icons">
-      ${items.map((p, i) => `<li><button class="cell cell-btn poi" data-action="place" data-id="${esc(p.id)}">
-        <span class="num" style="--c:${color}">${i + 1}</span>
-        <span class="cell-main"><span class="cell-title">${esc(p.name)}</span>
-          <span class="cell-sub">${esc([s.group === '*' ? p.group : '', p.address].filter(Boolean).join(' · ') || 'Near the meeting point')}</span></span>
-        <span class="cell-end"><b>${fmtDist(p.fromCenter)}</b>max ${p.real ? '' : '≈ '}${fmtTime(p.worstMin)}</span>${CHEV}
-      </button></li>`).join('')}
-    </ul>`;
+    <ul class="group places">${items.map(poiRow).join('')}</ul>
+    ${credits ? `<p class="footnote attrib">${esc(credits)}</p>` : ''}`;
 }
 
 afterRender.group = () => {
@@ -899,6 +1128,7 @@ afterRender.group = () => {
     b.addEventListener('mouseenter', () => highlightPoi(b.dataset.id, true));
     b.addEventListener('mouseleave', () => highlightPoi(b.dataset.id, false));
   }
+  observeRows();
 };
 
 const poiMarkers = new Map();
@@ -907,31 +1137,52 @@ function drawPoiMarkers(items) {
   poiMarkers.clear();
   items.forEach((p, i) => {
     const m = L.marker([p.lat, p.lon], {
-      icon: L.divIcon({ className: '', html: `<div class="poi-pin" style="--c:${TAB_COLOR[p.tab]}">${i + 1}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] }),
+      icon: L.divIcon({ className: '', html: `<div class="poi-pin" style="--c:${TAB_COLOR[p.tab]}">${i + 1}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] }),
       riseOnHover: true,
-    }).bindTooltip(esc(p.name), { permanent: items.length <= 25, direction: 'right', className: 'label', offset: [16, 0] })
+    }).bindTooltip(esc(p.name), { permanent: items.length <= 8, direction: 'right', className: 'label', offset: [14, 0] })
       .addTo(poiLayer);
     m.on('click', () => openPlace(p.id));
     poiMarkers.set(p.id, m);
   });
   const s = state.search;
-  requestAnimationFrame(() => fitTo([...items.map((p) => [p.lat, p.lon]), [s.solution.meet.lat, s.solution.meet.lon]], { maxZoom: 17 }));
+  requestAnimationFrame(() => fitTo([...items.map((p) => [p.lat, p.lon]), [s.meet.lat, s.meet.lon]], { maxZoom: 17 }));
 }
 
 function highlightPoi(id, on) {
   const m = poiMarkers.get(id);
   m?.getElement()?.querySelector('.poi-pin')?.classList.toggle('hl', on);
   m?.setZIndexOffset(on ? 1000 : 0);
+  if (m && poiMarkers.size > 8) { if (on) m.openTooltip(); else m.closeTooltip(); }
 }
 
 function openPlace(id) {
   const s = state.search;
+  const p = s.pois.find((x) => x.id === id);
+  if (!p) return;
   s.placeDrawn = null;
-  s.place = s.pois.find((p) => p.id === id);
-  if (s.place) setView('place');
+  s.place = p;
+  state.placeTab = 'overview';
+  loadDetails(p);
+  setView('place');
+}
+
+/** Photos, reviews and more for a place (Tripadvisor and/or Wikimedia), loaded once. */
+function loadDetails(p) {
+  if (p.id === 'meet' || p.details) return;
+  p.details = { status: 'loading', photos: [], reviews: [] };
+  (async () => {
+    if (ratingsOn && p.rating === undefined) await rateAll([p]).catch(() => {});
+    return detailsFor(p);
+  })()
+    .then((d) => { p.details = { status: 'ok', ...d }; })
+    .catch(() => { p.details = { status: 'error', photos: [], reviews: [] }; })
+    .finally(() => { if (state.view === 'place' && state.search?.place === p) render({ keepScroll: true }); });
 }
 
 // ------------------------------------------------ place view
+
+const PLACE_TABS = { overview: 'Overview', reviews: 'Reviews', photos: 'Photos', about: 'About' };
+const TRIP = { BUSINESS: 'Business', COUPLES: 'Couples', FAMILY: 'Family', FRIENDS: 'Friends', SOLO: 'Solo' };
 
 function renderPlace() {
   const s = state.search;
@@ -942,27 +1193,71 @@ function renderPlace() {
     s.markersKey = null;
     poiLayer.clearLayers();
     L.marker([p.lat, p.lon], {
-      icon: L.divIcon({ className: '', html: `<div class="poi-pin hl" style="--c:${TAB_COLOR[p.tab] || '#007aff'}">${glyph(p.tab, 15)}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] }),
+      icon: L.divIcon({ className: '', html: `<div class="poi-pin hl" style="--c:${TAB_COLOR[p.tab] || '#007aff'}">${glyph(p.tab, 15)}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] }),
       zIndexOffset: 1200,
-    }).bindTooltip(esc(p.name), { permanent: true, direction: 'right', className: 'label', offset: [20, 0] }).addTo(poiLayer);
+    }).bindTooltip(esc(p.name), { permanent: true, direction: 'right', className: 'label', offset: [18, 0] }).addTo(poiLayer);
     requestAnimationFrame(() => fitTo([...s.people.map((x) => [x.lat, x.lon]), [p.lat, p.lon]], { maxZoom: 16 }));
   }
   loadPlaceDirections();
   drawDirections();
 
-  const tags = [p.group, p.outdoor ? 'Outdoor seating' : '', p.vegan ? 'Vegan options' : p.vegetarian ? 'Vegetarian options' : '', p.wheelchair === 'yes' ? 'Step-free' : ''].filter(Boolean);
-  const links = mapLinks(p);
-  const website = p.website && /^https?:\/\//i.test(p.website) ? p.website : p.website ? `https://${p.website}` : '';
+  const d = p.details || { photos: [], reviews: [] };
+  const r = d.rating != null ? d : p.rating;
+  const loading = d.status === 'loading';
+  const photos = d.photos || [];
+  const st = openStatus(p.hours);
+  const phone = d.phone || p.phone;
+  const site = hrefOf(d.website || p.website);
+  const menu = hrefOf(d.menu || p.menu);
+  const tabs = ['overview', (d.reviews?.length || r?.count) && 'reviews', photos.length > 1 && 'photos', p.id !== 'meet' && 'about'].filter(Boolean);
+  const tab = tabs.includes(state.placeTab) ? state.placeTab : 'overview';
+
+  const gallery = photos.length
+    ? `<div class="gallery${photos.length === 1 ? ' single' : ''}">${photos.slice(0, 8).map((ph, k) => `<button class="g-item" data-action="photo" data-i="${k}" aria-label="Photo ${k + 1} of ${photos.length}"><img src="${esc(ph.url)}" alt="${esc(ph.caption || '')}" ${k > 1 ? 'loading="lazy"' : ''} decoding="async"></button>`).join('')}</div>`
+    : loading ? '<div class="gallery"><span class="g-item skel"></span><span class="g-item skel"></span></div>'
+      : `<div class="hero-art" style="--c:${TAB_COLOR[p.tab] || '#007aff'}">${glyph(p.tab === 'meet' ? 'pin' : p.tab, 40, 1.6)}</div>`;
+  const meta = [p.id === 'meet' ? 'Meeting point' : p.group, PRICE[r?.priceLevel], p.id === 'meet' ? '' : `${fmtDist(p.fromCenter)} from the meeting point`].filter(Boolean);
+  const quick = [
+    `<button class="q primary" data-action="choose">${glyph('send', 19)}<span>Send</span></button>`,
+    `<button class="q" data-action="place-tab" data-tab="overview" data-scroll="getting-there">${glyph('route', 19)}<span>Directions</span></button>`,
+    phone ? `<a class="q" href="tel:${esc(phone.replace(/[^\d+]/g, ''))}">${glyph('phone', 19)}<span>Call</span></a>` : '',
+    site ? `<a class="q" href="${esc(site)}" target="_blank" rel="noopener">${glyph('globe', 19)}<span>Website</span></a>` : '',
+    menu ? `<a class="q" href="${esc(menu)}" target="_blank" rel="noopener">${glyph('menu', 19)}<span>Menu</span></a>` : '',
+  ].join('');
+  const bodies = { overview: placeOverview, reviews: placeReviews, photos: placePhotos, about: placeAbout };
+  return `
+    ${p.id === 'meet' ? backBtn('back-results', 'Places') : backBtn('back-group', s.group === '*' ? 'Back' : s.group)}
+    ${gallery}
+    <div class="place-title">
+      <h2>${esc(p.name)}</h2>
+      ${r?.rating != null ? `<div class="place-rating">${ratingHtml(r, { big: true })}${r.count ? `<button class="btn btn-plain" data-action="place-tab" data-tab="reviews">${Number(r.count).toLocaleString()} reviews</button>` : ''}</div>` : loading && ratingsOn ? '<span class="skel" style="width:150px;height:16px"></span>' : ''}
+      <div class="footnote">${esc(meta.join(' · '))}</div>
+      ${st ? `<div class="place-status">${statusHtml(st)}</div>` : ''}
+    </div>
+    <div class="quick">${quick}</div>
+    ${tabs.length > 1 ? `<div class="segmented place-tabs" role="tablist">${tabs.map((t) => `<button class="seg${t === tab ? ' active' : ''}" role="tab" aria-selected="${t === tab}" data-action="place-tab" data-tab="${t}">${PLACE_TABS[t]}</button>`).join('')}</div>` : ''}
+    ${bodies[tab](p, d, r, ds)}`;
+}
+
+function placeOverview(p, d, r, ds) {
+  const s = state.search;
   const when = state.when || { type: 'now' };
   const anyTransit = s.people.some((x) => x.mode === 'transit');
   const anyRoad = s.people.some((x) => x.mode !== 'transit');
   const credits = [anyTransit && ATTRIBUTION.transit, anyRoad && ATTRIBUTION.routing].filter(Boolean)
     .map((a) => `<a href="${a.url}" target="_blank" rel="noopener">${esc(a.text)}</a>`).join(' · ');
+  const site = hrefOf(d.website || p.website);
+  const phone = d.phone || p.phone;
+  const week = weekTable(p.hours);
+  const st = openStatus(p.hours);
+  const hours = week
+    ? `<details class="hours"><summary>${st ? statusHtml(st) : 'Opening hours'}</summary><table>${week.map((w) => `<tr${w.today ? ' class="today"' : ''}><th>${w.day}</th><td>${esc(w.text)}</td></tr>`).join('')}</table></details>`
+    : d.hours?.length ? d.hours.map(esc).join('<br>') : p.hours ? esc(p.hours) : '';
+  const summary = d.ranking || d.description || p.description;
+  const links = mapLinks(p);
   return `
-    ${p.id === 'meet' ? backBtn('back-results', 'Places') : backBtn('back-group', s.group === '*' ? 'Back' : s.group)}
-    <div class="place-head">${tile(p.tab, 'xl')}<div style="min-width:0"><h2>${esc(p.name)}</h2><div class="footnote">${esc(tags.join(' · '))}</div></div></div>
-    <button class="btn btn-primary btn-block btn-lg" data-action="choose">Send location</button>
-    <div class="section-title">Getting there</div>
+    ${summary ? `<p class="place-summary">${esc(d.ranking ? d.ranking : '')}${d.ranking && (d.description || p.description) ? '<br>' : ''}${esc(truncate(d.description || p.description || '', 220))}</p>` : ''}
+    <div class="section-title" id="getting-there">Getting there</div>
     ${modeSwitch('dir-mode')}
     ${anyTransit ? `<div class="when-row">
       <select id="dir-when-type" aria-label="When">
@@ -975,14 +1270,70 @@ function renderPlace() {
     <p class="footnote attrib">${credits}</p>
     <div class="section-title">Details</div>
     <ul class="group kv">
-      <li><div class="cell"><span class="k">Address</span><span class="v">${esc(p.address || 'Not listed')}${p.id === 'meet' ? '' : `<br><span class="footnote">${fmtDist(p.fromCenter)} from the meeting point</span>`}</span></div></li>
-      ${p.hours ? `<li><div class="cell"><span class="k">Hours</span><span class="v">${esc(p.hours)}</span></div></li>` : ''}
-      ${p.phone ? `<li><div class="cell"><span class="k">Phone</span><a class="v" href="tel:${esc(p.phone.replace(/\s/g, ''))}">${esc(p.phone)}</a></div></li>` : ''}
-      ${website ? `<li><div class="cell"><span class="k">Website</span><a class="v" href="${esc(website)}" target="_blank" rel="noopener">${esc(website.replace(/^https?:\/\//, '').replace(/\/$/, ''))}</a></div></li>` : ''}
+      <li><div class="cell"><span class="k">Address</span><span class="v">${esc(p.address || d.address || 'Not listed')}</span></div></li>
+      ${hours ? `<li><div class="cell"><span class="k">Hours</span><span class="v">${hours}</span></div></li>` : ''}
+      ${phone ? `<li><div class="cell"><span class="k">Phone</span><a class="v" href="tel:${esc(phone.replace(/[^\d+]/g, ''))}">${esc(phone)}</a></div></li>` : ''}
+      ${site ? `<li><div class="cell"><span class="k">Website</span><a class="v" href="${esc(site)}" target="_blank" rel="noopener">${esc(site.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''))}</a></div></li>` : ''}
     </ul>
     <div class="actions">
       <a class="btn btn-tinted" href="${links.osm}" target="_blank" rel="noopener">Open in maps</a>
     </div>`;
+}
+
+const truncate = (t, n) => (t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t);
+const fmtDate = (iso) => { const t = Date.parse(iso); return Number.isFinite(t) ? new Date(t).toLocaleDateString([], { month: 'short', year: 'numeric' }) : ''; };
+
+function placeReviews(p, d, r) {
+  if (d.status === 'loading') return '<div class="empty"><span class="spinner"></span></div>';
+  const total = (d.breakdown || []).reduce((a, b) => a + b.count, 0);
+  const bars = total ? `<div class="bars">${[5, 4, 3, 2, 1].map((n) => {
+    const c = d.breakdown.find((b) => b.rating === n)?.count || 0;
+    return `<div class="bar"><span>${n}</span><i><b style="width:${((c / total) * 100).toFixed(1)}%"></b></i></div>`;
+  }).join('')}</div>` : '';
+  const reviews = (d.reviews || []).map((rv) => `<li class="review">
+      <div class="rv-head"><span class="avatar sm" style="--c:#8e8e93">${rv.avatar ? `<img src="${esc(rv.avatar)}" alt="" loading="lazy">` : esc(initial(rv.user))}</span>
+        <div class="rv-who"><b>${esc(rv.user)}</b><span class="footnote">${esc([fmtDate(rv.date), TRIP[rv.tripType]].filter(Boolean).join(' · '))}</span></div></div>
+      <div class="rv-rating">${rv.ratingImage ? `<img class="bubbles" src="${esc(rv.ratingImage)}" alt="${rv.rating} of 5" width="66" height="13">` : stars(rv.rating)}</div>
+      ${rv.title ? `<h4>${esc(rv.title)}</h4>` : ''}
+      <p class="rv-text" data-action="rv-more">${esc(rv.text)}</p>
+      ${rv.reply ? `<div class="rv-reply"><b>Reply from the owner</b><p class="rv-text" data-action="rv-more">${esc(rv.reply)}</p></div>` : ''}
+    </li>`).join('');
+  const from = d.attribution || (d.source === 'tripadvisor' ? 'Ratings and reviews from Tripadvisor' : '');
+  return `
+    ${r?.rating != null ? `<div class="rev-summary"><div class="big-num">${Number(r.rating).toFixed(1)}</div>
+      <div class="rev-mid">${ratingHtml({ ...r, count: 0 }, { big: true, number: false })}<span class="footnote">${Number(r.count || 0).toLocaleString()} reviews</span></div>${bars}</div>` : ''}
+    ${d.subratings?.length ? `<div class="subratings">${d.subratings.map((x) => `<span class="chip">${esc(x.name)} <b>${Number(x.rating).toFixed(1)}</b></span>`).join('')}</div>` : ''}
+    ${reviews ? `<ul class="reviews">${reviews}</ul>` : '<div class="empty">No reviews to show here yet.</div>'}
+    <div class="actions">
+      ${r?.url ? `<a class="btn btn-tinted" href="${esc(r.url)}" target="_blank" rel="noopener">All reviews on Tripadvisor</a>` : ''}
+      ${d.writeReview ? `<a class="btn btn-tinted" href="${esc(d.writeReview)}" target="_blank" rel="noopener">Write a review</a>` : ''}
+    </div>
+    ${from ? `<p class="footnote attrib">${esc(from)}</p>` : ''}`;
+}
+
+function placePhotos(p, d) {
+  const photos = d.photos || [];
+  const free = photos.some((ph) => ph.credit);
+  return `<div class="photo-grid">${photos.map((ph, k) => `<button class="g-item" data-action="photo" data-i="${k}" aria-label="Photo ${k + 1}"><img src="${esc(ph.url)}" alt="${esc(ph.caption || '')}" loading="lazy" decoding="async"></button>`).join('')}</div>
+    <p class="footnote attrib">${esc([d.source === 'tripadvisor' && 'Photos from Tripadvisor', free && 'Photos from Wikimedia Commons (tap one for its credit)', d.photoNote].filter(Boolean).join(' · '))}</p>`;
+}
+
+function placeAbout(p, d) {
+  const yes = (v) => v === 'yes' || v === 'only';
+  const feats = [
+    p.outdoor && 'Outdoor seating', yes(p.takeaway) && 'Takeaway', yes(p.delivery) && 'Delivery', yes(p.reservation) && 'Takes bookings',
+    p.wifi && 'Wi-Fi', p.wheelchair === 'yes' && 'Step-free access', p.vegan ? 'Vegan options' : p.vegetarian && 'Vegetarian options',
+    yes(p.dogs) && 'Dogs welcome', ...(d.features || []),
+  ].filter(Boolean);
+  const unique = [...new Set(feats)];
+  const cuisines = (p.cuisine || '').split(/[;,]/).map((c) => c.trim().replace(/_/g, ' ')).filter(Boolean);
+  return `
+    ${d.description || p.description ? `<p class="place-summary">${esc(d.description || p.description)}</p>` : ''}
+    ${cuisines.length || d.categories?.length ? `<div class="section-title">Food</div><div class="subratings">${[...new Set([...cuisines.map((c) => c[0].toUpperCase() + c.slice(1)), ...(d.categories || [])])].map((c) => `<span class="chip">${esc(c)}</span>`).join('')}</div>` : ''}
+    ${unique.length ? `<div class="section-title">Good to know</div><ul class="group features">${unique.map((f) => `<li><div class="cell"><span class="check">✓</span>${esc(f)}</div></li>`).join('')}</ul>` : ''}
+    ${d.ranking || d.awards?.length ? `<div class="section-title">Recognition</div><ul class="group features">${[d.ranking, ...(d.awards || [])].filter(Boolean).map((a) => `<li><div class="cell">${esc(a)}</div></li>`).join('')}</ul>` : ''}
+    ${!unique.length && !cuisines.length && !d.description && !p.description ? '<div class="empty">No more details listed for this place.</div>' : ''}
+    <p class="footnote attrib">Place details from <a href="https://www.openstreetmap.org/${esc(p.id)}" target="_blank" rel="noopener">OpenStreetMap</a>${d.source === 'tripadvisor' ? ' and Tripadvisor' : ''}</p>`;
 }
 
 afterRender.place = () => {
@@ -999,6 +1350,42 @@ afterRender.place = () => {
     if (e.target.value) { state.when = { type: 'arrive', time: e.target.value }; render({ keepScroll: true }); }
   });
 };
+
+// ------------------------------------------------ photo viewer
+
+function openLightbox(photos, start) {
+  let i = start;
+  const box = document.createElement('div');
+  box.className = 'lightbox';
+  box.setAttribute('role', 'dialog');
+  box.setAttribute('aria-label', 'Photos');
+  const show = () => {
+    const ph = photos[i];
+    box.innerHTML = `<button class="lb-close" aria-label="Close">${glyph('close', 18, 2.4)}</button>
+      ${photos.length > 1 ? `<button class="lb-prev" aria-label="Previous photo">‹</button><button class="lb-next" aria-label="Next photo">›</button>` : ''}
+      <figure><img src="${esc(ph.url)}" alt="${esc(ph.caption || '')}"><figcaption>${esc([ph.caption, ph.by && `by ${ph.by}`, ph.credit].filter(Boolean).join(' · '))}
+      ${ph.link ? ` · <a href="${esc(ph.link)}" target="_blank" rel="noopener">Licence &amp; source</a>` : ''}<span class="lb-count">${i + 1} / ${photos.length}</span></figcaption></figure>`;
+  };
+  const close = () => { box.remove(); document.removeEventListener('keydown', onKey); };
+  const step = (k) => { i = (i + k + photos.length) % photos.length; show(); };
+  const onKey = (e) => {
+    if (e.key === 'Escape') close();
+    else if (e.key === 'ArrowRight') step(1);
+    else if (e.key === 'ArrowLeft') step(-1);
+  };
+  box.addEventListener('click', (e) => {
+    if (e.target.closest('.lb-close') || e.target === box) close();
+    else if (e.target.closest('.lb-next')) step(1);
+    else if (e.target.closest('.lb-prev')) step(-1);
+  });
+  let x0 = null;
+  box.addEventListener('pointerdown', (e) => { x0 = e.clientX; });
+  box.addEventListener('pointerup', (e) => { if (x0 != null && Math.abs(e.clientX - x0) > 50) step(e.clientX < x0 ? 1 : -1); x0 = null; });
+  document.addEventListener('keydown', onKey);
+  show();
+  document.body.appendChild(box);
+  $('.lb-close', box).focus();
+}
 
 /** Fetch each person's real directions to the open place (once per place / mode / time). */
 function loadPlaceDirections() {
@@ -1220,21 +1607,21 @@ function initPanel() {
         const ctrl = new AbortController();
         searchAbort = ctrl;
         await loadPois(s, ctrl.signal, Number(el.dataset.r)).catch(() => {});
-        s.poiDist.clear();
         render();
         break;
       }
       case 'surprise': {
         const pick = s.pois[Math.floor(Math.random() * s.pois.length)];
-        s.tab = pick.tab; s.group = pick.group; s.place = pick; s.placeDrawn = null;
-        setView('place');
+        s.tab = pick.tab; s.group = pick.group;
+        openPlace(pick.id);
         break;
       }
       case 'replay': findPlaces({ replay: true }); break;
       case 'meet-place': {
-        const m = s.solution.meet;
+        const m = s.meet;
         s.place = { id: 'meet', name: s.area ? shortAddr(s.area) : 'Meeting point', lat: m.lat, lon: m.lon, tab: 'meet', group: 'Meeting point', address: s.area || '', fromCenter: 0 };
         s.placeDrawn = null;
+        state.placeTab = 'overview';
         setView('place');
         break;
       }
@@ -1243,7 +1630,7 @@ function initPanel() {
         poiLayer.clearLayers();
         s.markersKey = null;
         setView('results');
-        fitTo([...s.people.map((p) => [p.lat, p.lon]), [s.solution.meet.lat, s.solution.meet.lon]], { maxZoom: 16 });
+        fitTo([...s.people.map((p) => [p.lat, p.lon]), [s.meet.lat, s.meet.lon]], { maxZoom: 16 });
         break;
       case 'sort': s.sort = el.dataset.sort; render(); break;
       case 'place': openPlace(id); break;
@@ -1272,6 +1659,16 @@ function initPanel() {
         break;
       }
       case 'choose': enterShare(); break;
+      case 'place-tab': {
+        state.placeTab = el.dataset.tab;
+        render({ keepScroll: true });
+        const target = el.dataset.scroll ? document.getElementById(el.dataset.scroll) : $('.place-tabs');
+        if (isMobile() && sheet.snap === 'peek') setSheet('mid');
+        target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        break;
+      }
+      case 'photo': openLightbox(s.place.details?.photos || [], Number(el.dataset.i)); break;
+      case 'rv-more': el.classList.toggle('open'); break;
       case 'back-place': setView('place'); break;
       case 'back-people': state.sharePlace = null; poiLayer.clearLayers(); setView('people'); break;
       case 'native-share': {
@@ -1290,6 +1687,9 @@ function initPanel() {
       default: break;
     }
   });
+  // Pictures fade in once loaded; broken ones disappear.
+  body.addEventListener('load', (e) => { if (e.target.tagName === 'IMG') e.target.classList.add('in'); }, true);
+  body.addEventListener('error', (e) => { if (e.target.tagName === 'IMG') e.target.classList.add('broken'); }, true);
   body.addEventListener('keydown', (e) => {
     const t = e.target;
     if ((e.key === 'Enter' || e.key === ' ') && t.getAttribute?.('role') === 'button' && t.tagName !== 'BUTTON') { e.preventDefault(); t.click(); }
@@ -1322,13 +1722,9 @@ function nextHalfHour() {
 
 function applyTheme() {
   const t = state.settings.theme;
-  if (t === 'auto') {
-    document.documentElement.removeAttribute('data-theme');
-    document.documentElement.toggleAttribute('data-dark-tiles', window.matchMedia('(prefers-color-scheme: dark)').matches);
-  } else {
-    document.documentElement.setAttribute('data-theme', t);
-    document.documentElement.removeAttribute('data-dark-tiles');
-  }
+  if (t === 'auto') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', t);
+  if (map) addBasemap();
 }
 
 function syncSettingsUI() {
@@ -1436,6 +1832,7 @@ async function boot() {
   initSheet();
   initDrawer();
   window.addEventListener('resize', () => map?.invalidateSize());
+  ratingsSource().then((src) => { ratingsOn = !!src; ratingsName = src === 'tripadvisor' ? 'Tripadvisor' : src || ''; });
   onUser(await api.start());
 }
 

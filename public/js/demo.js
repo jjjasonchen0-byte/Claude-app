@@ -7,10 +7,9 @@
 //   • address search / reverse geocoding over the town's street addresses
 //   • ~380 places of interest, tagged like OpenStreetMap data
 //   • accounts, addresses and history kept in this browser's storage
-import { fromEdgeList, rng } from './network.js';
+import { fromEdgeList, rng, dijkstra } from './graph.js';
 import { parsePois } from './pois.js';
 import { haversine } from './geo.js';
-import { dijkstra } from './meet.js';
 
 const TOWN = 'Port Verity';
 const CENTER = { lat: 40.0, lon: -40.0 }; // a fictional island in the open Atlantic
@@ -794,12 +793,6 @@ export async function currentPosition() {
   return { lat: a.lat, lon: a.lon };
 }
 
-export async function loadNetwork(points, { onStatus = () => {} } = {}) {
-  ensure();
-  onStatus('Reading the streets of Port Verity…');
-  await new Promise((r) => setTimeout(r, 350));
-  return { graph: town.graph, source: 'osm' };
-}
 
 // ---------------------------------------------------------------- local "server"
 
@@ -904,7 +897,7 @@ export async function directions(mode, from, to) {
   const geometry = [];
   for (let v = b; v !== -1; v = parent[v]) geometry.push([g.lat[v], g.lon[v]]);
   geometry.reverse();
-  return { mode, provider: 'test-town', distance: Math.round(dist[b]), duration: Math.round(dist[b] / TOWN_SPEED[mode] + (mode === 'drive' ? 90 : 0)), geometry };
+  return { mode, provider: 'test-town', distance: Math.round(dist[b]), duration: Math.round(dist[b] / TOWN_SPEED[mode] + (mode === 'drive' ? 90 : 0)), geometry, alternatives: [] };
 }
 
 export async function travelTimes(mode, sources, destinations) {
@@ -913,12 +906,13 @@ export async function travelTimes(mode, sources, destinations) {
   const g = town.graph;
   const targets = destinations.map((p) => nearestAddress(p.lat, p.lon).node);
   const durations = [], distances = [];
+  await new Promise((r) => setTimeout(r, 60));
   for (const src of sources) {
     const { dist } = dijkstra(g, nearestAddress(src.lat, src.lon).node);
     distances.push(targets.map((t) => (Number.isFinite(dist[t]) ? Math.round(dist[t]) : null)));
     durations.push(targets.map((t) => (Number.isFinite(dist[t]) ? Math.round(dist[t] / TOWN_SPEED[mode] + (mode === 'drive' ? 90 : 0)) : null)));
   }
-  return { durations, distances };
+  return { durations, distances, destinations: targets.map((t) => [g.lat[t], g.lon[t]]) };
 }
 
 /** A ready-made group: you plus three friends spread around town. */
@@ -1105,8 +1099,9 @@ export function addBasemap(map) {
   });
   const groups = Object.fromEntries(Object.entries(town.labels).map(([k, list]) => [k, L.layerGroup(list.map((l) => label(l, k)))]));
   const visible = {
-    city: (z) => z < 12.25, bay: (z) => z >= 9, hood: (z) => z >= 12.25 && z < 15.5, water: (z) => z >= 10.5, park: (z) => z >= 13.5,
-    street: (z) => z >= 15.5, town: (z) => z >= 8 && z < 14, village: (z) => z >= 10.5 && z < 15, forest: (z) => z >= 10.5 && z < 13.5,
+    // Few labels at a time, like Apple Maps: names appear only once there is room for them.
+    city: (z) => z < 12, bay: (z) => z >= 9 && z < 13, hood: (z) => z >= 12.5 && z < 15.25, water: (z) => z >= 11.5, park: (z) => z >= 14.25,
+    street: (z) => z >= 16.25, town: (z) => z >= 8.5 && z < 13.5, village: (z) => z >= 11 && z < 14.5, forest: (z) => z >= 11 && z < 13,
   };
   const update = () => {
     const z = map.getZoom();
@@ -1123,3 +1118,90 @@ export function addBasemap(map) {
 }
 
 export const townCenter = CENTER;
+
+// ---------------------------------------------------------------- sample ratings, photos and reviews
+//
+// The real app shows Tripadvisor ratings, photos and reviews (and free photos
+// from Wikimedia Commons). Port Verity is made up, so here every place gets a
+// made-up rating, drawn illustrations instead of photos, and sample reviews,
+// all clearly labelled as samples.
+
+const nameHash = (s) => [...String(s)].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) >>> 0, 2166136261);
+const RATED_TABS = new Set(['food', 'drinks', 'fun', 'culture', 'outdoors']);
+const PRICES = ['Cheap Eats', 'Mid Range', 'Mid Range', 'Fine Dining'];
+const TAB_HUE = { food: 28, drinks: 32, fun: 248, culture: 285, outdoors: 130, shopping: 212 };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function sampleRating(p) {
+  if (!RATED_TABS.has(p.tab)) return null;
+  const h = nameHash(p.name);
+  if (h % 11 === 0) return null; // not every place is rated
+  return {
+    id: h, rating: Math.min(5, 3.5 + ((h >>> 3) % 4) * 0.5), count: 6 + ((h >>> 7) % 1400),
+    ratingImage: '', priceLevel: p.tab === 'food' ? PRICES[(h >>> 11) % PRICES.length] : '', url: '',
+  };
+}
+
+/** A soft drawn picture (SVG data URL): a coloured scene with a plate, cup, tree or building. */
+function illustration(p, k = 0) {
+  const h = nameHash(`${p.name}#${k}`);
+  const hue = ((TAB_HUE[p.tab] ?? 210) + ((h % 50) - 25) + 360) % 360;
+  const c1 = `hsl(${hue} 70% ${78 - (h % 9)}%)`, c2 = `hsl(${(hue + 28) % 360} 62% ${58 + (h % 8)}%)`;
+  const dots = Array.from({ length: 7 }, (_, i) => {
+    const r = 10 + ((h >>> (i * 3)) % 26), x = (h >>> (i * 2)) % 400, y = (h >>> (i * 4 + 1)) % 300;
+    return `<circle cx="${x}" cy="${y}" r="${r}" fill="#fff" opacity="${0.08 + (i % 3) * 0.05}"/>`;
+  }).join('');
+  const subject = {
+    food: '<ellipse cx="200" cy="190" rx="118" ry="44" fill="#fff" opacity=".95"/><ellipse cx="200" cy="182" rx="78" ry="26" fill="hsl(15 70% 62%)"/><circle cx="178" cy="176" r="10" fill="hsl(110 45% 45%)"/><circle cx="214" cy="178" r="12" fill="hsl(45 90% 60%)"/>',
+    drinks: '<rect x="150" y="110" width="100" height="110" rx="16" fill="#fff" opacity=".95"/><path d="M250 135h18a22 22 0 0 1 0 44h-18" fill="none" stroke="#fff" stroke-width="12"/><rect x="160" y="122" width="80" height="22" rx="8" fill="hsl(28 55% 42%)"/>',
+    outdoors: '<path d="M200 70l70 110h-140z" fill="hsl(130 45% 40%)"/><path d="M200 110l85 120h-170z" fill="hsl(130 45% 34%)"/><rect x="190" y="225" width="20" height="40" fill="hsl(28 40% 35%)"/>',
+    culture: '<path d="M120 130l80-50 80 50z" fill="#fff"/><rect x="132" y="138" width="16" height="90" fill="#fff"/><rect x="172" y="138" width="16" height="90" fill="#fff"/><rect x="212" y="138" width="16" height="90" fill="#fff"/><rect x="252" y="138" width="16" height="90" fill="#fff"/><rect x="118" y="230" width="164" height="14" fill="#fff"/>',
+    fun: '<path d="M200 80l22 46 50 7-36 35 9 50-45-24-45 24 9-50-36-35 50-7z" fill="#fff" opacity=".95"/>',
+  }[p.tab] || '<rect x="140" y="110" width="120" height="120" rx="20" fill="#fff" opacity=".9"/>';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient></defs><rect width="400" height="300" fill="url(#g)"/>${dots}<g transform="translate(${(h % 60) - 30} ${(h % 30) - 15})">${subject}</g></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+const REVIEW_BITS = {
+  food: [['Lovely evening', 'Friendly staff and generous portions. We shared a few plates and everything came out hot and quick.'], ['Worth the walk', 'Busy on a Friday but the wait was short. Great for a group — they pushed two tables together for us.'], ['Solid choice', 'Good food, fair prices. Dessert was the highlight. Would come back.'], ['A bit slow', 'Tasty, but service was slow when it got busy. Book ahead at weekends.']],
+  drinks: [['Cosy spot', 'Comfy seats, good music, not too loud to talk. Perfect for catching up.'], ['Great coffee', 'Strong coffee and nice pastries. A few tables outside when it’s sunny.'], ['Fun night', 'Good selection and friendly bar staff. Gets lively later on.']],
+  default: [['Good afternoon out', 'Easy to find and plenty to do. Took about two hours.'], ['Nice for a group', 'We met friends here and it worked well for everyone.'], ['Pleasant', 'Clean and well kept. Quieter in the morning.']],
+};
+const SAMPLE_PEOPLE = ['Sample guest', 'Test visitor', 'Demo diner', 'Example friend'];
+
+export const rated = {
+  async getConfig() { return {}; },
+  async ratingsSource() { return 'Sample ratings and drawings: Port Verity is a made-up town'; },
+  async rateAll(pois) {
+    await sleep(220);
+    for (const p of pois) if (p.rating === undefined) p.rating = sampleRating(p);
+  },
+  async thumbFor(p) {
+    if (p.thumb !== undefined) return p.thumb;
+    return (p.thumb = illustration(p, 0));
+  },
+  async detailsFor(p) {
+    await sleep(300);
+    const r = p.rating ?? sampleRating(p);
+    const h = nameHash(p.name);
+    const bits = REVIEW_BITS[p.tab] || REVIEW_BITS.default;
+    const photos = Array.from({ length: 4 + (h % 5) }, (_, k) => ({ url: illustration(p, k), caption: 'Drawing', by: '', credit: '' }));
+    if (!r) return { source: null, photos, reviews: [], photoNote: 'Drawings: the test town is made up' };
+    const total = r.count;
+    const spread = [0.55, 0.25, 0.11, 0.06, 0.03].map((f, i) => ({ rating: 5 - i, count: Math.round(total * f) }));
+    return {
+      ...r, source: 'sample',
+      attribution: 'Sample ratings and reviews: Port Verity is a made-up test town',
+      photoNote: 'Drawings: the test town is made up',
+      photos,
+      breakdown: spread,
+      subratings: p.tab === 'food' ? [{ name: 'Food', rating: Math.min(5, r.rating + 0.2) }, { name: 'Service', rating: r.rating }, { name: 'Value', rating: Math.max(3, r.rating - 0.3) }] : [],
+      reviews: bits.map(([title, text], i) => ({
+        id: i, title, text, rating: Math.max(3, Math.min(5, Math.round(r.rating) - (i === bits.length - 1 ? 1 : 0))),
+        ratingImage: '', date: new Date(Date.now() - (i * 23 + (h % 20)) * 864e5).toISOString(), tripType: ['FRIENDS', 'COUPLES', 'FAMILY', 'SOLO'][i % 4],
+        user: SAMPLE_PEOPLE[i % SAMPLE_PEOPLE.length], avatar: '', url: '', reply: '',
+      })),
+      features: [],
+    };
+  },
+};

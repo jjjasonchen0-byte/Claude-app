@@ -1,7 +1,36 @@
 // Places of interest around the meeting point, via OpenStreetMap / Overpass,
 // sorted into tabs (Food, Drinks, …) and listings ("Italian · 4").
-import { overpass } from './network.js';
 import { haversine } from './geo.js';
+
+export const OVERPASS_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+];
+
+/** POST an Overpass query, trying mirrors in turn. */
+export async function overpass(query, { signal, timeoutMs = 9000, mirrors = 1 } = {}) {
+  let lastErr;
+  for (const url of OVERPASS_ENDPOINTS.slice(0, mirrors)) {
+    const ctrl = new AbortController();
+    const onAbort = () => ctrl.abort();
+    signal?.addEventListener('abort', onAbort);
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { method: 'POST', body: new URLSearchParams({ data: query }), signal: ctrl.signal });
+      if (!res.ok) throw new Error(`Overpass ${res.status}`);
+      const json = await res.json();
+      if (!json || !Array.isArray(json.elements)) throw new Error('Bad Overpass response');
+      return json;
+    } catch (err) {
+      if (signal?.aborted) throw err;
+      lastErr = err;
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+    }
+  }
+  throw lastErr || new Error('Overpass unavailable');
+}
 
 export const TABS = [
   { id: 'food', label: 'Food', icon: '🍽️' },
@@ -98,7 +127,7 @@ export function poiQuery(center, radius) {
     `nwr${around}[tourism~"^(museum|gallery|attraction|zoo|aquarium|theme_park|viewpoint|picnic_site)$"][name]`,
     `nwr${around}[shop~"^(mall|department_store|books|bakery|pastry|games|video_games|toys|music|gift|clothes|coffee|tea|ice_cream|supermarket)$"][name]`,
   ];
-  return `[out:json][timeout:25];(${sel.join(';')};);out center tags 400;`;
+  return `[out:json][timeout:12];(${sel.join(';')};);out center tags 400;`;
 }
 
 function formatAddress(tags) {
@@ -131,10 +160,22 @@ export function parsePois(elements, center) {
       hours: tags.opening_hours || '',
       phone: tags.phone || tags['contact:phone'] || '',
       website: tags.website || tags['contact:website'] || '',
+      menu: tags['website:menu'] || '',
+      email: tags.email || tags['contact:email'] || '',
+      description: tags.description || '',
+      brand: tags.brand || '',
       wheelchair: tags.wheelchair || '',
       outdoor: tags.outdoor_seating === 'yes',
+      takeaway: tags.takeaway || '',
+      delivery: tags.delivery || '',
+      reservation: tags.reservation || '',
+      wifi: /yes|wlan|free/.test(tags.internet_access || '') ? 'yes' : '',
+      dogs: tags.dog || '',
       vegan: /yes|only/.test(tags['diet:vegan'] || ''),
       vegetarian: /yes|only/.test(tags['diet:vegetarian'] || ''),
+      // Free photo sources: a Wikidata item or a Wikimedia Commons file.
+      wikidata: /^Q\d+$/.test(tags.wikidata || '') ? tags.wikidata : '',
+      commons: tags.wikimedia_commons || (/commons\.wikimedia\.org\/wiki\/(File:[^?#]+)/.exec(tags.image || '')?.[1] ? decodeURIComponent(/commons\.wikimedia\.org\/wiki\/(File:[^?#]+)/.exec(tags.image)[1]) : ''),
       fromCenter: haversine(center.lat, center.lon, lat, lon),
     });
   }
@@ -158,29 +199,54 @@ export function groupPois(pois) {
   return out;
 }
 
-/** Fetch POIs, widening the search radius until there is a decent choice. */
 /**
- * Fetch POIs, widening the search radius until there is a decent choice.
- * Uses OpenStreetMap's Overpass API; if that is down or refusing requests,
- * falls back to Photon (the address search service), which can list nearby
- * places by type but not by cuisine.
+ * Places near a point, as fast as possible. One Overpass query (OpenStreetMap,
+ * with cuisines) races Photon (which only knows the kind of place): Photon
+ * starts if Overpass has not answered within a couple of seconds, and
+ * whichever has answered once both had a fair chance wins. Quiet areas get
+ * one wider search.
  */
-export async function findPois(center, { radius, signal, minResults = 12 } = {}) {
-  const radii = radius ? [radius] : [800, 1800, 4000];
-  let pois = [];
-  let used = radii[0];
-  try {
-    for (const r of radii) {
-      used = r;
-      const json = await overpass(poiQuery(center, r), { signal, timeoutMs: 10000, mirrors: 2 });
+export async function findPois(center, { radius, signal, minResults = 12, photonAfterMs = 2200, graceMs = 1200, overpassTimeoutMs = 9000 } = {}) {
+  const r = radius || 1500;
+  const ctrl = new AbortController();
+  const onAbort = () => ctrl.abort();
+  signal?.addEventListener('abort', onAbort);
+  const viaOverpass = (async () => {
+    let json = await overpass(poiQuery(center, r), { signal: ctrl.signal, timeoutMs: overpassTimeoutMs });
+    let pois = parsePois(json.elements, center);
+    let used = r;
+    if (!radius && pois.length < minResults) {
+      used = 4000;
+      json = await overpass(poiQuery(center, used), { signal: ctrl.signal, timeoutMs: overpassTimeoutMs });
       pois = parsePois(json.elements, center);
-      if (pois.length >= minResults) break;
     }
     return { pois, radius: used, source: 'overpass' };
-  } catch (err) {
-    if (signal?.aborted) throw err;
-    const r = radius || 1500;
-    return { pois: await photonPois(center, r, { signal }), radius: r, source: 'photon' };
+  })();
+  let photon = null;
+  const startPhoton = () => (photon ||= photonPois(center, r, { signal: ctrl.signal }).then((pois) => ({ pois, radius: r, source: 'photon' })));
+  const settle = (p) => p.then((v) => ({ ok: true, v }), (e) => ({ ok: false, e }));
+  try {
+    const o = settle(viaOverpass);
+    const first = await Promise.race([o, new Promise((res) => setTimeout(() => res(null), photonAfterMs))]);
+    if (first?.ok) return first.v;
+    if (signal?.aborted) throw first?.e || new DOMException('Aborted', 'AbortError');
+    // Overpass failed or is slow: Photon joins in.
+    const p = settle(startPhoton());
+    const next = await Promise.race([o, p]);
+    if (next.ok) {
+      if (next.v.source === 'overpass') return next.v;
+      // Photon answered first; Overpass gets a moment longer, since it knows cuisines.
+      const late = await Promise.race([o, new Promise((res) => setTimeout(() => res(null), graceMs))]);
+      return late?.ok ? late.v : next.v;
+    }
+    // The first to finish failed: wait for the other one.
+    const [ro, rp] = await Promise.all([o, p]);
+    if (ro.ok) return ro.v;
+    if (rp.ok) return rp.v;
+    throw rp.e;
+  } finally {
+    signal?.removeEventListener('abort', onAbort);
+    ctrl.abort(); // stop whichever is still running
   }
 }
 

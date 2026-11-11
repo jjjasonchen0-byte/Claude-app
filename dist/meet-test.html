@@ -1038,14 +1038,14 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 }
 @keyframes halo { 70% { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 26px rgba(0, 122, 255, 0); } 100% { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 0 rgba(0, 122, 255, 0); } }
 .poi-pin {
-  --c: var(--accent); width: 30px; height: 30px; border-radius: 50%; background: var(--c); color: #fff; display: grid; place-items: center;
-  font: 700 13px/1 var(--font-display); border: 2.5px solid #fff; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28); transition: transform 0.2s cubic-bezier(0.3, 1.4, 0.5, 1);
+  --c: var(--accent); width: 26px; height: 26px; border-radius: 50%; background: var(--c); color: #fff; display: grid; place-items: center;
+  font: 700 12px/1 var(--font-display); border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); transition: transform 0.2s cubic-bezier(0.3, 1.4, 0.5, 1);
 }
-.poi-pin svg { width: 15px; height: 15px; }
+.poi-pin svg { width: 14px; height: 14px; }
 .poi-pin.hl { transform: scale(1.3); }
 .leaflet-tooltip.label {
   background: var(--material-strong); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); color: var(--text);
-  border: 0; border-radius: 999px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16); font-weight: 600; font-size: 12px; padding: 4px 10px;
+  border: 0; border-radius: 999px; box-shadow: 0 1px 5px rgba(0, 0, 0, 0.14); font-weight: 600; font-size: 11.5px; padding: 3px 9px;
 }
 .leaflet-tooltip.label::before { display: none; }
 .leaflet-popup-content-wrapper { border-radius: 18px; background: var(--material-strong); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); color: var(--text); box-shadow: var(--shadow-2); }
@@ -1063,9 +1063,13 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .leaflet-control-zoom a:last-child { border-bottom: 0 !important; }
 .leaflet-control-attribution { font-size: 10px; border-radius: 8px 0 0 0; background: var(--material) !important; color: var(--text-2); }
 .leaflet-control-attribution a { color: var(--text-2); }
-/* Real OpenStreetMap tiles: a little calmer to sit with the UI; inverted for dark mode. */
-.osm-tiles { filter: saturate(0.72) contrast(0.96) brightness(1.03); }
-:root[data-dark-tiles] .osm-tiles, :root[data-theme="dark"] .osm-tiles { filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.88) saturate(0.5); }
+/* Without a CARTO key: the standard OpenStreetMap map, calmer; inverted at night. */
+.osm-tiles { filter: saturate(0.45) contrast(0.9) brightness(1.06); }
+.osm-tiles.dark { filter: invert(1) hue-rotate(180deg) brightness(0.88) contrast(0.85) saturate(0.35); }
+/* While map tiles load: the colour of land on the base map. */
+#map { background: #f3f1ed; }
+:root[data-theme="dark"] #map { background: #262626; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #map { background: #262626; } }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
@@ -1138,9 +1142,119 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .mixed-note { margin: -4px 6px 10px; }
 .dirs .cell-btn[role="button"] { cursor: pointer; }
 
-:root { --map-forest: #dcebcf; --map-motorway: #ffbd6b; --map-motorway-casing: #ec9b45; --map-land: #f6f4ef; --map-park: #cfe8bf; --map-water: #a8d4f5; --map-road: #ffffff; --map-casing: #e3ded4; --map-major: #ffe28a; --map-major-casing: #efc65a; --map-label: #6e6e73; --map-halo: rgba(255,255,255,.92); --map-park-label: #3c7a35; --map-water-label: #3b7bb5; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --map-forest: #1c2a1f; --map-motorway: #7a5427; --map-motorway-casing: #5b3e1c; --map-land: #1e1f22; --map-park: #1f3324; --map-water: #13304a; --map-road: #3a3b3f; --map-casing: #26272a; --map-major: #6b5a2a; --map-major-casing: #4c4121; --map-label: #aeaeb2; --map-halo: rgba(20,20,22,.9); --map-park-label: #7cc47a; --map-water-label: #6fb1ea; } }
-:root[data-theme="dark"] { --map-forest: #1c2a1f; --map-motorway: #7a5427; --map-motorway-casing: #5b3e1c; --map-land: #1e1f22; --map-park: #1f3324; --map-water: #13304a; --map-road: #3a3b3f; --map-casing: #26272a; --map-major: #6b5a2a; --map-major-casing: #4c4121; --map-label: #aeaeb2; --map-halo: rgba(20,20,22,.9); --map-park-label: #7cc47a; --map-water-label: #6fb1ea; }
+/* ---------------------------------------------------------------- places: photos & ratings */
+.skel { display: inline-block; height: 12px; border-radius: 6px; vertical-align: middle;
+  background: linear-gradient(90deg, var(--fill) 0%, var(--fill-2) 50%, var(--fill) 100%); background-size: 200% 100%; animation: shimmer 1.2s linear infinite; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+img.broken { display: none; }
+
+.rating { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--text-2); white-space: nowrap; }
+.rating b { color: var(--text); font-weight: 600; }
+.rating.big { font-size: 15px; gap: 7px; }
+.rating.big b { font-size: 16px; }
+.rating .bubbles { display: block; height: auto; }
+.stars { --r: 0%; letter-spacing: 1px; font-size: 12px; line-height: 1;
+  background: linear-gradient(90deg, #ff9f0a var(--r), var(--fill-2) var(--r)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.rating.big .stars { font-size: 15px; }
+.st.open { color: var(--green); font-weight: 600; }
+.st.soon { color: #ff9500; font-weight: 600; }
+.st.closed { color: var(--red); font-weight: 600; }
+
+/* list of places with pictures */
+.group.places { --inset: 92px; }
+.poi { align-items: center; gap: 12px; padding: 10px 14px 10px 10px; }
+.thumb { position: relative; width: 68px; height: 68px; flex: none; border-radius: 12px; overflow: hidden; background: var(--fill); }
+.thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.3s; z-index: 1; }
+.thumb img.in { opacity: 1; }
+.thumb-art { position: absolute; inset: 0; display: grid; place-items: center; color: #fff;
+  background: radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--c) 55%, #fff), var(--c)); }
+.thumb .num { position: absolute; left: 4px; top: 4px; width: 20px; height: 20px; font-size: 11px; z-index: 2; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); }
+.cell-meta { display: flex; align-items: center; gap: 0; font-size: 13px; color: var(--text-2); margin-top: 2px; white-space: nowrap; overflow: hidden; }
+.cell-meta .dot { margin: 0 5px; }
+.poi .cell-sub { margin-top: 2px; }
+.poi .cell-title { font-weight: 600; }
+
+/* place page */
+.gallery { display: flex; gap: 6px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 -16px 14px; padding: 0 16px; scrollbar-width: none; }
+.gallery::-webkit-scrollbar { display: none; }
+.g-item { position: relative; flex: none; width: 62%; aspect-ratio: 4 / 3; border: 0; padding: 0; border-radius: 14px; overflow: hidden; scroll-snap-align: start; background: var(--fill); }
+.g-item + .g-item { width: 40%; }
+.gallery.single .g-item { width: 100%; aspect-ratio: 16 / 9; }
+.g-item img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0; transition: opacity 0.3s; }
+.g-item img.in { opacity: 1; }
+.g-item.skel { display: block; height: auto; border-radius: 14px; }
+.hero-art { height: 120px; border-radius: 16px; margin: 0 0 14px; display: grid; place-items: center; color: #fff;
+  background: radial-gradient(circle at 25% 20%, color-mix(in srgb, var(--c) 50%, #fff), var(--c) 70%); }
+.place-title { margin: 0 4px 14px; display: grid; gap: 4px; }
+.place-title h2 { font-size: 26px; }
+.place-rating { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.place-rating .btn-plain { font-size: 14px; padding: 2px 4px; }
+.place-status { font-size: 14px; color: var(--text-2); }
+.quick { display: flex; gap: 8px; margin: 0 0 14px; overflow-x: auto; scrollbar-width: none; }
+.quick::-webkit-scrollbar { display: none; }
+.q { flex: 1 0 64px; display: grid; justify-items: center; gap: 4px; border: 0; border-radius: 14px; padding: 10px 6px 8px; background: var(--card); color: var(--accent); font-size: 12px; font-weight: 600; }
+.q svg { width: 21px; height: 21px; }
+.q.primary { background: var(--accent); color: #fff; }
+.q:active { transform: scale(0.96); }
+.place-tabs { margin: 4px 0 14px; position: sticky; top: -16px; z-index: 5; box-shadow: 0 0 0 6px var(--material); }
+.place-summary { margin: 0 4px 12px; font-size: 15px; line-height: 1.45; }
+.hours summary { cursor: pointer; list-style: none; }
+.hours summary::-webkit-details-marker { display: none; }
+.hours summary::after { content: " ▾"; color: var(--text-3); }
+.hours[open] summary::after { content: " ▴"; }
+.hours table { border-collapse: collapse; margin-top: 6px; font-size: 14px; }
+.hours th { text-align: left; font-weight: 500; color: var(--text-2); padding: 2px 14px 2px 0; }
+.hours td { padding: 2px 0; font-variant-numeric: tabular-nums; }
+.hours tr.today th, .hours tr.today td { color: var(--text); font-weight: 600; }
+
+/* reviews */
+.rev-summary { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 14px; background: var(--card); border-radius: 14px; padding: 14px; margin-bottom: 10px; }
+.big-num { font: 700 40px/1 var(--font-display); letter-spacing: -0.03em; }
+.rev-mid { display: grid; gap: 4px; }
+.bars { display: grid; gap: 3px; min-width: 90px; }
+.bar { display: grid; grid-template-columns: 10px 1fr; align-items: center; gap: 6px; font-size: 11px; color: var(--text-2); }
+.bar i { height: 6px; border-radius: 3px; background: var(--fill); overflow: hidden; }
+.bar b { display: block; height: 100%; border-radius: 3px; background: #ff9f0a; }
+.subratings { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.subratings .chip { border: 0; background: var(--card); border-radius: 999px; padding: 5px 11px; font-size: 13px; }
+.reviews { list-style: none; padding: 0; margin: 0 0 12px; display: grid; gap: 8px; }
+.review { background: var(--card); border-radius: 14px; padding: 12px 14px; }
+.rv-head { display: flex; align-items: center; gap: 10px; }
+.rv-head .avatar { overflow: hidden; }
+.rv-head .avatar img { width: 100%; height: 100%; object-fit: cover; }
+.rv-who { display: grid; }
+.rv-who b { font-size: 15px; font-weight: 600; }
+.rv-rating { margin: 8px 0 2px; }
+.review h4 { margin: 4px 0 2px; font-size: 15px; }
+.rv-text { margin: 2px 0 0; font-size: 14px; line-height: 1.45; cursor: pointer;
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.rv-text.open { -webkit-line-clamp: unset; display: block; }
+.rv-reply { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: var(--fill); font-size: 13px; }
+
+/* photos & about */
+.photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-bottom: 10px; border-radius: 14px; overflow: hidden; }
+.photo-grid .g-item { width: auto !important; aspect-ratio: 1; border-radius: 0; }
+.features .cell { min-height: 44px; gap: 10px; font-size: 15px; }
+.features .check { color: var(--green); font-weight: 700; }
+.group.features { --inset: 16px; }
+
+/* photo viewer */
+.lightbox { position: fixed; inset: 0; z-index: 2500; background: rgba(0, 0, 0, 0.92); display: grid; place-items: center; animation: fade 0.2s; touch-action: pan-y; }
+.lightbox figure { margin: 0; max-width: min(1100px, 94vw); display: grid; gap: 10px; justify-items: center; }
+.lightbox img { max-width: 100%; max-height: calc(100vh - 140px); border-radius: 10px; object-fit: contain; user-select: none; -webkit-user-drag: none; }
+.lightbox figcaption { color: rgba(255, 255, 255, 0.75); font-size: 13px; text-align: center; padding: 0 16px; }
+.lightbox figcaption a { color: #64d2ff; }
+.lb-count { display: block; margin-top: 4px; color: rgba(255, 255, 255, 0.5); }
+.lightbox button { position: absolute; border: 0; background: rgba(255, 255, 255, 0.14); color: #fff; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-size: 28px; line-height: 1; }
+.lightbox button:hover { background: rgba(255, 255, 255, 0.24); }
+.lb-close { top: calc(16px + env(safe-area-inset-top, 0px)); right: 16px; }
+.lb-prev { left: 14px; top: 50%; transform: translateY(-50%); }
+.lb-next { right: 14px; top: 50%; transform: translateY(-50%); }
+@media (max-width: 759px) { .lb-prev, .lb-next { display: none !important; } }
+
+:root { --map-forest: #dfeed6; --map-motorway: #fbd38d; --map-motorway-casing: #f0bb6a; --map-land: #f7f6f2; --map-park: #d6ecc9; --map-water: #b4dcf7; --map-road: #ffffff; --map-casing: #ebe8e1; --map-major: #fdf0c4; --map-major-casing: #f0dc9c; --map-label: #8a8a8e; --map-halo: rgba(255,255,255,.95); --map-park-label: #4f8a48; --map-water-label: #4b88bf; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --map-forest: #1d2620; --map-motorway: #6a5232; --map-motorway-casing: #4f3d25; --map-land: #1f2023; --map-park: #203024; --map-water: #152a3d; --map-road: #36373b; --map-casing: #28292c; --map-major: #4f4a3a; --map-major-casing: #3c382c; --map-label: #98989d; --map-halo: rgba(20,20,22,.9); --map-park-label: #79b378; --map-water-label: #6aa5d9; } }
+:root[data-theme="dark"] { --map-forest: #1d2620; --map-motorway: #6a5232; --map-motorway-casing: #4f3d25; --map-land: #1f2023; --map-park: #203024; --map-water: #152a3d; --map-road: #36373b; --map-casing: #28292c; --map-major: #4f4a3a; --map-major-casing: #3c382c; --map-label: #98989d; --map-halo: rgba(20,20,22,.9); --map-park-label: #79b378; --map-water-label: #6aa5d9; }
 #map { background: var(--map-water); }
 .map-label { pointer-events: none; }
 .map-label span { position: absolute; display: block; white-space: nowrap; font: 600 11px/1 var(--font); letter-spacing: 0; color: var(--map-label);
@@ -1422,123 +1536,50 @@ function smallestEnclosingCircle(points) {
   return { lat: ll.lat, lon: ll.lon, radius: c.r };
 }
 
-__m["geo"] = { haversine, dist, makeProjector, centroid, paddedBBox, span, smallestEnclosingCircle };
-})();
-// ---- network
-(() => {
-// Road network loading. Fetches real streets from OpenStreetMap (Overpass API)
-// for the area around everyone's addresses and turns them into a compact
-// graph. If that is not possible (offline, rate-limited, too far apart) a
-// synthetic organic "street" graph is generated so the experience still works.
-const { haversine, paddedBBox, span } = __m["geo"];
-const OVERPASS_ENDPOINTS = [
-  'https://overpass-api.de/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter',
-  'https://overpass.private.coffee/api/interpreter',
-];
-
-/** Which road classes to download, scaled by how spread out the group is. */
-function roadClassesFor(spanM) {
-  if (spanM < 6000) return 'motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|pedestrian|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link';
-  if (spanM < 20000) return 'motorway|trunk|primary|secondary|tertiary|unclassified|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link';
-  if (spanM < 60000) return 'motorway|trunk|primary|secondary|motorway_link|trunk_link|primary_link';
-  return 'motorway|trunk|primary|motorway_link|trunk_link';
-}
-
-const MAX_NETWORK_SPAN_M = 220000;
-
-/** Overpass QL for the road network in a bbox. */
-function roadQuery(bbox, classes) {
-  const b = `${bbox.s.toFixed(5)},${bbox.w.toFixed(5)},${bbox.n.toFixed(5)},${bbox.e.toFixed(5)}`;
-  return `[out:json][timeout:40][maxsize:268435456];way["highway"~"^(${classes})$"](${b});(._;>;);out skel qt;`;
-}
-
-/** POST an Overpass query, trying mirrors in turn. */
-async function overpass(query, { signal, timeoutMs = 45000, mirrors = OVERPASS_ENDPOINTS.length } = {}) {
-  let lastErr;
-  for (const url of OVERPASS_ENDPOINTS.slice(0, mirrors)) {
-    const ctrl = new AbortController();
-    const onAbort = () => ctrl.abort();
-    signal?.addEventListener('abort', onAbort);
-    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        body: new URLSearchParams({ data: query }),
-        signal: ctrl.signal,
-      });
-      if (!res.ok) throw new Error(`Overpass ${res.status}`);
-      const json = await res.json();
-      if (!json || !Array.isArray(json.elements)) throw new Error('Bad Overpass response');
-      return json;
-    } catch (err) {
-      if (signal?.aborted) throw err;
-      lastErr = err;
-    } finally {
-      clearTimeout(timer);
-      signal?.removeEventListener('abort', onAbort);
-    }
-  }
-  throw lastErr || new Error('Overpass unavailable');
-}
-
 /**
- * Build a CSR adjacency graph from Overpass `out skel` elements.
- * Returns { n, lat, lon, adjStart, adjNode, adjLen, synthetic }.
+ * Douglas–Peucker line simplification of [[lat, lon], ...] with a tolerance
+ * in metres. Routes keep their shape on screen at a fraction of the size.
  */
-function buildGraph(elements) {
-  const nodeIdx = new Map();
-  const lats = [];
-  const lons = [];
-  const coords = new Map();
-  for (const el of elements) if (el.type === 'node') coords.set(el.id, el);
-
-  const edgesA = [];
-  const edgesB = [];
-  const idx = (id) => {
-    let i = nodeIdx.get(id);
-    if (i === undefined) {
-      const c = coords.get(id);
-      if (!c) return -1;
-      i = lats.length;
-      nodeIdx.set(id, i);
-      lats.push(c.lat);
-      lons.push(c.lon);
+function simplify(pts, toleranceM = 3) {
+  if (!Array.isArray(pts) || pts.length < 3) return pts || [];
+  const proj = makeProjector({ lat: pts[0][0], lon: pts[0][1] });
+  const xy = pts.map(([lat, lon]) => proj.toXY({ lat, lon }));
+  const keep = new Uint8Array(pts.length);
+  keep[0] = keep[pts.length - 1] = 1;
+  const stack = [[0, pts.length - 1]];
+  const tol2 = toleranceM * toleranceM;
+  while (stack.length) {
+    const [a, b] = stack.pop();
+    const ax = xy[a].x, ay = xy[a].y, dx = xy[b].x - ax, dy = xy[b].y - ay;
+    const len2 = dx * dx + dy * dy;
+    let worst = -1, worstD = tol2;
+    for (let i = a + 1; i < b; i++) {
+      let t = len2 ? ((xy[i].x - ax) * dx + (xy[i].y - ay) * dy) / len2 : 0;
+      t = Math.max(0, Math.min(1, t));
+      const ex = xy[i].x - (ax + t * dx), ey = xy[i].y - (ay + t * dy);
+      const d = ex * ex + ey * ey;
+      if (d > worstD) { worstD = d; worst = i; }
     }
-    return i;
-  };
-  for (const el of elements) {
-    if (el.type !== 'way' || !Array.isArray(el.nodes)) continue;
-    let prev = -1;
-    for (const id of el.nodes) {
-      const i = idx(id);
-      if (i >= 0 && prev >= 0 && i !== prev) { edgesA.push(prev); edgesB.push(i); }
-      prev = i;
-    }
+    if (worst > 0) { keep[worst] = 1; stack.push([a, worst], [worst, b]); }
   }
-  return fromEdgeList(Float64Array.from(lats), Float64Array.from(lons), edgesA, edgesB, false);
+  return pts.filter((_, i) => keep[i]);
 }
 
-/** Make an undirected CSR graph from parallel edge arrays. */
-function fromEdgeList(lat, lon, A, B, synthetic) {
-  const n = lat.length;
-  const deg = new Int32Array(n + 1);
-  for (let k = 0; k < A.length; k++) { deg[A[k]]++; deg[B[k]]++; }
-  const adjStart = new Int32Array(n + 1);
-  for (let i = 0; i < n; i++) adjStart[i + 1] = adjStart[i] + deg[i];
-  const fill = adjStart.slice(0, n);
-  const m = adjStart[n];
-  const adjNode = new Int32Array(m);
-  const adjLen = new Float32Array(m);
-  for (let k = 0; k < A.length; k++) {
-    const a = A[k], b = B[k];
-    const len = haversine(lat[a], lon[a], lat[b], lon[b]);
-    adjNode[fill[a]] = b; adjLen[fill[a]++] = len;
-    adjNode[fill[b]] = a; adjLen[fill[b]++] = len;
-  }
-  return { n, lat, lon, adjStart, adjNode, adjLen, synthetic };
+/** Length of a [[lat, lon], ...] line in metres. */
+function lineLength(pts) {
+  let m = 0;
+  for (let i = 1; i < pts.length; i++) m += haversine(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]);
+  return m;
 }
 
+__m["geo"] = { haversine, dist, makeProjector, centroid, paddedBBox, span, smallestEnclosingCircle, simplify, lineLength };
+})();
+// ---- graph
+(() => {
+// A compact road graph and shortest paths. Only the offline test town uses
+// this now: the real app asks routing services for travel times instead of
+// downloading the streets.
+const { haversine } = __m["geo"];
 /** Small deterministic PRNG (mulberry32). */
 function rng(seed) {
   let a = seed >>> 0;
@@ -1551,81 +1592,25 @@ function rng(seed) {
   };
 }
 
-/**
- * Generate an organic, street-like graph covering the group's area:
- * a jittered grid with random diagonals and a few missing links.
- */
-function syntheticGraph(points, { cells = 70, seed = 7 } = {}) {
-  const bbox = paddedBBox(points, 0.25, 800);
-  const rand = rng(seed + Math.round(points[0].lat * 1e4) + Math.round(points[0].lon * 1e4));
-  const midLat = (bbox.s + bbox.n) / 2;
-  const aspect = ((bbox.e - bbox.w) * Math.cos((midLat * Math.PI) / 180)) / (bbox.n - bbox.s);
-  const cols = Math.max(12, Math.round(cells * Math.sqrt(aspect)));
-  const rows = Math.max(12, Math.round(cells / Math.sqrt(aspect)));
-  const dLat = (bbox.n - bbox.s) / rows;
-  const dLon = (bbox.e - bbox.w) / cols;
-  const n = (rows + 1) * (cols + 1);
-  const lat = new Float64Array(n);
-  const lon = new Float64Array(n);
-  const id = (r, c) => r * (cols + 1) + c;
-  for (let r = 0; r <= rows; r++) {
-    for (let c = 0; c <= cols; c++) {
-      const i = id(r, c);
-      lat[i] = bbox.s + (r + (rand() - 0.5) * 0.7) * dLat;
-      lon[i] = bbox.w + (c + (rand() - 0.5) * 0.7) * dLon;
-    }
+/** Make an undirected CSR graph from parallel edge arrays. */
+function fromEdgeList(lat, lon, A, B) {
+  const n = lat.length;
+  const deg = new Int32Array(n + 1);
+  for (let k = 0; k < A.length; k++) { deg[A[k]]++; deg[B[k]]++; }
+  const adjStart = new Int32Array(n + 1);
+  for (let i = 0; i < n; i++) adjStart[i + 1] = adjStart[i] + deg[i];
+  const fill = adjStart.slice(0, n);
+  const adjNode = new Int32Array(adjStart[n]);
+  const adjLen = new Float32Array(adjStart[n]);
+  for (let k = 0; k < A.length; k++) {
+    const a = A[k], b = B[k];
+    const len = haversine(lat[a], lon[a], lat[b], lon[b]);
+    adjNode[fill[a]] = b; adjLen[fill[a]++] = len;
+    adjNode[fill[b]] = a; adjLen[fill[b]++] = len;
   }
-  const A = [];
-  const B = [];
-  const link = (a, b, p) => { if (rand() < p) { A.push(a); B.push(b); } };
-  for (let r = 0; r <= rows; r++) {
-    for (let c = 0; c <= cols; c++) {
-      if (c < cols) link(id(r, c), id(r, c + 1), 0.88);
-      if (r < rows) link(id(r, c), id(r + 1, c), 0.88);
-      if (r < rows && c < cols) link(id(r, c), id(r + 1, c + 1), 0.22);
-      if (r < rows && c > 0) link(id(r, c), id(r + 1, c - 1), 0.22);
-    }
-  }
-  return fromEdgeList(lat, lon, A, B, true);
+  return { n, lat, lon, adjStart, adjNode, adjLen };
 }
 
-/**
- * Load the best graph available for these points.
- * Resolves to { graph, source: 'osm' | 'synthetic', reason? }.
- */
-async function loadNetwork(points, { signal, onStatus = () => {} } = {}) {
-  const s = span(points);
-  if (s > MAX_NETWORK_SPAN_M) {
-    return { graph: syntheticGraph(points), source: 'synthetic', reason: 'Addresses are very far apart, so routes are approximated.' };
-  }
-  try {
-    onStatus('Downloading streets…');
-    const bbox = paddedBBox(points, 0.2, 700);
-    const json = await overpass(roadQuery(bbox, roadClassesFor(s)), { signal, timeoutMs: 30000, mirrors: 2 });
-    onStatus('Mapping intersections…');
-    const graph = buildGraph(json.elements);
-    if (graph.n < 20) throw new Error('Too few roads found');
-    return { graph, source: 'osm' };
-  } catch (err) {
-    if (signal?.aborted) throw err;
-    return { graph: syntheticGraph(points), source: 'synthetic', reason: 'Street data could not be loaded, so routes are approximated.' };
-  }
-}
-
-__m["network"] = { OVERPASS_ENDPOINTS, roadClassesFor, MAX_NETWORK_SPAN_M, roadQuery, overpass, buildGraph, fromEdgeList, rng, syntheticGraph, loadNetwork };
-})();
-// ---- meet
-(() => {
-// The meeting-point solver.
-//
-// Every friend's address is a source. From each source we run Dijkstra over
-// the road graph — the frontier of that search is exactly "all routes
-// branching out at the same rate" (an invisible circle measured along roads).
-// Each search is restricted to nodes that lead *towards* another friend
-// (inside a travel ellipse), so branches heading away are never explored.
-// The meeting point is the first place every frontier reaches: the node that
-// minimises the longest anyone has to travel.
-const { haversine } = __m["geo"];
 /** Binary min-heap keyed by float priority, storing int ids. */
 class Heap {
   constructor(cap = 1024) { this.k = new Float64Array(cap); this.v = new Int32Array(cap); this.size = 0; }
@@ -1660,57 +1645,19 @@ class Heap {
   }
 }
 
-/** Label connected components; returns { comp: Int32Array, largest }. */
-function components(g) {
-  const comp = new Int32Array(g.n).fill(-1);
-  const sizes = [];
-  const stack = new Int32Array(g.n);
-  for (let s = 0; s < g.n; s++) {
-    if (comp[s] !== -1 || g.adjStart[s] === g.adjStart[s + 1]) continue;
-    const c = sizes.length;
-    let top = 0, size = 0;
-    stack[top++] = s; comp[s] = c;
-    while (top) {
-      const u = stack[--top]; size++;
-      for (let e = g.adjStart[u]; e < g.adjStart[u + 1]; e++) {
-        const v = g.adjNode[e];
-        if (comp[v] === -1) { comp[v] = c; stack[top++] = v; }
-      }
-    }
-    sizes.push(size);
-  }
-  let largest = 0;
-  for (let c = 1; c < sizes.length; c++) if (sizes[c] > sizes[largest]) largest = c;
-  return { comp, largest, sizes };
-}
-
-/** Nearest graph node to a point, optionally limited to one component. */
-function nearestNode(g, p, comp, wanted) {
-  let best = -1, bestD = Infinity;
-  const cos = Math.cos((p.lat * Math.PI) / 180);
-  for (let i = 0; i < g.n; i++) {
-    if (comp && comp[i] !== wanted) continue;
-    const dy = g.lat[i] - p.lat, dx = (g.lon[i] - p.lon) * cos;
-    const d = dx * dx + dy * dy;
-    if (d < bestD) { bestD = d; best = i; }
-  }
-  return best;
-}
-
-/** Dijkstra from `start` (with initial distance d0) over nodes where allowed[v]. */
-function dijkstra(g, start, d0 = 0, allowed = null) {
+/** Dijkstra from `start`: { dist, parent }. */
+function dijkstra(g, start) {
   const dist = new Float64Array(g.n).fill(Infinity);
   const parent = new Int32Array(g.n).fill(-1);
   const heap = new Heap();
-  dist[start] = d0;
-  heap.push(d0, start);
+  dist[start] = 0;
+  heap.push(0, start);
   while (heap.size) {
     const u = heap.pop();
     const du = heap.lastKey;
     if (du > dist[u]) continue;
     for (let e = g.adjStart[u]; e < g.adjStart[u + 1]; e++) {
       const v = g.adjNode[e];
-      if (allowed && !allowed[v]) continue;
       const nd = du + g.adjLen[e];
       if (nd < dist[v]) { dist[v] = nd; parent[v] = u; heap.push(nd, v); }
     }
@@ -1718,268 +1665,208 @@ function dijkstra(g, start, d0 = 0, allowed = null) {
   return { dist, parent };
 }
 
-/**
- * Nodes "leading towards" another friend from source i: inside the ellipse
- * |s_i v| + |v t| <= k * |s_i t| + slack for some other friend t (or the
- * group centroid). Fast equirectangular distances are plenty here.
- */
-function corridorMask(g, src, targets, k = 1.45, slack = 400) {
-  const mask = new Uint8Array(g.n);
-  const cos = Math.cos((src.lat * Math.PI) / 180);
-  const M = 111320;
-  const d = (aLat, aLon, bLat, bLon) => Math.hypot((aLat - bLat) * M, (aLon - bLon) * M * cos);
-  const lims = targets.map((t) => k * d(src.lat, src.lon, t.lat, t.lon) + slack);
-  for (let v = 0; v < g.n; v++) {
-    const ds = d(src.lat, src.lon, g.lat[v], g.lon[v]);
-    for (let j = 0; j < targets.length; j++) {
-      if (ds + d(g.lat[v], g.lon[v], targets[j].lat, targets[j].lon) <= lims[j]) { mask[v] = 1; break; }
-    }
-  }
-  return mask;
+__m["graph"] = { rng, fromEdgeList, dijkstra };
+})();
+// ---- meetpoint
+(() => {
+// Finding the meeting point.
+//
+// Instead of downloading every street in the area, Meet asks a routing
+// service for real travel times from everyone to a grid of candidate spots
+// (one small request per way of travelling), keeps the best spot and zooms
+// in around it a few times. "Fairest" means the longest trip is as short as
+// possible; "least total" means everyone's trips add up to the least time.
+// People on public transport are first estimated from walking distance, then
+// the two best spots are checked against real timetables.
+const { haversine, paddedBBox, centroid, smallestEnclosingCircle } = __m["geo"];
+const SPEEDS = { walk: 1.35, bike: 4.2, transit: 6.5, drive: 9.5 }; // m/s, urban averages
+const DETOUR = 1.3; // roads are about this much longer than a straight line
+const TRANSIT_OVERHEAD = 360; // walking to the stop and waiting, seconds
+
+/** Public transport estimate from a walking distance: never slower than walking. */
+const transitFromWalk = (m) => Math.min(m / SPEEDS.walk, TRANSIT_OVERHEAD + m / SPEEDS.transit);
+
+/** Rough door-to-door seconds for a straight-line distance. */
+function estimateSeconds(mode, straightM) {
+  const road = straightM * DETOUR;
+  return mode === 'transit' ? transitFromWalk(road) : road / (SPEEDS[mode] || SPEEDS.walk);
 }
 
-/**
- * Solve for the meeting point.
- * @param g graph from network.js
- * @param people [{lat, lon}]
- * @param opts { mode: 'fair' | 'total', k }
- */
-function solveMeeting(g, people, { mode = 'fair', corridors = [1.12, 1.3, 1.6], speeds = null } = {}) {
-  if (people.length < 2) throw new Error('Need at least two addresses');
-  // With speeds (m/s per person), fairness is measured in travel time, so
-  // someone driving is asked to go further than someone walking.
-  const w = people.map((_, i) => (speeds?.[i] > 0 ? 1 / speeds[i] : 1));
-  const { comp, largest } = components(g);
-  const cLat = people.reduce((s, p) => s + p.lat, 0) / people.length;
-  const cLon = people.reduce((s, p) => s + p.lon, 0) / people.length;
-  const center = { lat: cLat, lon: cLon };
-
-  const snapped = people.map((p) => {
-    const node = nearestNode(g, p, comp, largest);
-    return { node, gap: haversine(p.lat, p.lon, g.lat[node], g.lon[node]) };
-  });
-
-  const run = (k) => people.map((p, i) => {
-    const others = people.filter((_, j) => j !== i);
-    const mask = k ? corridorMask(g, p, people.length > 2 ? [...others, center] : others, k, 150) : null;
-    if (mask) mask[snapped[i].node] = 1;
-    return dijkstra(g, snapped[i].node, snapped[i].gap, mask);
-  });
-
-  const pick = (searches) => {
-    let best = -1, bestKey = Infinity, bestTie = Infinity;
-    for (let v = 0; v < g.n; v++) {
-      let mx = 0, sum = 0, ok = true;
-      for (let i = 0; i < searches.length; i++) {
-        const d = searches[i].dist[v];
-        if (d === Infinity) { ok = false; break; }
-        const c = d * w[i];
-        if (c > mx) mx = c;
-        sum += c;
-      }
-      if (!ok) continue;
-      const key = mode === 'total' ? sum : mx;
-      const tie = mode === 'total' ? mx : sum;
-      if (key < bestKey - 1e-6 || (Math.abs(key - bestKey) <= 1e-6 && tie < bestTie)) {
-        best = v; bestKey = key; bestTie = tie;
-      }
-    }
-    return best;
-  };
-
-  // Try a tight corridor first, widen it if the roads don't connect inside
-  // it (rivers, motorways…), and finally explore freely.
-  let searches, meet = -1, restricted = false;
-  for (const k of [...corridors, null]) {
-    searches = run(k);
-    meet = pick(searches);
-    restricted = k;
-    if (meet >= 0) break;
-  }
-  if (meet < 0) throw new Error('Could not connect everyone on the road network');
-
-  const reach = searches.map((s) => s.dist[meet]);
-  const cost = reach.map((d, i) => d * w[i]); // seconds when speeds are given, else metres
-  const radius = Math.max(...cost);
-  return {
-    meetNode: meet,
-    meet: { lat: g.lat[meet], lon: g.lon[meet] },
-    radius,
-    restricted,
-    people: people.map((p, i) => ({
-      ...p,
-      node: snapped[i].node,
-      gap: snapped[i].gap,
-      reach: reach[i],
-      cost: cost[i],
-      speed: speeds?.[i] > 0 ? speeds[i] : null,
-      dist: searches[i].dist,
-      parent: searches[i].parent,
-    })),
-  };
-}
-
-/** Road path (array of node ids) from a person's snapped node to `node`. */
-function pathTo(person, node) {
+/** n × n points spread evenly over a bounding box. */
+function grid(bbox, n) {
   const out = [];
-  for (let v = node; v !== -1; v = person.parent[v]) out.push(v);
-  return out.reverse();
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      out.push({ lat: bbox.s + ((bbox.n - bbox.s) * r) / (n - 1), lon: bbox.w + ((bbox.e - bbox.w) * c) / (n - 1) });
+    }
+  }
+  return out;
+}
+
+const score = (times, rule) => {
+  let max = 0, sum = 0;
+  for (const t of times) { if (t == null || !Number.isFinite(t)) return Infinity; max = Math.max(max, t); sum += t; }
+  return rule === 'total' ? sum + max * 0.01 : max + sum * 0.01;
+};
+
+const timeout = (promise, ms) => Promise.race([promise, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
+
+/**
+ * Travel times (seconds) and distances (metres) from every person to every
+ * candidate: people × candidates. Falls back to straight-line estimates for a
+ * way of travelling whose service does not answer.
+ */
+async function evaluate(people, cands, { travelTimes, signal }) {
+  const times = people.map(() => cands.map(() => null));
+  const dists = people.map(() => cands.map(() => null));
+  let snapped = null;
+  let approx = false;
+  // Walkers and public transport riders share one walking request.
+  const groups = { walk: [], bike: [], drive: [] };
+  people.forEach((p, i) => (groups[p.mode === 'transit' ? 'walk' : p.mode] || groups.walk).push(i));
+  await Promise.all(Object.entries(groups).map(async ([mode, idx]) => {
+    if (!idx.length) return;
+    try {
+      const t = await timeout(travelTimes(mode, idx.map((i) => people[i]), cands, { signal }), 12000);
+      if (t.destinations?.length === cands.length && (!snapped || mode === 'walk')) snapped = t.destinations;
+      idx.forEach((pi, k) => {
+        cands.forEach((_, j) => {
+          const d = t.distances?.[k]?.[j];
+          const s = t.durations?.[k]?.[j];
+          dists[pi][j] = d ?? null;
+          times[pi][j] = people[pi].mode === 'transit'
+            ? (d != null ? transitFromWalk(d) : s != null ? transitFromWalk(s * SPEEDS.walk) : null)
+            : s;
+        });
+      });
+    } catch (err) {
+      if (signal?.aborted) throw err;
+      approx = true;
+      for (const pi of idx) {
+        cands.forEach((c, j) => {
+          const m = haversine(people[pi].lat, people[pi].lon, c.lat, c.lon);
+          dists[pi][j] = m * DETOUR;
+          times[pi][j] = estimateSeconds(people[pi].mode, m);
+        });
+      }
+    }
+  }));
+  const points = cands.map((c, j) => (snapped?.[j] ? { lat: snapped[j][0], lon: snapped[j][1] } : { lat: c.lat, lon: c.lon }));
+  return points.map((pt, j) => ({ ...pt, times: times.map((row) => row[j]), dists: dists.map((row) => row[j]), approx }));
 }
 
 /**
- * A small bundle of different routes from a person to the meeting point.
- *
- * Every step of every route moves closer to the meeting point (its road
- * distance to the meeting point strictly drops), so no route ever heads the
- * wrong way. Each route is at most `slack` longer than the shortest one.
- * Alternatives are found by making the edges of routes already found (and,
- * more gently, every street touching them) more expensive and searching
- * again, so the next route sits at least a block away. Only routes that
- * differ enough are kept.
- *
- * @param toMeet road distance from every node to the meeting point (dijkstra from it)
- * @returns [{ path: node ids from the person's street to the meeting point, length }], shortest first
+ * @param people [{ lat, lon, mode }]
+ * @param opts.rule 'fair' | 'total'
+ * @param opts.travelTimes (mode, sources, destinations, {signal}) → { durations, distances, destinations? }
+ * @param opts.directions optional (mode, from, to) → { duration }: used to check public transport
+ * @returns { meet: {lat, lon}, times: [s], dists: [m], real: [bool], approx }
  */
-function routeBundle(g, person, meetNode, toMeet, { max = 4, attempts = 16, slack = 0.15, penalty = 1.8, nearby = 1.35, overlap = 0.6 } = {}) {
-  const start = person.node;
-  if (start === meetNode || toMeet[start] === Infinity) return [{ path: [start], length: 0 }];
-  const limit = toMeet[start] * (1 + slack) + 30;
-  const pen = new Float32Array(g.adjNode.length).fill(1);
-  const dist = new Float64Array(g.n), parent = new Int32Array(g.n), viaEdge = new Int32Array(g.n), seen = new Int32Array(g.n);
-  const twin = (e, u, v) => { for (let f = g.adjStart[v]; f < g.adjStart[v + 1]; f++) if (g.adjNode[f] === u) return f; return -1; };
-  const routes = [];
-  for (let t = 1; t <= attempts && routes.length < max; t++) {
-    const heap = new Heap();
-    dist[start] = 0; seen[start] = t; parent[start] = -1;
-    heap.push(0, start);
-    while (heap.size) {
-      const u = heap.pop();
-      const du = heap.lastKey;
-      if (du > dist[u]) continue;
-      if (u === meetNode) break;
-      for (let e = g.adjStart[u]; e < g.adjStart[u + 1]; e++) {
-        const v = g.adjNode[e];
-        if (!(toMeet[v] < toMeet[u] - 0.01)) continue; // only ever towards the meeting point
-        const nd = du + g.adjLen[e] * pen[e];
-        if (nd + toMeet[v] > limit * 3) continue;
-        if (seen[v] !== t || nd < dist[v]) { seen[v] = t; dist[v] = nd; parent[v] = u; viaEdge[v] = e; heap.push(nd, v); }
-      }
-    }
-    if (seen[meetNode] !== t) break;
-    const path = [meetNode];
-    const keys = new Set();
-    let length = 0;
-    for (let v = meetNode; v !== start; v = parent[v]) {
-      const u = parent[v], e = viaEdge[v];
-      length += g.adjLen[e];
-      keys.add(Math.min(u, v) * 1048576 + Math.max(u, v));
-      pen[e] *= penalty;
-      const back = twin(e, u, v);
-      if (back >= 0) pen[back] *= penalty;
-      path.push(u);
-    }
-    path.reverse();
-    // Nudge the next search a block or so away from this route.
-    for (const v of path) for (let f = g.adjStart[v]; f < g.adjStart[v + 1]; f++) pen[f] *= nearby;
-    if (length > limit) continue;
-    const similar = routes.some((r) => {
-      let shared = 0;
-      for (const k of keys) if (r.keys.has(k)) shared++;
-      return shared / Math.min(keys.size, r.keys.size) > overlap;
-    });
-    if (!similar) routes.push({ path, length, keys });
+async function findMeetingPoint(people, { rule = 'fair', travelTimes, directions, signal, onStatus = () => {} } = {}) {
+  if (people.length < 2) throw new Error('Add at least two people');
+  const all = [];
+  const add = (rows) => { for (const r of rows) { r.score = score(r.times, rule); all.push(r); } };
+  const best = () => all.reduce((a, b) => (b.score < a.score ? b : a));
+
+  // Round 1: a coarse grid over everyone, plus the middle and the geometric fairest spot.
+  const box = paddedBBox(people, 0.12, 400);
+  const sec = smallestEnclosingCircle(people);
+  let cellLat = (box.n - box.s) / 6, cellLon = (box.e - box.w) / 6;
+  onStatus('Finding the fairest spot…');
+  add(await evaluate(people, [...grid(box, 7), centroid(people), { lat: sec.lat, lon: sec.lon }], { travelTimes, signal }));
+
+  // Then zoom in around the best spot so far, until the grid is about 200 m apart.
+  for (let round = 0; round < 3; round++) {
+    const b = best();
+    if (!Number.isFinite(b.score)) break;
+    const cellM = Math.max(cellLat * 111320, cellLon * 111320 * Math.cos((b.lat * Math.PI) / 180));
+    if (round > 0 && cellM < 200) break;
+    const fine = { s: b.lat - cellLat, n: b.lat + cellLat, w: b.lon - cellLon, e: b.lon + cellLon };
+    add(await evaluate(people, grid(fine, 5), { travelTimes, signal }));
+    cellLat /= 2; cellLon /= 2;
   }
-  return routes.map(({ path, length }) => ({ path, length }));
+  if (!all.some((r) => Number.isFinite(r.score))) throw new Error('No spot can be reached by everyone');
+
+  // Public transport: check the two best (distinct) spots against real timetables.
+  const riders = people.map((p, i) => (p.mode === 'transit' ? i : -1)).filter((i) => i >= 0);
+  const real = people.map((p) => p.mode !== 'transit');
+  let chosen = best();
+  if (riders.length && directions) {
+    const ranked = all.filter((r) => Number.isFinite(r.score)).sort((a, b) => a.score - b.score);
+    const top = [];
+    for (const r of ranked) {
+      if (top.every((t) => haversine(t.lat, t.lon, r.lat, r.lon) > 250)) top.push(r);
+      if (top.length === 2) break;
+    }
+    onStatus('Checking public transport…');
+    const checked = await Promise.all(top.map(async (cand) => {
+      const times = [...cand.times];
+      const ok = await Promise.all(riders.map(async (i) => {
+        try {
+          const d = await timeout(directions('transit', people[i], cand, { signal }), 9000);
+          // Walking straight there can beat the timetable.
+          times[i] = Math.min(d.duration, cand.dists[i] != null ? cand.dists[i] / SPEEDS.walk : Infinity);
+          return true;
+        } catch (err) {
+          if (signal?.aborted) throw err;
+          return false;
+        }
+      }));
+      return { ...cand, times, score: score(times, rule), checked: ok };
+    }));
+    chosen = checked.reduce((a, b) => (b.score < a.score ? b : a));
+    riders.forEach((i, k) => { real[i] = chosen.checked[k]; });
+  }
+  if (chosen.approx) real.fill(false);
+  return {
+    meet: { lat: chosen.lat, lon: chosen.lon },
+    times: chosen.times.map((t) => Math.round(t)),
+    dists: chosen.dists.map((d, i) => Math.round(d ?? haversine(people[i].lat, people[i].lon, chosen.lat, chosen.lon) * DETOUR)),
+    real,
+    approx: !!chosen.approx,
+    tried: all.length,
+  };
 }
 
-/** Approximate road distance from a person to an arbitrary point. */
-function roadDistanceTo(g, person, point, radiusM = 250) {
-  // Use the best reached node near the point; fall back to a detour factor.
-  let best = Infinity;
-  const cos = Math.cos((point.lat * Math.PI) / 180);
-  const r2 = (radiusM / 111320) ** 2;
-  for (let v = 0; v < g.n; v++) {
-    const dv = person.dist[v];
-    if (dv === Infinity) continue;
-    const dy = g.lat[v] - point.lat, dx = (g.lon[v] - point.lon) * cos;
-    if (dx * dx + dy * dy > r2) continue;
-    const total = dv + haversine(g.lat[v], g.lon[v], point.lat, point.lon);
-    if (total < best) best = total;
-  }
-  if (best === Infinity) best = haversine(person.lat, person.lon, point.lat, point.lon) * 1.3;
-  return best;
-}
-
-__m["meet"] = { components, nearestNode, dijkstra, corridorMask, solveMeeting, pathTo, routeBundle, roadDistanceTo };
+__m["meetpoint"] = { SPEEDS, transitFromWalk, estimateSeconds, grid, findMeetingPoint };
 })();
 // ---- growth
 (() => {
-// Canvas overlay that shows each person's routes to the meeting point
-// growing at one shared rate (an invisible circle measured along the roads)
-// until they meet. Each person gets a small bundle of routes; every step of
-// every route moves closer to the meeting point, so nothing branches off the
-// wrong way. Once everyone arrives the alternatives fade and each person's
-// best route stays, like a directions line.
+// Canvas overlay that shows everyone's real routes to the meeting point
+// growing on one shared clock: after "10 minutes" each line has covered what
+// that person travels in 10 minutes, so whoever has further to go is still
+// moving when the others have arrived. A dot marks where each person is.
+// A person's other good routes grow lighter alongside; once everyone has
+// arrived they fade and the main route stays, like a directions line.
 // Coordinates are pre-projected to Web Mercator at zoom 0, so each frame is a
 // cheap scale + translate.
-const { routeBundle, dijkstra } = __m["meet"];
-// While growing: each person's main route a little stronger, the other
-// options lighter. Once everyone has met: options fade, main route goes bold.
-const MAIN = { width: 2.4, alpha: 0.85 };
-const ALT = { width: 1.6, alpha: 0.4 };
-const ALT_DONE = { width: 1.5, alpha: 0.16 };
 
+const MAIN = { width: 3, alpha: 0.95 };
+const ALT = { width: 2, alpha: 0.32 };
+const ALT_DONE = { width: 1.8, alpha: 0.14 };
+
+/**
+ * One person's journey, for the animation:
+ *   { color, pieces: [{ pts: [[lat, lon]], t0, t1, walk }], alts: [[[lat, lon]]], duration }
+ * `t0`/`t1` are seconds after leaving; walking parts are drawn dotted.
+ */
 class GrowthAnimation {
-  /**
-   * @param map Leaflet map
-   * @param graph road graph
-   * @param solution result of solveMeeting()
-   * @param colors one CSS colour per person
-   */
-  constructor(map, graph, solution, colors) {
+  constructor(map, tracks) {
     this.map = map;
-    this.graph = graph;
-    this.solution = solution;
-    this.colors = colors;
-    this.r = 0;
+    this.clock = 0;
     this.done = false;
     this.raf = 0;
-
     const crs = L.CRS.EPSG3857;
-    const proj = (lat, lon) => crs.latLngToPoint(L.latLng(lat, lon), 0);
-    const pt = (v) => proj(graph.lat[v], graph.lon[v]);
-    this.limit = solution.radius;
-    const toMeet = dijkstra(graph, solution.meetNode).dist;
-    this.layers = solution.people.map((person) => {
-      const routes = routeBundle(graph, person, solution.meetNode, toMeet);
-      // The shared radius is travel time when people have speeds (distance
-      // otherwise): each person's routes grow at their own pace and everyone
-      // arrives together when it reaches the meeting point.
-      const k = person.speed ? 1 / person.speed : 1;
-      const arrive = person.cost ?? person.reach;
-      const gap = person.gap * k;
+    const proj = ([lat, lon]) => crs.latLngToPoint(L.latLng(lat, lon), 0);
+    this.total = Math.max(60, ...tracks.map((t) => t.duration || 0));
+    this.tracks = tracks.map((t) => {
       const segs = [];
-      const seen = new Set();
-      const door = proj(person.lat, person.lon);
-      const first = pt(routes[0].path[0]);
-      segs.push({ a: door, b: first, d0: 0, d1: gap, best: true });
-      routes.forEach((route, ri) => {
-        const scale = route.length > 0 ? (arrive - gap) / route.length : 0;
-        let along = 0;
-        for (let i = 1; i < route.path.length; i++) {
-          const u = route.path[i - 1], v = route.path[i];
-          const len = edgeLength(graph, u, v);
-          const key = Math.min(u, v) * 1048576 + Math.max(u, v);
-          const d0 = gap + along * scale;
-          along += len;
-          if (seen.has(key)) continue; // shared with a route already drawn
-          seen.add(key);
-          segs.push({ a: pt(u), b: pt(v), d0, d1: gap + along * scale, best: ri === 0 });
-        }
-      });
-      segs.sort((x, y) => x.d0 - y.d0);
-      const best = [door, ...routes[0].path.map(pt)];
-      return { segs, best, routes: routes.length };
+      for (const piece of t.pieces) addTimed(segs, piece.pts.map(proj), piece.t0, piece.t1, piece.walk);
+      const alts = [];
+      for (const line of t.alts || []) addTimed(alts, line.map(proj), 0, t.duration, false);
+      segs.sort((a, b) => a.s0 - b.s0);
+      alts.sort((a, b) => a.s0 - b.s0);
+      return { color: t.color, segs, alts, duration: t.duration };
     });
 
     this.canvas = document.createElement('canvas');
@@ -2012,10 +1899,8 @@ class GrowthAnimation {
     const map = this.map;
     const scale = map.getZoomScale(zoom, map.getZoom());
     const half = map.getSize().divideBy(2);
-    const from = map.getPixelBounds().min;                     // current top-left, world px
-    const to = map.project(center, zoom).subtract(half);         // final top-left, world px at new zoom
-    // Same timing as Leaflet's own zoom animation, so it scales with the map
-    // instead of blinking out while zooming.
+    const from = map.getPixelBounds().min;
+    const to = map.project(center, zoom).subtract(half);
     this.canvas.classList.add('zooming');
     L.DomUtil.setTransform(this.canvas, from.multiplyBy(scale).subtract(to), scale);
     this.zooming = true;
@@ -2028,31 +1913,30 @@ class GrowthAnimation {
     this.canvas.style.transform = '';
   }
 
-  /** Animate until all frontiers meet. Resolves true if completed, false if cancelled. */
+  /** Animate until everyone has arrived. Resolves true if completed, false if cancelled. */
   play({ duration = 6000, onProgress } = {}) {
     cancelAnimationFrame(this.raf);
     this.done = false;
+    this.skipRequested = false;
     return new Promise((resolve) => {
       this.resolve = resolve;
       const start = performance.now();
-      const total = this.limit;
       const step = (now) => {
         const t = Math.min(1, (now - start) / duration);
-        // Constant speed so every frontier advances at the same rate;
-        // only the first 6% eases in.
+        // Steady clock; only the first 6% eases in.
         const eased = t < 0.06 ? (t * t) / 0.12 : t - 0.03;
-        this.r = total * Math.min(1, eased / 0.97);
-        this.draw();
-        onProgress?.(this.r, total);
+        this.clock = this.total * Math.min(1, eased / 0.97);
         if (t >= 1 || this.skipRequested) {
-          this.r = total;
+          this.clock = this.total;
           this.done = true;
           this.draw();
-          onProgress?.(total, total);
+          onProgress?.(this.total, this.total);
           this.resolve = null;
           resolve(true);
           return;
         }
+        this.draw();
+        onProgress?.(this.clock, this.total);
         this.raf = requestAnimationFrame(step);
       };
       this.raf = requestAnimationFrame(step);
@@ -2067,57 +1951,57 @@ class GrowthAnimation {
     const scale = 2 ** map.getZoom();
     const origin = map.getPixelBounds().min;
     const ox = origin.x, oy = origin.y;
-    const r = this.r;
+    const c = this.clock;
     const finished = this.done;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, this.size.x, this.size.y);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
+    const X = (x) => x * scale - ox, Y = (y) => y * scale - oy;
 
-    this.layers.forEach((layer, li) => {
-      const color = this.colors[li % this.colors.length];
-      const main = new Path2D();
-      const alt = new Path2D();
-      for (const s of layer.segs) {
-        if (s.d0 >= r) break; // sorted by d0
-        const path = s.best ? main : alt;
-        const x0 = s.a.x * scale - ox, y0 = s.a.y * scale - oy;
-        let x1 = s.b.x * scale - ox, y1 = s.b.y * scale - oy;
-        if (s.d1 > r) {
-          const f = (r - s.d0) / Math.max(1e-9, s.d1 - s.d0);
-          x1 = x0 + (x1 - x0) * f;
-          y1 = y0 + (y1 - y0) * f;
+    const trace = (segs, upTo) => {
+      const ride = new Path2D(), walk = new Path2D();
+      let head = null;
+      for (const s of segs) {
+        if (s.s0 > upTo) break;
+        const x0 = X(s.ax), y0 = Y(s.ay);
+        let x1 = X(s.bx), y1 = Y(s.by);
+        if (s.s1 > upTo) {
+          const f = s.s1 > s.s0 ? (upTo - s.s0) / (s.s1 - s.s0) : 1;
+          x1 = x0 + (x1 - x0) * f; y1 = y0 + (y1 - y0) * f;
         }
-        path.moveTo(x0, y0);
-        path.lineTo(x1, y1);
+        const path = s.walk ? walk : ride;
+        path.moveTo(x0, y0); path.lineTo(x1, y1);
+        if (!head || s.s0 >= head.s) head = { x: x1, y: y1, s: s.s0 };
       }
-      ctx.strokeStyle = color;
-      const altStyle = finished ? ALT_DONE : ALT;
-      ctx.globalAlpha = altStyle.alpha;
-      ctx.lineWidth = altStyle.width;
-      ctx.stroke(alt);
-      if (!finished) {
-        ctx.globalAlpha = MAIN.alpha;
-        ctx.lineWidth = MAIN.width;
-        ctx.stroke(main);
-      }
+      return { ride, walk, head };
+    };
 
-      // Once everyone meets: each person's best route, like a directions line.
-      if (finished) {
-        ctx.globalAlpha = 1;
-        ctx.beginPath();
-        layer.best.forEach((p, i) => {
-          const x = p.x * scale - ox, y = p.y * scale - oy;
-          if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
-        });
-        ctx.strokeStyle = 'rgba(255,255,255,0.95)';
-        ctx.lineWidth = 6.5;
-        ctx.stroke();
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 3.5;
-        ctx.stroke();
-      }
-    });
+    // Lighter alternatives underneath.
+    for (const t of this.tracks) {
+      if (!t.alts.length) continue;
+      const { ride } = trace(t.alts, finished ? Infinity : c);
+      const st = finished ? ALT_DONE : ALT;
+      ctx.globalAlpha = st.alpha; ctx.lineWidth = st.width; ctx.strokeStyle = t.color; ctx.setLineDash([]);
+      ctx.stroke(ride);
+    }
+    // Main routes: white casing for rides, dotted walking parts, a dot for where each person is.
+    const heads = [];
+    for (const t of this.tracks) {
+      const { ride, walk, head } = trace(t.segs, finished ? Infinity : c);
+      ctx.globalAlpha = 1;
+      ctx.setLineDash([]);
+      ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.lineWidth = MAIN.width + 3.5; ctx.stroke(ride);
+      ctx.strokeStyle = t.color; ctx.lineWidth = MAIN.width; ctx.globalAlpha = MAIN.alpha; ctx.stroke(ride);
+      ctx.globalAlpha = 1; ctx.setLineDash([0.1, 7]); ctx.lineWidth = 4; ctx.stroke(walk);
+      if (!finished && head && c < t.duration) heads.push({ ...head, color: t.color });
+    }
+    ctx.setLineDash([]);
+    for (const h of heads) {
+      ctx.beginPath(); ctx.arc(h.x, h.y, 6, 0, Math.PI * 2);
+      ctx.fillStyle = h.color; ctx.fill();
+      ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; ctx.stroke();
+    }
     ctx.globalAlpha = 1;
   }
 
@@ -2131,9 +2015,19 @@ class GrowthAnimation {
   }
 }
 
-function edgeLength(g, u, v) {
-  for (let e = g.adjStart[u]; e < g.adjStart[u + 1]; e++) if (g.adjNode[e] === v) return g.adjLen[e];
-  return 0;
+/** Split a projected line into segments timed evenly by length between t0 and t1. */
+function addTimed(out, pts, t0, t1, walk) {
+  if (pts.length < 2) return;
+  let total = 0;
+  const lens = [];
+  for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y); lens.push(l); total += l; }
+  let along = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const s0 = t0 + (total ? along / total : 0) * (t1 - t0);
+    along += lens[i - 1];
+    const s1 = t0 + (total ? along / total : 1) * (t1 - t0);
+    out.push({ ax: pts[i - 1].x, ay: pts[i - 1].y, bx: pts[i].x, by: pts[i].y, s0, s1, walk });
+  }
 }
 
 __m["growth"] = { GrowthAnimation };
@@ -2142,8 +2036,37 @@ __m["growth"] = { GrowthAnimation };
 (() => {
 // Places of interest around the meeting point, via OpenStreetMap / Overpass,
 // sorted into tabs (Food, Drinks, …) and listings ("Italian · 4").
-const { overpass } = __m["network"];
 const { haversine } = __m["geo"];
+const OVERPASS_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+];
+
+/** POST an Overpass query, trying mirrors in turn. */
+async function overpass(query, { signal, timeoutMs = 9000, mirrors = 1 } = {}) {
+  let lastErr;
+  for (const url of OVERPASS_ENDPOINTS.slice(0, mirrors)) {
+    const ctrl = new AbortController();
+    const onAbort = () => ctrl.abort();
+    signal?.addEventListener('abort', onAbort);
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { method: 'POST', body: new URLSearchParams({ data: query }), signal: ctrl.signal });
+      if (!res.ok) throw new Error(`Overpass ${res.status}`);
+      const json = await res.json();
+      if (!json || !Array.isArray(json.elements)) throw new Error('Bad Overpass response');
+      return json;
+    } catch (err) {
+      if (signal?.aborted) throw err;
+      lastErr = err;
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+    }
+  }
+  throw lastErr || new Error('Overpass unavailable');
+}
+
 const TABS = [
   { id: 'food', label: 'Food', icon: '🍽️' },
   { id: 'drinks', label: 'Drinks', icon: '☕' },
@@ -2239,7 +2162,7 @@ function poiQuery(center, radius) {
     `nwr${around}[tourism~"^(museum|gallery|attraction|zoo|aquarium|theme_park|viewpoint|picnic_site)$"][name]`,
     `nwr${around}[shop~"^(mall|department_store|books|bakery|pastry|games|video_games|toys|music|gift|clothes|coffee|tea|ice_cream|supermarket)$"][name]`,
   ];
-  return `[out:json][timeout:25];(${sel.join(';')};);out center tags 400;`;
+  return `[out:json][timeout:12];(${sel.join(';')};);out center tags 400;`;
 }
 
 function formatAddress(tags) {
@@ -2272,10 +2195,22 @@ function parsePois(elements, center) {
       hours: tags.opening_hours || '',
       phone: tags.phone || tags['contact:phone'] || '',
       website: tags.website || tags['contact:website'] || '',
+      menu: tags['website:menu'] || '',
+      email: tags.email || tags['contact:email'] || '',
+      description: tags.description || '',
+      brand: tags.brand || '',
       wheelchair: tags.wheelchair || '',
       outdoor: tags.outdoor_seating === 'yes',
+      takeaway: tags.takeaway || '',
+      delivery: tags.delivery || '',
+      reservation: tags.reservation || '',
+      wifi: /yes|wlan|free/.test(tags.internet_access || '') ? 'yes' : '',
+      dogs: tags.dog || '',
       vegan: /yes|only/.test(tags['diet:vegan'] || ''),
       vegetarian: /yes|only/.test(tags['diet:vegetarian'] || ''),
+      // Free photo sources: a Wikidata item or a Wikimedia Commons file.
+      wikidata: /^Q\d+$/.test(tags.wikidata || '') ? tags.wikidata : '',
+      commons: tags.wikimedia_commons || (/commons\.wikimedia\.org\/wiki\/(File:[^?#]+)/.exec(tags.image || '')?.[1] ? decodeURIComponent(/commons\.wikimedia\.org\/wiki\/(File:[^?#]+)/.exec(tags.image)[1]) : ''),
       fromCenter: haversine(center.lat, center.lon, lat, lon),
     });
   }
@@ -2299,29 +2234,54 @@ function groupPois(pois) {
   return out;
 }
 
-/** Fetch POIs, widening the search radius until there is a decent choice. */
 /**
- * Fetch POIs, widening the search radius until there is a decent choice.
- * Uses OpenStreetMap's Overpass API; if that is down or refusing requests,
- * falls back to Photon (the address search service), which can list nearby
- * places by type but not by cuisine.
+ * Places near a point, as fast as possible. One Overpass query (OpenStreetMap,
+ * with cuisines) races Photon (which only knows the kind of place): Photon
+ * starts if Overpass has not answered within a couple of seconds, and
+ * whichever has answered once both had a fair chance wins. Quiet areas get
+ * one wider search.
  */
-async function findPois(center, { radius, signal, minResults = 12 } = {}) {
-  const radii = radius ? [radius] : [800, 1800, 4000];
-  let pois = [];
-  let used = radii[0];
-  try {
-    for (const r of radii) {
-      used = r;
-      const json = await overpass(poiQuery(center, r), { signal, timeoutMs: 10000, mirrors: 2 });
+async function findPois(center, { radius, signal, minResults = 12, photonAfterMs = 2200, graceMs = 1200, overpassTimeoutMs = 9000 } = {}) {
+  const r = radius || 1500;
+  const ctrl = new AbortController();
+  const onAbort = () => ctrl.abort();
+  signal?.addEventListener('abort', onAbort);
+  const viaOverpass = (async () => {
+    let json = await overpass(poiQuery(center, r), { signal: ctrl.signal, timeoutMs: overpassTimeoutMs });
+    let pois = parsePois(json.elements, center);
+    let used = r;
+    if (!radius && pois.length < minResults) {
+      used = 4000;
+      json = await overpass(poiQuery(center, used), { signal: ctrl.signal, timeoutMs: overpassTimeoutMs });
       pois = parsePois(json.elements, center);
-      if (pois.length >= minResults) break;
     }
     return { pois, radius: used, source: 'overpass' };
-  } catch (err) {
-    if (signal?.aborted) throw err;
-    const r = radius || 1500;
-    return { pois: await photonPois(center, r, { signal }), radius: r, source: 'photon' };
+  })();
+  let photon = null;
+  const startPhoton = () => (photon ||= photonPois(center, r, { signal: ctrl.signal }).then((pois) => ({ pois, radius: r, source: 'photon' })));
+  const settle = (p) => p.then((v) => ({ ok: true, v }), (e) => ({ ok: false, e }));
+  try {
+    const o = settle(viaOverpass);
+    const first = await Promise.race([o, new Promise((res) => setTimeout(() => res(null), photonAfterMs))]);
+    if (first?.ok) return first.v;
+    if (signal?.aborted) throw first?.e || new DOMException('Aborted', 'AbortError');
+    // Overpass failed or is slow: Photon joins in.
+    const p = settle(startPhoton());
+    const next = await Promise.race([o, p]);
+    if (next.ok) {
+      if (next.v.source === 'overpass') return next.v;
+      // Photon answered first; Overpass gets a moment longer, since it knows cuisines.
+      const late = await Promise.race([o, new Promise((res) => setTimeout(() => res(null), graceMs))]);
+      return late?.ok ? late.v : next.v;
+    }
+    // The first to finish failed: wait for the other one.
+    const [ro, rp] = await Promise.all([o, p]);
+    if (ro.ok) return ro.v;
+    if (rp.ok) return rp.v;
+    throw rp.e;
+  } finally {
+    signal?.removeEventListener('abort', onAbort);
+    ctrl.abort(); // stop whichever is still running
   }
 }
 
@@ -2374,7 +2334,291 @@ async function photonPois(center, radiusM, { signal } = {}) {
     .filter((p) => p.fromCenter <= radiusM * 1.1);
 }
 
-__m["pois"] = { TABS, categorize, poiQuery, parsePois, groupPois, findPois, PHOTON_GROUPS, photonUrl, photonElements };
+__m["pois"] = { OVERPASS_ENDPOINTS, overpass, TABS, categorize, poiQuery, parsePois, groupPois, findPois, PHOTON_GROUPS, photonUrl, photonElements };
+})();
+// ---- hours
+(() => {
+// Opening hours from OpenStreetMap's opening_hours tag, for the common
+// forms ("Mo-Fr 09:00-17:00; Sa 10:00-14:00", "24/7", "Tu-Su 12:00-23:00",
+// "We-Su 17:00-01:00", "Mo off"). Anything fancier (months, holidays,
+// sunrise) is shown as written instead of guessing.
+
+const DAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const TIME = /^(\d{1,2}):(\d{2})$/;
+
+function parseDays(sel) {
+  const days = new Set();
+  for (const part of sel.split(',')) {
+    const m = part.trim().match(/^(Mo|Tu|We|Th|Fr|Sa|Su)(?:-(Mo|Tu|We|Th|Fr|Sa|Su))?$/);
+    if (!m) return null;
+    const a = DAYS.indexOf(m[1]);
+    const b = m[2] ? DAYS.indexOf(m[2]) : a;
+    for (let d = a; ; d = (d + 1) % 7) { days.add(d); if (d === b) break; }
+  }
+  return days;
+}
+
+const toMin = (s) => {
+  const m = TIME.exec(s.trim());
+  if (!m || Number(m[1]) > 24 || Number(m[2]) > 59) return null;
+  return Number(m[1]) * 60 + Number(m[2]);
+};
+
+function parseTimes(sel) {
+  const out = [];
+  for (const part of sel.split(',')) {
+    const p = part.trim();
+    if (!p) continue;
+    const open = p.match(/^(\d{1,2}:\d{2})\+$/);
+    if (open) { const a = toMin(open[1]); if (a == null) return null; out.push([a, 24 * 60]); continue; }
+    const [x, y, extra] = p.split('-');
+    if (extra !== undefined || y === undefined) return null;
+    const a = toMin(x), b = toMin(y);
+    if (a == null || b == null) return null;
+    out.push([a, b <= a ? b + 24 * 60 : b]); // past midnight
+  }
+  return out;
+}
+
+/** opening_hours → week: 7 arrays (Mon…Sun) of [openMin, closeMin] (close may pass 24:00), or null. */
+function parseHours(spec) {
+  const s = String(spec || '').trim();
+  if (!s) return null;
+  if (s === '24/7') return DAYS.map(() => [[0, 24 * 60]]);
+  const week = DAYS.map(() => []);
+  // "Mo-Fr 09:00-17:00, Sa 10:00-14:00" uses commas between rules too.
+  const rules = s.replace(/\|\|/g, ';').split(';').flatMap((r) => r.split(/(?<=[\d+]|off|closed),\s*(?=(?:Mo|Tu|We|Th|Fr|Sa|Su)\b)/));
+  for (const raw of rules) {
+    const rule = raw.trim().replace(/\s*"[^"]*"\s*$/, ''); // drop comments
+    if (!rule) continue;
+    if (/^(PH|SH)\b/.test(rule)) continue; // holidays: not modelled
+    const m = rule.match(/^((?:(?:Mo|Tu|We|Th|Fr|Sa|Su)(?:-(?:Mo|Tu|We|Th|Fr|Sa|Su))?)(?:,(?:Mo|Tu|We|Th|Fr|Sa|Su)(?:-(?:Mo|Tu|We|Th|Fr|Sa|Su))?)*)?(?:,PH)?\s*(.*)$/);
+    if (!m) return null;
+    const days = m[1] ? parseDays(m[1]) : new Set([0, 1, 2, 3, 4, 5, 6]);
+    if (!days) return null;
+    const rest = m[2].trim();
+    if (/^(off|closed)$/i.test(rest)) { for (const d of days) week[d] = []; continue; }
+    const times = rest ? parseTimes(rest) : [[0, 24 * 60]];
+    if (!times) return null;
+    for (const d of days) week[d] = times; // a later rule replaces the day
+  }
+  return week;
+}
+
+const defaultFmt = (min) => {
+  const m = ((min % 1440) + 1440) % 1440;
+  return new Date(2000, 0, 1, Math.floor(m / 60), m % 60).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+};
+
+/**
+ * Is it open at `date`? → { open, soon, text } like "Open · Closes 22:00",
+ * "Closes soon · 22:00", "Closed · Opens Tue 09:00", "Open 24 hours"; or null if unknown.
+ */
+function openStatus(spec, date = new Date(), { fmt = defaultFmt } = {}) {
+  const week = parseHours(spec);
+  if (!week) return null;
+  if (week.every((d) => d.length === 1 && d[0][0] === 0 && d[0][1] >= 1440)) return { open: true, soon: false, text: 'Open 24 hours' };
+  const day = (date.getDay() + 6) % 7;
+  const now = date.getHours() * 60 + date.getMinutes();
+  const spans = [];
+  // Yesterday's late hours, today's and the next six days', on one timeline.
+  for (let k = -1; k < 7; k++) {
+    for (const [a, b] of week[(day + k + 7) % 7]) spans.push([a + k * 1440, b + k * 1440]);
+  }
+  spans.sort((x, y) => x[0] - y[0]);
+  // Merge touching spans (e.g. 00:00-24:00 every day).
+  const merged = [];
+  for (const sp of spans) {
+    const last = merged.at(-1);
+    if (last && sp[0] <= last[1]) last[1] = Math.max(last[1], sp[1]); else merged.push([...sp]);
+  }
+  const cur = merged.find(([a, b]) => a <= now && now < b);
+  if (cur) {
+    if (cur[1] - now > 6 * 1440) return { open: true, soon: false, text: 'Open 24 hours' };
+    const soon = cur[1] - now <= 45;
+    return { open: true, soon, text: `${soon ? 'Closes soon' : 'Open'} · ${soon ? '' : 'Closes '}${fmt(cur[1])}` };
+  }
+  const next = merged.find(([a]) => a > now);
+  if (!next) return { open: false, soon: false, text: 'Closed' };
+  const dayOffset = Math.floor(next[0] / 1440);
+  const when = dayOffset === 0 ? fmt(next[0]) : dayOffset === 1 ? `tomorrow ${fmt(next[0])}` : `${DAY_NAMES[(day + dayOffset) % 7]} ${fmt(next[0])}`;
+  return { open: false, soon: next[0] - now <= 45, text: `Closed · Opens ${when}` };
+}
+
+/** Rows for a weekly table: [{ day: 'Mon', text: '9:00 AM – 5:00 PM', today }] or null. */
+function weekTable(spec, date = new Date(), { fmt = defaultFmt } = {}) {
+  const week = parseHours(spec);
+  if (!week) return null;
+  const today = (date.getDay() + 6) % 7;
+  return week.map((spans, d) => ({
+    day: DAY_NAMES[d],
+    today: d === today,
+    text: !spans.length ? 'Closed'
+      : spans.length === 1 && spans[0][0] === 0 && spans[0][1] >= 1440 ? 'Open 24 hours'
+        : spans.map(([a, b]) => `${fmt(a)} – ${fmt(b)}`).join(', '),
+  }));
+}
+
+__m["hours"] = { DAY_NAMES, parseHours, openStatus, weekTable };
+})();
+// ---- rated
+(() => {
+// Ratings, photos and reviews for places.
+//
+//  • Tripadvisor, when the Meet server has a TRIPADVISOR_API_KEY: ratings in
+//    lists, a photo per place, and a full page of photos and reviews.
+//  • Always, for free: photos from Wikimedia Commons for places that
+//    OpenStreetMap links to Wikidata or Commons (museums, parks, landmarks and
+//    some restaurants).
+
+let configPromise = null;
+
+/** What the Meet server offers: { ratings: 'tripadvisor' | null, basemapKey }. */
+function getConfig() {
+  configPromise ||= fetch('/api/config', { credentials: 'same-origin' })
+    .then((r) => (r.ok ? r.json() : {}))
+    .catch(() => ({}));
+  return configPromise;
+}
+
+/** 'tripadvisor' when the server provides ratings, otherwise null. */
+function ratingsSource() {
+  return getConfig().then((c) => c.ratings || null);
+}
+
+const TAB_CATEGORY = { food: 'RESTAURANT', drinks: 'RESTAURANT', fun: 'ATTRACTION', culture: 'ATTRACTION', outdoors: 'ATTRACTION' };
+
+async function postJson(url, body) {
+  const res = await fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(data.error || 'Ratings unavailable'), { status: res.status });
+  return data;
+}
+
+async function getJson(url) {
+  const res = await fetch(url, { credentials: 'same-origin' });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(data.error || 'Unavailable'), { status: res.status });
+  return data;
+}
+
+/**
+ * Fill in `p.rating` ({ id, rating, count, ratingImage, priceLevel, url } or
+ * null) for places that do not have one yet. Up to 12 per request.
+ */
+async function rateAll(pois) {
+  if (!(await ratingsSource())) return;
+  const todo = pois.filter((p) => p.rating === undefined && !p.ratingPending);
+  for (let i = 0; i < todo.length; i += 12) {
+    const batch = todo.slice(i, i + 12);
+    for (const p of batch) p.ratingPending = true;
+    try {
+      const { ratings } = await postJson('/api/places/ratings', {
+        items: batch.map((p) => ({ key: p.id, name: p.name, lat: p.lat, lon: p.lon, category: TAB_CATEGORY[p.tab] })),
+      });
+      for (const p of batch) p.rating = ratings[p.id] || null;
+    } catch (err) {
+      for (const p of batch) p.rating = null;
+      if (err.status === 429 || err.status === 503) throw err;
+    } finally {
+      for (const p of batch) p.ratingPending = false;
+    }
+  }
+}
+
+/** A photo URL for a list row, or null. */
+async function thumbFor(p) {
+  if (p.thumb !== undefined) return p.thumb;
+  if (p.rating?.id) {
+    try {
+      const { photo } = await getJson(`/api/places/photo/${encodeURIComponent(p.rating.id)}`);
+      if (photo?.url) return (p.thumb = photo.url);
+    } catch { /* fall through to free photos */ }
+  }
+  const free = await freeImage(p).catch(() => null);
+  return (p.thumb = free ? commonsUrl(free, 240) : null);
+}
+
+/**
+ * Everything for the place page: { photos: [{ url, caption, by, credit }],
+ * reviews, rating, …, source }. Tripadvisor when available, then free photos.
+ */
+async function detailsFor(p) {
+  let details = null;
+  if (p.rating?.id) {
+    try { details = (await getJson(`/api/places/details/${encodeURIComponent(p.rating.id)}`)).place; } catch { details = null; }
+  }
+  const out = { ...(details || {}), source: details ? 'tripadvisor' : null, photos: details?.photos || [], reviews: details?.reviews || [] };
+  if (out.photos.length < 3) {
+    const free = await freeGallery(p).catch(() => []);
+    out.photos = [...out.photos, ...free];
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- Wikimedia (free)
+
+const WIKIDATA = 'https://www.wikidata.org/w/api.php';
+const COMMONS = 'https://commons.wikimedia.org/w/api.php';
+const wikidataCache = new Map(); // Q-id → Promise<{ image, category }>
+
+/** A Commons thumbnail URL (the server redirects to the right size). */
+const commonsUrl = (file, width = 640) => `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(String(file).replace(/^File:/i, ''))}?width=${width}`;
+
+/** A Wikidata item's picture (P18) and Commons category (P373): two tiny requests. */
+function wikidataInfo(qid) {
+  if (!wikidataCache.has(qid)) {
+    const claim = (property) => fetch(`${WIKIDATA}?${new URLSearchParams({ action: 'wbgetclaims', entity: qid, property, format: 'json', origin: '*' })}`)
+      .then((r) => r.json())
+      .then((j) => j.claims?.[property]?.[0]?.mainsnak?.datavalue?.value || '')
+      .catch(() => '');
+    wikidataCache.set(qid, Promise.all([claim('P18'), claim('P373')]).then(([image, category]) => ({ image, category })));
+  }
+  return wikidataCache.get(qid);
+}
+
+/** The main free picture of a place: its Commons file, else its Wikidata image. */
+async function freeImage(p) {
+  if (/^File:/i.test(p.commons || '')) return p.commons;
+  if (p.wikidata) return (await wikidataInfo(p.wikidata)).image || null;
+  return null;
+}
+
+/** Up to 10 free photos with credits, from the place's Commons file, Wikidata image and Commons category. */
+async function freeGallery(p) {
+  const files = [];
+  const first = await freeImage(p).catch(() => null);
+  if (first) files.push(`File:${String(first).replace(/^File:/i, '')}`);
+  const category = /^Category:/i.test(p.commons || '') ? p.commons.replace(/^Category:/i, '') : p.wikidata ? (await wikidataInfo(p.wikidata)).category : '';
+  const q = new URLSearchParams({ action: 'query', format: 'json', origin: '*', prop: 'imageinfo', iiprop: 'url|extmetadata', iiurlwidth: '1000', iiextmetadatafilter: 'Artist|LicenseShortName' });
+  if (category) {
+    q.set('generator', 'categorymembers'); q.set('gcmtitle', `Category:${category}`); q.set('gcmtype', 'file'); q.set('gcmlimit', '10');
+  } else if (files.length) {
+    q.set('titles', files.join('|'));
+  } else {
+    return [];
+  }
+  const j = await (await fetch(`${COMMONS}?${q}`)).json();
+  const pages = Object.values(j.query?.pages || {});
+  // The place's own picture first.
+  pages.sort((a, b) => (files.includes(b.title) ? 1 : 0) - (files.includes(a.title) ? 1 : 0));
+  const strip = (html) => String(html || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+  return pages.map((pg) => {
+    const info = pg.imageinfo?.[0];
+    if (!info?.thumburl || !/\.(jpe?g|png|webp)$/i.test(pg.title)) return null;
+    const meta = info.extmetadata || {};
+    return {
+      url: info.thumburl,
+      caption: '',
+      by: strip(meta.Artist?.value).slice(0, 60),
+      credit: [strip(meta.LicenseShortName?.value), 'Wikimedia Commons'].filter(Boolean).join(' · '),
+      link: info.descriptionurl || '',
+    };
+  }).filter(Boolean).slice(0, 10);
+}
+
+__m["rated"] = { getConfig, ratingsSource, rateAll, thumbFor, detailsFor, commonsUrl };
 })();
 // ---- share
 (() => {
@@ -2490,8 +2734,8 @@ const ATTRIBUTION = {
 const ll = (p) => `${Number(p.lat).toFixed(6)},${Number(p.lon).toFixed(6)}`;
 const lonlat = (p) => `${Number(p.lon).toFixed(6)},${Number(p.lat).toFixed(6)}`;
 
-function osrmRouteUrl(mode, from, to) {
-  return `${OSRM}/${OSRM_PROFILE[mode]}/route/v1/driving/${lonlat(from)};${lonlat(to)}?overview=full&geometries=geojson&steps=false`;
+function osrmRouteUrl(mode, from, to, { alternatives = false } = {}) {
+  return `${OSRM}/${OSRM_PROFILE[mode]}/route/v1/driving/${lonlat(from)};${lonlat(to)}?overview=full&geometries=geojson&steps=false${alternatives ? '&alternatives=2' : ''}`;
 }
 
 function osrmTableUrl(mode, sources, destinations) {
@@ -2531,22 +2775,32 @@ function decodePolyline(str, precision = 5) {
   return out;
 }
 
-/** OSRM route → { mode, duration (s), distance (m), geometry: [[lat, lon]] }. */
+const coords = (g) => (g?.coordinates || []).map(([lon, lat]) => [lat, lon]);
+
+/**
+ * OSRM route → { mode, duration (s), distance (m), geometry: [[lat, lon]],
+ * alternatives: [[[lat, lon]], ...] } (other good routes, if asked for).
+ */
 function normalizeOsrm(json, mode) {
   const r = json?.routes?.[0];
   if (json?.code !== 'Ok' || !r) throw Object.assign(new Error('No route found'), { status: 404 });
   return {
     mode, provider: 'osrm',
     duration: Math.round(r.duration), distance: Math.round(r.distance),
-    geometry: (r.geometry?.coordinates || []).map(([lon, lat]) => [lat, lon]),
+    geometry: coords(r.geometry),
+    alternatives: json.routes.slice(1, 3).map((a) => coords(a.geometry)),
   };
 }
 
-/** OSRM table → { durations: [[s|null]], distances: [[m|null]] } (sources × destinations). */
+/**
+ * OSRM table → { durations: [[s|null]], distances: [[m|null]], destinations: [[lat, lon]] }
+ * (sources × destinations; destinations are the spots snapped onto the nearest road).
+ */
 function normalizeOsrmTable(json) {
   if (json?.code !== 'Ok') throw Object.assign(new Error('Travel times unavailable'), { status: 502 });
   const round = (rows) => (rows || []).map((row) => row.map((v) => (v == null ? null : Math.round(v))));
-  return { durations: round(json.durations), distances: round(json.distances) };
+  const snapped = (json.destinations || []).map((d) => (Array.isArray(d?.location) ? [Math.round(d.location[1] * 1e6) / 1e6, Math.round(d.location[0] * 1e6) / 1e6] : null));
+  return { durations: round(json.durations), distances: round(json.distances), destinations: snapped };
 }
 
 const VEHICLE = {
@@ -2636,16 +2890,21 @@ async function viaServerOr(path, direct, signal) {
   return direct();
 }
 
-/** Directions for one person. mode: transit | walk | bike | drive. */
-function getDirections(mode, from, to, { time, arriveBy = false, signal } = {}) {
-  const key = [mode, ll(from), ll(to), time || '', arriveBy].join('|');
+/**
+ * Directions for one person. mode: transit | walk | bike | drive.
+ * `alternatives` also returns other good road routes (for the route animation).
+ */
+function getDirections(mode, from, to, { time, arriveBy = false, alternatives = false, signal } = {}) {
+  const alt = alternatives && mode !== 'transit';
+  const key = [mode, ll(from), ll(to), time || '', arriveBy, alt].join('|');
   if (cache.has(key)) return cache.get(key);
   const q = new URLSearchParams({ mode, from: ll(from), to: ll(to) });
   if (time) q.set('time', new Date(time).toISOString());
   if (arriveBy) q.set('arriveBy', '1');
+  if (alt) q.set('alt', '1');
   const promise = viaServerOr(`/api/directions?${q}`, async () => {
     if (mode === 'transit') return normalizeTransit(await getJson(transitUrl(from, to, { time, arriveBy }), { signal }), { arriveBy });
-    return normalizeOsrm(await getJson(osrmRouteUrl(mode, from, to), { signal }), mode);
+    return normalizeOsrm(await getJson(osrmRouteUrl(mode, from, to, { alternatives: alt }), { signal }), mode);
   }, signal);
   cache.set(key, promise);
   promise.catch(() => cache.delete(key));
@@ -2687,10 +2946,9 @@ __m["directions"] = { MODES, ATTRIBUTION, osrmRouteUrl, osrmTableUrl, transitUrl
 //   • address search / reverse geocoding over the town's street addresses
 //   • ~380 places of interest, tagged like OpenStreetMap data
 //   • accounts, addresses and history kept in this browser's storage
-const { fromEdgeList, rng } = __m["network"];
+const { fromEdgeList, rng, dijkstra } = __m["graph"];
 const { parsePois } = __m["pois"];
 const { haversine } = __m["geo"];
-const { dijkstra } = __m["meet"];
 const TOWN = 'Port Verity';
 const CENTER = { lat: 40.0, lon: -40.0 }; // a fictional island in the open Atlantic
 const M_LAT = 111320;
@@ -3473,12 +3731,6 @@ async function currentPosition() {
   return { lat: a.lat, lon: a.lon };
 }
 
-async function loadNetwork(points, { onStatus = () => {} } = {}) {
-  ensure();
-  onStatus('Reading the streets of Port Verity…');
-  await new Promise((r) => setTimeout(r, 350));
-  return { graph: town.graph, source: 'osm' };
-}
 
 // ---------------------------------------------------------------- local "server"
 
@@ -3583,7 +3835,7 @@ async function directions(mode, from, to) {
   const geometry = [];
   for (let v = b; v !== -1; v = parent[v]) geometry.push([g.lat[v], g.lon[v]]);
   geometry.reverse();
-  return { mode, provider: 'test-town', distance: Math.round(dist[b]), duration: Math.round(dist[b] / TOWN_SPEED[mode] + (mode === 'drive' ? 90 : 0)), geometry };
+  return { mode, provider: 'test-town', distance: Math.round(dist[b]), duration: Math.round(dist[b] / TOWN_SPEED[mode] + (mode === 'drive' ? 90 : 0)), geometry, alternatives: [] };
 }
 
 async function travelTimes(mode, sources, destinations) {
@@ -3592,12 +3844,13 @@ async function travelTimes(mode, sources, destinations) {
   const g = town.graph;
   const targets = destinations.map((p) => nearestAddress(p.lat, p.lon).node);
   const durations = [], distances = [];
+  await new Promise((r) => setTimeout(r, 60));
   for (const src of sources) {
     const { dist } = dijkstra(g, nearestAddress(src.lat, src.lon).node);
     distances.push(targets.map((t) => (Number.isFinite(dist[t]) ? Math.round(dist[t]) : null)));
     durations.push(targets.map((t) => (Number.isFinite(dist[t]) ? Math.round(dist[t] / TOWN_SPEED[mode] + (mode === 'drive' ? 90 : 0)) : null)));
   }
-  return { durations, distances };
+  return { durations, distances, destinations: targets.map((t) => [g.lat[t], g.lon[t]]) };
 }
 
 /** A ready-made group: you plus three friends spread around town. */
@@ -3784,8 +4037,9 @@ function addBasemap(map) {
   });
   const groups = Object.fromEntries(Object.entries(town.labels).map(([k, list]) => [k, L.layerGroup(list.map((l) => label(l, k)))]));
   const visible = {
-    city: (z) => z < 12.25, bay: (z) => z >= 9, hood: (z) => z >= 12.25 && z < 15.5, water: (z) => z >= 10.5, park: (z) => z >= 13.5,
-    street: (z) => z >= 15.5, town: (z) => z >= 8 && z < 14, village: (z) => z >= 10.5 && z < 15, forest: (z) => z >= 10.5 && z < 13.5,
+    // Few labels at a time, like Apple Maps: names appear only once there is room for them.
+    city: (z) => z < 12, bay: (z) => z >= 9 && z < 13, hood: (z) => z >= 12.5 && z < 15.25, water: (z) => z >= 11.5, park: (z) => z >= 14.25,
+    street: (z) => z >= 16.25, town: (z) => z >= 8.5 && z < 13.5, village: (z) => z >= 11 && z < 14.5, forest: (z) => z >= 11 && z < 13,
   };
   const update = () => {
     const z = map.getZoom();
@@ -3803,7 +4057,94 @@ function addBasemap(map) {
 
 const townCenter = CENTER;
 
-__m["demo"] = { warm, getBounds, findPois, searchAddress, reverseGeocode, currentPosition, loadNetwork, api, directions, travelTimes, sampleGroup, addBasemap, townCenter };
+// ---------------------------------------------------------------- sample ratings, photos and reviews
+//
+// The real app shows Tripadvisor ratings, photos and reviews (and free photos
+// from Wikimedia Commons). Port Verity is made up, so here every place gets a
+// made-up rating, drawn illustrations instead of photos, and sample reviews,
+// all clearly labelled as samples.
+
+const nameHash = (s) => [...String(s)].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) >>> 0, 2166136261);
+const RATED_TABS = new Set(['food', 'drinks', 'fun', 'culture', 'outdoors']);
+const PRICES = ['Cheap Eats', 'Mid Range', 'Mid Range', 'Fine Dining'];
+const TAB_HUE = { food: 28, drinks: 32, fun: 248, culture: 285, outdoors: 130, shopping: 212 };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function sampleRating(p) {
+  if (!RATED_TABS.has(p.tab)) return null;
+  const h = nameHash(p.name);
+  if (h % 11 === 0) return null; // not every place is rated
+  return {
+    id: h, rating: Math.min(5, 3.5 + ((h >>> 3) % 4) * 0.5), count: 6 + ((h >>> 7) % 1400),
+    ratingImage: '', priceLevel: p.tab === 'food' ? PRICES[(h >>> 11) % PRICES.length] : '', url: '',
+  };
+}
+
+/** A soft drawn picture (SVG data URL): a coloured scene with a plate, cup, tree or building. */
+function illustration(p, k = 0) {
+  const h = nameHash(`${p.name}#${k}`);
+  const hue = ((TAB_HUE[p.tab] ?? 210) + ((h % 50) - 25) + 360) % 360;
+  const c1 = `hsl(${hue} 70% ${78 - (h % 9)}%)`, c2 = `hsl(${(hue + 28) % 360} 62% ${58 + (h % 8)}%)`;
+  const dots = Array.from({ length: 7 }, (_, i) => {
+    const r = 10 + ((h >>> (i * 3)) % 26), x = (h >>> (i * 2)) % 400, y = (h >>> (i * 4 + 1)) % 300;
+    return `<circle cx="${x}" cy="${y}" r="${r}" fill="#fff" opacity="${0.08 + (i % 3) * 0.05}"/>`;
+  }).join('');
+  const subject = {
+    food: '<ellipse cx="200" cy="190" rx="118" ry="44" fill="#fff" opacity=".95"/><ellipse cx="200" cy="182" rx="78" ry="26" fill="hsl(15 70% 62%)"/><circle cx="178" cy="176" r="10" fill="hsl(110 45% 45%)"/><circle cx="214" cy="178" r="12" fill="hsl(45 90% 60%)"/>',
+    drinks: '<rect x="150" y="110" width="100" height="110" rx="16" fill="#fff" opacity=".95"/><path d="M250 135h18a22 22 0 0 1 0 44h-18" fill="none" stroke="#fff" stroke-width="12"/><rect x="160" y="122" width="80" height="22" rx="8" fill="hsl(28 55% 42%)"/>',
+    outdoors: '<path d="M200 70l70 110h-140z" fill="hsl(130 45% 40%)"/><path d="M200 110l85 120h-170z" fill="hsl(130 45% 34%)"/><rect x="190" y="225" width="20" height="40" fill="hsl(28 40% 35%)"/>',
+    culture: '<path d="M120 130l80-50 80 50z" fill="#fff"/><rect x="132" y="138" width="16" height="90" fill="#fff"/><rect x="172" y="138" width="16" height="90" fill="#fff"/><rect x="212" y="138" width="16" height="90" fill="#fff"/><rect x="252" y="138" width="16" height="90" fill="#fff"/><rect x="118" y="230" width="164" height="14" fill="#fff"/>',
+    fun: '<path d="M200 80l22 46 50 7-36 35 9 50-45-24-45 24 9-50-36-35 50-7z" fill="#fff" opacity=".95"/>',
+  }[p.tab] || '<rect x="140" y="110" width="120" height="120" rx="20" fill="#fff" opacity=".9"/>';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient></defs><rect width="400" height="300" fill="url(#g)"/>${dots}<g transform="translate(${(h % 60) - 30} ${(h % 30) - 15})">${subject}</g></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+const REVIEW_BITS = {
+  food: [['Lovely evening', 'Friendly staff and generous portions. We shared a few plates and everything came out hot and quick.'], ['Worth the walk', 'Busy on a Friday but the wait was short. Great for a group — they pushed two tables together for us.'], ['Solid choice', 'Good food, fair prices. Dessert was the highlight. Would come back.'], ['A bit slow', 'Tasty, but service was slow when it got busy. Book ahead at weekends.']],
+  drinks: [['Cosy spot', 'Comfy seats, good music, not too loud to talk. Perfect for catching up.'], ['Great coffee', 'Strong coffee and nice pastries. A few tables outside when it’s sunny.'], ['Fun night', 'Good selection and friendly bar staff. Gets lively later on.']],
+  default: [['Good afternoon out', 'Easy to find and plenty to do. Took about two hours.'], ['Nice for a group', 'We met friends here and it worked well for everyone.'], ['Pleasant', 'Clean and well kept. Quieter in the morning.']],
+};
+const SAMPLE_PEOPLE = ['Sample guest', 'Test visitor', 'Demo diner', 'Example friend'];
+
+const rated = {
+  async getConfig() { return {}; },
+  async ratingsSource() { return 'Sample ratings and drawings: Port Verity is a made-up town'; },
+  async rateAll(pois) {
+    await sleep(220);
+    for (const p of pois) if (p.rating === undefined) p.rating = sampleRating(p);
+  },
+  async thumbFor(p) {
+    if (p.thumb !== undefined) return p.thumb;
+    return (p.thumb = illustration(p, 0));
+  },
+  async detailsFor(p) {
+    await sleep(300);
+    const r = p.rating ?? sampleRating(p);
+    const h = nameHash(p.name);
+    const bits = REVIEW_BITS[p.tab] || REVIEW_BITS.default;
+    const photos = Array.from({ length: 4 + (h % 5) }, (_, k) => ({ url: illustration(p, k), caption: 'Drawing', by: '', credit: '' }));
+    if (!r) return { source: null, photos, reviews: [], photoNote: 'Drawings: the test town is made up' };
+    const total = r.count;
+    const spread = [0.55, 0.25, 0.11, 0.06, 0.03].map((f, i) => ({ rating: 5 - i, count: Math.round(total * f) }));
+    return {
+      ...r, source: 'sample',
+      attribution: 'Sample ratings and reviews: Port Verity is a made-up test town',
+      photoNote: 'Drawings: the test town is made up',
+      photos,
+      breakdown: spread,
+      subratings: p.tab === 'food' ? [{ name: 'Food', rating: Math.min(5, r.rating + 0.2) }, { name: 'Service', rating: r.rating }, { name: 'Value', rating: Math.max(3, r.rating - 0.3) }] : [],
+      reviews: bits.map(([title, text], i) => ({
+        id: i, title, text, rating: Math.max(3, Math.min(5, Math.round(r.rating) - (i === bits.length - 1 ? 1 : 0))),
+        ratingImage: '', date: new Date(Date.now() - (i * 23 + (h % 20)) * 864e5).toISOString(), tripType: ['FRIENDS', 'COUPLES', 'FAMILY', 'SOLO'][i % 4],
+        user: SAMPLE_PEOPLE[i % SAMPLE_PEOPLE.length], avatar: '', url: '', reply: '',
+      })),
+      features: [],
+    };
+  },
+};
+
+__m["demo"] = { warm, getBounds, findPois, searchAddress, reverseGeocode, currentPosition, api, directions, travelTimes, sampleGroup, addBasemap, townCenter, rated };
 })();
 // ---- guest
 (() => {
@@ -3900,7 +4241,7 @@ __m["guest"] = { guest };
   const d = __m.demo;
   __m.remote = { remote: d.api };
   __m.geocode = { searchAddress: d.searchAddress, reverseGeocode: d.reverseGeocode, currentPosition: d.currentPosition };
-  __m.network = { ...__m.network, loadNetwork: d.loadNetwork };
+  __m.rated = { ...__m.rated, ...d.rated };
   __m.pois = { ...__m.pois, findPois: d.findPois };
   __m.directions = { ...__m.directions, getDirections: d.directions, getTravelTimes: d.travelTimes };
   const baseText = __m.share.shareText;
@@ -3973,18 +4314,20 @@ __m["api"] = { api };
 // optional sign-in and the draggable bottom sheet on phones.
 const { api } = __m["api"];
 const { searchAddress, reverseGeocode, currentPosition } = __m["geocode"];
-const { loadNetwork } = __m["network"];
-const { solveMeeting, roadDistanceTo } = __m["meet"];
+const { findMeetingPoint, estimateSeconds, SPEEDS } = __m["meetpoint"];
 const { GrowthAnimation } = __m["growth"];
 const { TABS, findPois, groupPois } = __m["pois"];
+const { ratingsSource, rateAll, thumbFor, detailsFor } = __m["rated"];
+const { openStatus, weekTable } = __m["hours"];
+const { haversine } = __m["geo"];
 const { mapLinks, shareText, messagingLinks, nativeShare, copyText, calendarInvite, download } = __m["share"];
 const { MODES, ATTRIBUTION, getDirections, getTravelTimes, navLinks, vehicleName, isWalkLeg } = __m["directions"];
 // ---------------------------------------------------------------- constants
 
 const COLORS = ['#007aff', '#ff9500', '#34c759', '#af52de', '#ff3b30', '#30b0c7', '#5856d6', '#ff2d55', '#a2845e', '#8e8e93'];
-const SPEEDS = { walk: 1.35, bike: 4.2, transit: 6.5, drive: 9.5 }; // m/s, urban averages
-const ANIM_MS = { slow: 9000, normal: 6000, fast: 3200 };
+const ANIM_MS = { slow: 8000, normal: 5000, fast: 2800 };
 const RADII = [500, 1000, 2000, 5000];
+const PRICE = { 'Cheap Eats': '£', 'Mid Range': '££', 'Fine Dining': '£££' };
 const DEFAULT_SETTINGS = { mode: 'fair', travel: 'walk', speed: 'normal', theme: 'auto' };
 const SHEET_DEFAULT = { people: 'mid', results: 'mid', group: 'mid', place: 'mid', share: 'full' };
 
@@ -4005,6 +4348,12 @@ const GLYPH = {
   bike: '<circle cx="6" cy="16" r="3.4"/><circle cx="18" cy="16" r="3.4"/><path d="M6 16l3.8-7h6.2l2 7M8.5 6h3M12 9l-2.2 7"/>',
   drive: '<path d="M5 15l1.5-4.6A2 2 0 0 1 8.4 9h7.2a2 2 0 0 1 1.9 1.4L19 15M4 15h16v3a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H7v1a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/>',
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
+  phone: '<path d="M6.6 3.5h2.6l1.5 4.2-2 1.3a11 11 0 0 0 6.3 6.3l1.3-2 4.2 1.5v2.6a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.6 5.7a2 2 0 0 1 2-2.2z"/>',
+  globe: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.3 3.5 5.2 3.5 8.5s-1.1 6.2-3.5 8.5c-2.4-2.3-3.5-5.2-3.5-8.5s1.1-6.2 3.5-8.5z"/>',
+  send: '<path d="M20.5 3.5L3.5 10.6l7.3 2.6 2.6 7.3z"/>',
+  route: '<circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="6" r="2.2"/><path d="M8 18h6.5a3.5 3.5 0 0 0 0-7h-5a3.5 3.5 0 0 1 0-7H16"/>',
+  menu: '<path d="M6 3.5h12v17H6zM9 8h6M9 12h6M9 16h4"/>',
+  photo: '<rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><circle cx="9" cy="10.5" r="1.8"/><path d="M20.5 15.5l-5-5-8.5 8"/>',
 };
 GLYPH.meet = GLYPH.pin;
 const glyph = (id, size = 16, width = 2.2) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${GLYPH[id]}</svg>`;
@@ -4024,7 +4373,7 @@ const state = {
 };
 const sheet = { snap: 'mid', target: 0 };
 
-let map, peopleLayer, resultLayer, poiLayer, anim, searchAbort, homeSearchCtl;
+let map, baseLayer, peopleLayer, resultLayer, poiLayer, anim, searchAbort, homeSearchCtl;
 
 // ---------------------------------------------------------------- helpers
 
@@ -4038,7 +4387,7 @@ function fmtDist(m) {
   return `${(m / 1000).toFixed(m < 9500 ? 1 : 0)} km`;
 }
 function travelMinutes(m, mode = state.settings.travel) {
-  return Math.round(m / SPEEDS[mode] / 60 + (mode === 'transit' ? 6 : 0));
+  return Math.round(estimateSeconds(mode, m / 1.3) / 60);
 }
 function fmtTime(min) {
   if (min < 60) return `${Math.max(1, min)} min`;
@@ -4250,10 +4599,14 @@ function initHome() {
 
 // ---------------------------------------------------------------- map
 
+const isDark = () => state.settings.theme === 'dark' || (state.settings.theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+function addBasemap() { if (!baseLayer) baseLayer = __m.demo.addBasemap(map) || true; }
+
 function initMap() {
   map = L.map('map', { zoomControl: false, zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 80, minZoom: 8, maxZoom: 18, maxBounds: __m.demo.getBounds(), maxBoundsViscosity: 0.8 });
   L.control.zoom({ position: 'bottomright' }).addTo(map);
-  __m.demo.addBasemap(map);
+  addBasemap();
   map.attributionControl.setPrefix(false).addAttribution('Port Verity is a made-up test town');
   peopleLayer = L.layerGroup().addTo(map);
   resultLayer = L.layerGroup().addTo(map);
@@ -4568,6 +4921,34 @@ function cancelSearch() {
   fitTo(activePeople().map((p) => [p.lat, p.lon]), { maxZoom: 15 });
 }
 
+const withTimeout = (promise, ms) => Promise.race([promise, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
+const routeMode = (r) => (r?.options ? 'transit' : r?.mode);
+
+/** One person's route as timed pieces for the animation (a straight dotted line if there is no route). */
+function trackFor(person, route, meet, estimate) {
+  const door = [person.lat, person.lon], end = [meet.lat, meet.lon];
+  if (!route) return { color: person.color, duration: estimate, pieces: [{ pts: [door, end], t0: 0, t1: estimate, walk: true }], alts: [] };
+  if (route.options) {
+    const o = route.options[0];
+    const start = Date.parse(o.start);
+    let t = 0;
+    const pieces = o.legs.filter((l) => l.geometry.length > 1).map((l) => {
+      const a = Date.parse(l.from.time);
+      const t0 = Number.isFinite(a) && Number.isFinite(start) ? Math.max(t, (a - start) / 1000) : t;
+      t = t0 + l.duration;
+      return { pts: l.geometry, t0, t1: t, walk: isWalkLeg(l) };
+    });
+    if (pieces.length) pieces.unshift({ pts: [door, pieces[0].pts[0]], t0: 0, t1: 0, walk: true });
+    return { color: person.color, duration: Math.max(t, o.duration), pieces, alts: route.options.slice(1).map((x) => x.legs.flatMap((l) => l.geometry)) };
+  }
+  return {
+    color: person.color,
+    duration: route.duration,
+    pieces: [{ pts: [door, ...route.geometry, end], t0: 0, t1: route.duration, walk: route.mode === 'walk' }],
+    alts: route.alternatives || [],
+  };
+}
+
 async function findPlaces({ replay = false } = {}) {
   const prev = replay ? state.search : null;
   const people = prev ? prev.people : activePeople();
@@ -4580,43 +4961,42 @@ async function findPlaces({ replay = false } = {}) {
   fitTo(people.map((p) => [p.lat, p.lon]), { maxZoom: 16, animate: false });
 
   try {
-    let net, solution;
-    if (prev) {
-      net = { graph: prev.graph, source: prev.source, reason: prev.reason };
-      solution = prev.solution;
-    } else {
-      setStatus('Loading streets…');
-      net = await loadNetwork(people, { signal: ctrl.signal, onStatus: (s) => setStatus(s) });
-      if (ctrl.signal.aborted) return;
-      setStatus('Working out routes…');
-      await new Promise((r) => setTimeout(r, 30));
-      solution = solveMeeting(net.graph, people, { mode: state.settings.mode, speeds: people.map((p) => SPEEDS[p.mode] || SPEEDS.transit) });
-    }
+    // 1. The fairest spot, from real travel times (a few small requests).
+    const meeting = prev ? prev.meeting : await findMeetingPoint(people, {
+      rule: state.settings.mode, travelTimes: getTravelTimes, directions: getDirections, signal: ctrl.signal,
+      onStatus: (t) => setStatus(t),
+    });
     if (ctrl.signal.aborted) return;
-
+    const meet = meeting.meet;
     const search = state.search = {
-      people, graph: net.graph, solution, source: net.source, reason: net.reason,
+      people, meeting, meet, routes: prev?.routes || null,
       pois: prev?.pois || null, grouped: prev?.grouped || null, radius: prev?.radius || null, tab: prev?.tab || null,
-      group: null, place: null, area: prev?.area || null, poiError: prev?.poiError || null,
-      poiDist: prev?.poiDist || new Map(), sort: prev?.sort,
+      group: null, place: null, area: prev?.area || null, poiError: prev?.poiError || null, sort: prev?.sort,
     };
 
-    // Fetch places and the area name while the routes animate.
+    // 2. Places and the area's name load while the routes come in and animate.
     const poisPromise = prev?.pois ? Promise.resolve() : loadPois(search, ctrl.signal);
     if (!search.area) {
-      reverseGeocode(solution.meet.lat, solution.meet.lon, { signal: ctrl.signal })
-        .then((r) => { search.area = r.address; if (state.view === 'results') render(); })
+      reverseGeocode(meet.lat, meet.lon, { signal: ctrl.signal })
+        .then((r) => { search.area = r.address; if (state.view === 'results') render({ keepScroll: true }); })
         .catch(() => {});
     }
 
-    anim = new GrowthAnimation(map, net.graph, solution, people.map((p) => p.color));
+    // 3. Everyone's real route there.
+    if (!search.routes) {
+      setStatus('Getting everyone’s routes…');
+      search.routes = await Promise.all(people.map((p) => withTimeout(getDirections(p.mode, p, meet, { alternatives: true, signal: ctrl.signal }), 10000).catch(() => null)));
+      if (ctrl.signal.aborted) return;
+    }
+    const tracks = people.map((p, i) => trackFor(p, search.routes[i], meet, meeting.times[i]));
+    anim = new GrowthAnimation(map, tracks);
     const done = await anim.play({
       duration: ANIM_MS[state.settings.speed] || ANIM_MS.normal,
-      onProgress: (r) => setStatus(`Routes spreading · ${fmtTime(Math.max(1, Math.round(r / 60)))}`, { skip: true }),
+      onProgress: (sec) => setStatus(`Everyone on their way · ${fmtTime(Math.max(1, Math.round(sec / 60)))}`, { skip: true }),
     });
     if (!done || ctrl.signal.aborted) return;
 
-    L.marker([solution.meet.lat, solution.meet.lon], {
+    L.marker([meet.lat, meet.lon], {
       icon: L.divIcon({ className: '', html: '<div class="meet-dot"></div>', iconSize: [22, 22], iconAnchor: [11, 11] }),
       zIndexOffset: 1000,
     }).bindTooltip('Meeting point', { permanent: true, direction: 'top', className: 'label', offset: [0, -14] }).addTo(resultLayer);
@@ -4626,7 +5006,7 @@ async function findPlaces({ replay = false } = {}) {
     if (ctrl.signal.aborted) return;
     setStatus('');
     setView('results', { pop: true });
-    fitTo([...people.map((p) => [p.lat, p.lon]), [solution.meet.lat, solution.meet.lon]], { maxZoom: 16 });
+    fitTo([...people.map((p) => [p.lat, p.lon]), [meet.lat, meet.lon]], { maxZoom: 16 });
   } catch (err) {
     if (ctrl.signal.aborted) return;
     console.error(err);
@@ -4640,7 +5020,7 @@ async function findPlaces({ replay = false } = {}) {
 async function loadPois(search, signal, radius) {
   search.poiError = null;
   try {
-    const { pois, radius: used } = await findPois(search.solution.meet, { radius, signal });
+    const { pois, radius: used } = await findPois(search.meet, { radius, signal });
     search.pois = pois;
     search.radius = used;
     search.grouped = groupPois(pois);
@@ -4656,12 +5036,8 @@ async function loadPois(search, signal, radius) {
   }
 }
 
-/** Road distances from every person to a place (cached). */
-function distancesTo(poi) {
-  const s = state.search;
-  if (!s.poiDist.has(poi.id)) s.poiDist.set(poi.id, s.solution.people.map((person) => roadDistanceTo(s.graph, person, poi)));
-  return s.poiDist.get(poi.id);
-}
+/** Rough road distance from every person to a place (real times load separately). */
+const distancesTo = (poi) => state.search.people.map((person) => haversine(person.lat, person.lon, poi.lat, poi.lon) * 1.3);
 
 const modeLabel = (m) => MODES.find((x) => x.id === m)?.label || 'Transit';
 const CARET = '<svg class="caret" viewBox="0 0 10 6" width="8" height="5" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -4730,17 +5106,20 @@ function modeSwitch(action) {
 /** Real travel times from everyone to the meeting point, each in their own mode. */
 function loadMeetTimes() {
   const s = state.search;
-  const meet = s.solution.meet;
+  const meet = s.meet;
   const key = `${s.people.map((p) => p.mode).join(',')}|${meet.lat},${meet.lon}`;
   if (s.meetTimes?.key === key) return;
   const mt = s.meetTimes = { key, values: s.people.map(() => null) };
   const refresh = () => { if (state.search === s && s.meetTimes === mt && state.view === 'results') render({ keepScroll: true }); };
+  // The routes already fetched for the animation give most of these.
+  const known = s.people.map((person, i) => routeMode(s.routes?.[i]) === person.mode);
+  known.forEach((k, i) => { if (k) mt.values[i] = s.routes[i].duration; });
   s.people.forEach((person, i) => {
-    if (person.mode !== 'transit') return;
+    if (person.mode !== 'transit' || known[i]) return;
     getDirections('transit', person, meet).then((d) => { mt.values[i] = d.duration; refresh(); }).catch(() => {});
   });
   for (const mode of ['walk', 'bike', 'drive']) {
-    const idx = s.people.map((p, i) => (p.mode === mode ? i : -1)).filter((i) => i >= 0);
+    const idx = s.people.map((p, i) => (p.mode === mode && !known[i] ? i : -1)).filter((i) => i >= 0);
     if (!idx.length) continue;
     getTravelTimes(mode, idx.map((i) => s.people[i]), [meet])
       .then((t) => { t.durations.forEach((row, k) => { mt.values[idx[k]] = row[0]; }); refresh(); }).catch(() => {});
@@ -4751,7 +5130,6 @@ function loadMeetTimes() {
 
 function renderResults() {
   const s = state.search;
-  const { solution } = s;
   loadMeetTimes();
   const total = s.pois.length;
   const tabs = TABS.map((t) => {
@@ -4781,9 +5159,9 @@ function renderResults() {
       </div>
     </div>
     ${modeSwitch('trip-mode')}
-    <ul class="group icons">${s.people.map((p, i) => tripRow(p, solution.people[i].reach, s.meetTimes?.values[i])).join('')}
+    <ul class="group icons">${s.people.map((p, i) => tripRow(p, s.routes?.[i]?.distance ?? s.meeting.dists[i], s.meetTimes?.values[i])).join('')}
       <li><button class="cell cell-btn" data-action="meet-place">${tile('meet')}<span class="cell-main cell-title">Routes to this spot &amp; send it</span>${CHEV}</button></li></ul>
-    ${s.source === 'synthetic' ? `<p class="notice">${esc(s.reason)} Distances are estimates.</p>` : ''}
+    ${s.meeting.approx ? '<p class="notice">Travel times could not be checked right now, so this spot is estimated from distance.</p>' : ''}
     <div class="pills" role="tablist">${tabs}</div>
     ${list}
     <div class="radius-row"><span class="footnote">${total} places within</span><div class="segmented">${radius}</div></div>
@@ -4792,6 +5170,85 @@ function renderResults() {
       <button class="btn btn-tinted" data-action="replay">Replay</button>
       <button class="btn btn-tinted" data-action="edit-people">Edit people</button>
     </div>`;
+}
+
+// ------------------------------------------------ ratings & photos
+
+let ratingsOn = false; // the server has ratings (checked at start)
+let ratingsName = ''; // who they come from, for the credit line
+
+const thumbArt = (p) => `<span class="thumb-art" style="--c:${TAB_COLOR[p.tab] || '#8e8e93'}">${glyph(p.tab === 'meet' ? 'pin' : p.tab, 22, 1.9)}</span>`;
+const stars = (x) => `<span class="stars" style="--r:${Math.max(0, Math.min(100, (x / 5) * 100))}%" aria-hidden="true">★★★★★</span>`;
+
+/** "4.5 ●●●●◐ (1,234)": Tripadvisor's bubble picture when we have it, else stars. */
+function ratingHtml(r, { big = false, number = true } = {}) {
+  if (!r || r.rating == null) return '';
+  const pic = r.ratingImage
+    ? `<img class="bubbles" src="${esc(r.ratingImage)}" alt="" width="${big ? 88 : 66}" height="${big ? 17 : 13}">`
+    : stars(r.rating);
+  const count = r.count ? `<span class="r-count">(${Number(r.count).toLocaleString()})</span>` : '';
+  return `<span class="rating${big ? ' big' : ''}" aria-label="Rated ${Number(r.rating).toFixed(1)} out of 5${r.count ? ` from ${r.count} reviews` : ''}">${number ? `<b>${Number(r.rating).toFixed(1)}</b>` : ''}${pic}${count}</span>`;
+}
+
+/** "Open · Closes 22:00" with the first word coloured. */
+function statusHtml(st) {
+  if (!st) return '';
+  const [first, ...rest] = st.text.split(' · ');
+  const cls = st.open ? (st.soon ? 'soon' : 'open') : 'closed';
+  return `<span class="st ${cls}">${esc(first)}</span>${rest.length ? ` · ${esc(rest.join(' · '))}` : ''}`;
+}
+
+const hrefOf = (url) => (!url ? '' : /^https?:\/\//i.test(url) ? url : `https://${url}`);
+const poiById = (id) => state.search?.pois?.find((p) => p.id === id);
+
+// Rows coming into view get their rating (a batch at a time) and their photo.
+let rowObserver = null;
+const ratingQueue = new Set();
+let ratingTimer = 0;
+let ratingsPausedShown = false;
+function queueRating(p) {
+  if (!ratingsOn || p.rating !== undefined || p.ratingPending) return;
+  ratingQueue.add(p);
+  clearTimeout(ratingTimer);
+  ratingTimer = setTimeout(() => {
+    const batch = [...ratingQueue].slice(0, 12);
+    for (const x of batch) ratingQueue.delete(x);
+    const s = state.search;
+    rateAll(batch)
+      .catch((err) => { if (!ratingsPausedShown) { ratingsPausedShown = true; toast(err.message, { error: true }); } })
+      .finally(() => {
+        if (state.search !== s) return;
+        if (['group', 'place'].includes(state.view)) render({ keepScroll: true });
+        if (ratingQueue.size) queueRating([...ratingQueue][0]);
+      });
+  }, 120);
+}
+
+function loadThumb(el) {
+  const p = poiById(el.dataset.thumb);
+  if (!p || el.dataset.loading) return;
+  if (ratingsOn && p.rating === undefined) { queueRating(p); return; }
+  if (p.thumb === null || el.querySelector('img')) return;
+  el.dataset.loading = '1';
+  thumbFor(p).then((url) => {
+    if (!url || !el.isConnected || el.querySelector('img')) return;
+    const img = new Image();
+    img.alt = '';
+    img.decoding = 'async';
+    img.onload = () => img.classList.add('in');
+    img.onerror = () => { img.remove(); p.thumb = null; };
+    img.src = url;
+    el.prepend(img);
+  }).catch(() => {}).finally(() => { delete el.dataset.loading; });
+}
+
+function observeRows() {
+  rowObserver?.disconnect();
+  if (!('IntersectionObserver' in window)) { $$('[data-thumb]').forEach(loadThumb); return; }
+  rowObserver = new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) loadThumb(e.target);
+  }, { root: $('#panel-body'), rootMargin: '120px 0px' });
+  for (const el of $$('[data-thumb]')) rowObserver.observe(el);
 }
 
 // ------------------------------------------------ group (category) view
@@ -4810,10 +5267,12 @@ function groupItems() {
       real = false;
       return travelMinutes(ds[pi], person.mode);
     });
-    return { ...p, ds, worstMin: Math.round(Math.max(...per)), real };
+    return { p, ds, worstMin: Math.round(Math.max(...per)), real };
   });
+  const rated = (x) => (x.p.rating?.rating ?? -1) * 100000 + (x.p.rating?.count || 0);
   if (s.sort === 'fair') enriched.sort((a, b) => a.worstMin - b.worstMin);
-  else enriched.sort((a, b) => a.fromCenter - b.fromCenter);
+  else if (s.sort === 'top') enriched.sort((a, b) => rated(b) - rated(a) || a.p.fromCenter - b.p.fromCenter);
+  else enriched.sort((a, b) => a.p.fromCenter - b.p.fromCenter);
   return enriched;
 }
 
@@ -4835,28 +5294,43 @@ function loadGroupTimes(items) {
   return gt.durations;
 }
 
+function poiRow({ p, worstMin, real }, i) {
+  const s = state.search;
+  const r = p.rating;
+  const ratingPart = r?.rating != null ? ratingHtml(r) : ratingsOn && r === undefined ? '<span class="skel" style="width:92px"></span>' : '';
+  const line2 = [ratingPart, esc(PRICE[r?.priceLevel] || '')].filter(Boolean).join('<span class="dot">·</span>');
+  const where = [s.group === '*' ? p.group : '', p.address].filter(Boolean).map(esc).join(' · ');
+  const st = statusHtml(openStatus(p.hours));
+  return `<li><button class="cell cell-btn poi" data-action="place" data-id="${esc(p.id)}">
+      <span class="thumb" data-thumb="${esc(p.id)}">${p.thumb ? `<img class="in" src="${esc(p.thumb)}" alt="">` : ''}${thumbArt(p)}<span class="num" style="--c:${TAB_COLOR[p.tab]}">${i + 1}</span></span>
+      <span class="cell-main"><span class="cell-title">${esc(p.name)}</span>
+        ${line2 ? `<span class="cell-meta">${line2}</span>` : ''}
+        <span class="cell-sub">${where || 'Near the meeting point'}</span>
+        ${st ? `<span class="cell-sub">${st}</span>` : ''}</span>
+      <span class="cell-end"><b>${fmtDist(p.fromCenter)}</b>max ${real ? '' : '≈ '}${fmtTime(worstMin)}</span>
+    </button></li>`;
+}
+
 function renderGroup() {
   const s = state.search;
   const items = groupItems();
+  s.groupList = items.map((x) => x.p);
   const title = s.group === '*' ? `All ${TABS.find((t) => t.id === s.tab).label.toLowerCase()}` : s.group;
-  const color = TAB_COLOR[s.tab];
-  const markersKey = `${s.tab}|${s.group}|${s.sort}|${items.map((p) => p.id).join(',')}`;
-  if (s.markersKey !== markersKey) { s.markersKey = markersKey; drawPoiMarkers(items); }
+  const markersKey = `${s.tab}|${s.group}|${s.sort}|${items.map((x) => x.p.id).join(',')}`;
+  if (s.markersKey !== markersKey) { s.markersKey = markersKey; drawPoiMarkers(items.map((x) => x.p)); }
+  const anyTa = items.some((x) => x.p.rating?.rating != null);
+  const anyFree = items.some((x) => x.p.thumb && !x.p.rating?.id);
+  const credits = [anyTa && (ratingsName === 'Tripadvisor' ? 'Ratings and photos from Tripadvisor' : ratingsName), anyFree && 'Some photos from Wikimedia Commons'].filter(Boolean).join(' · ');
   return `
     ${backBtn('back-results', 'Categories')}
     <div class="sheet-title">${tile(s.tab, 'lg')}<div style="flex:1;min-width:0"><h2>${esc(title)}</h2><div class="footnote">${items.length} place${items.length === 1 ? '' : 's'} nearby</div></div></div>
     <div class="segmented" style="margin-top:0">
-      <button class="seg${s.sort !== 'fair' ? ' active' : ''}" data-action="sort" data-sort="near">Nearest</button>
-      <button class="seg${s.sort === 'fair' ? ' active' : ''}" data-action="sort" data-sort="fair">Fairest for everyone</button>
+      <button class="seg${!['fair', 'top'].includes(s.sort) ? ' active' : ''}" data-action="sort" data-sort="near">Nearest</button>
+      <button class="seg${s.sort === 'fair' ? ' active' : ''}" data-action="sort" data-sort="fair">Fairest</button>
+      ${ratingsOn ? `<button class="seg${s.sort === 'top' ? ' active' : ''}" data-action="sort" data-sort="top">Top rated</button>` : ''}
     </div>
-    <ul class="group icons">
-      ${items.map((p, i) => `<li><button class="cell cell-btn poi" data-action="place" data-id="${esc(p.id)}">
-        <span class="num" style="--c:${color}">${i + 1}</span>
-        <span class="cell-main"><span class="cell-title">${esc(p.name)}</span>
-          <span class="cell-sub">${esc([s.group === '*' ? p.group : '', p.address].filter(Boolean).join(' · ') || 'Near the meeting point')}</span></span>
-        <span class="cell-end"><b>${fmtDist(p.fromCenter)}</b>max ${p.real ? '' : '≈ '}${fmtTime(p.worstMin)}</span>${CHEV}
-      </button></li>`).join('')}
-    </ul>`;
+    <ul class="group places">${items.map(poiRow).join('')}</ul>
+    ${credits ? `<p class="footnote attrib">${esc(credits)}</p>` : ''}`;
 }
 
 afterRender.group = () => {
@@ -4864,6 +5338,7 @@ afterRender.group = () => {
     b.addEventListener('mouseenter', () => highlightPoi(b.dataset.id, true));
     b.addEventListener('mouseleave', () => highlightPoi(b.dataset.id, false));
   }
+  observeRows();
 };
 
 const poiMarkers = new Map();
@@ -4872,31 +5347,52 @@ function drawPoiMarkers(items) {
   poiMarkers.clear();
   items.forEach((p, i) => {
     const m = L.marker([p.lat, p.lon], {
-      icon: L.divIcon({ className: '', html: `<div class="poi-pin" style="--c:${TAB_COLOR[p.tab]}">${i + 1}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] }),
+      icon: L.divIcon({ className: '', html: `<div class="poi-pin" style="--c:${TAB_COLOR[p.tab]}">${i + 1}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] }),
       riseOnHover: true,
-    }).bindTooltip(esc(p.name), { permanent: items.length <= 25, direction: 'right', className: 'label', offset: [16, 0] })
+    }).bindTooltip(esc(p.name), { permanent: items.length <= 8, direction: 'right', className: 'label', offset: [14, 0] })
       .addTo(poiLayer);
     m.on('click', () => openPlace(p.id));
     poiMarkers.set(p.id, m);
   });
   const s = state.search;
-  requestAnimationFrame(() => fitTo([...items.map((p) => [p.lat, p.lon]), [s.solution.meet.lat, s.solution.meet.lon]], { maxZoom: 17 }));
+  requestAnimationFrame(() => fitTo([...items.map((p) => [p.lat, p.lon]), [s.meet.lat, s.meet.lon]], { maxZoom: 17 }));
 }
 
 function highlightPoi(id, on) {
   const m = poiMarkers.get(id);
   m?.getElement()?.querySelector('.poi-pin')?.classList.toggle('hl', on);
   m?.setZIndexOffset(on ? 1000 : 0);
+  if (m && poiMarkers.size > 8) { if (on) m.openTooltip(); else m.closeTooltip(); }
 }
 
 function openPlace(id) {
   const s = state.search;
+  const p = s.pois.find((x) => x.id === id);
+  if (!p) return;
   s.placeDrawn = null;
-  s.place = s.pois.find((p) => p.id === id);
-  if (s.place) setView('place');
+  s.place = p;
+  state.placeTab = 'overview';
+  loadDetails(p);
+  setView('place');
+}
+
+/** Photos, reviews and more for a place (Tripadvisor and/or Wikimedia), loaded once. */
+function loadDetails(p) {
+  if (p.id === 'meet' || p.details) return;
+  p.details = { status: 'loading', photos: [], reviews: [] };
+  (async () => {
+    if (ratingsOn && p.rating === undefined) await rateAll([p]).catch(() => {});
+    return detailsFor(p);
+  })()
+    .then((d) => { p.details = { status: 'ok', ...d }; })
+    .catch(() => { p.details = { status: 'error', photos: [], reviews: [] }; })
+    .finally(() => { if (state.view === 'place' && state.search?.place === p) render({ keepScroll: true }); });
 }
 
 // ------------------------------------------------ place view
+
+const PLACE_TABS = { overview: 'Overview', reviews: 'Reviews', photos: 'Photos', about: 'About' };
+const TRIP = { BUSINESS: 'Business', COUPLES: 'Couples', FAMILY: 'Family', FRIENDS: 'Friends', SOLO: 'Solo' };
 
 function renderPlace() {
   const s = state.search;
@@ -4907,27 +5403,71 @@ function renderPlace() {
     s.markersKey = null;
     poiLayer.clearLayers();
     L.marker([p.lat, p.lon], {
-      icon: L.divIcon({ className: '', html: `<div class="poi-pin hl" style="--c:${TAB_COLOR[p.tab] || '#007aff'}">${glyph(p.tab, 15)}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] }),
+      icon: L.divIcon({ className: '', html: `<div class="poi-pin hl" style="--c:${TAB_COLOR[p.tab] || '#007aff'}">${glyph(p.tab, 15)}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] }),
       zIndexOffset: 1200,
-    }).bindTooltip(esc(p.name), { permanent: true, direction: 'right', className: 'label', offset: [20, 0] }).addTo(poiLayer);
+    }).bindTooltip(esc(p.name), { permanent: true, direction: 'right', className: 'label', offset: [18, 0] }).addTo(poiLayer);
     requestAnimationFrame(() => fitTo([...s.people.map((x) => [x.lat, x.lon]), [p.lat, p.lon]], { maxZoom: 16 }));
   }
   loadPlaceDirections();
   drawDirections();
 
-  const tags = [p.group, p.outdoor ? 'Outdoor seating' : '', p.vegan ? 'Vegan options' : p.vegetarian ? 'Vegetarian options' : '', p.wheelchair === 'yes' ? 'Step-free' : ''].filter(Boolean);
-  const links = mapLinks(p);
-  const website = p.website && /^https?:\/\//i.test(p.website) ? p.website : p.website ? `https://${p.website}` : '';
+  const d = p.details || { photos: [], reviews: [] };
+  const r = d.rating != null ? d : p.rating;
+  const loading = d.status === 'loading';
+  const photos = d.photos || [];
+  const st = openStatus(p.hours);
+  const phone = d.phone || p.phone;
+  const site = hrefOf(d.website || p.website);
+  const menu = hrefOf(d.menu || p.menu);
+  const tabs = ['overview', (d.reviews?.length || r?.count) && 'reviews', photos.length > 1 && 'photos', p.id !== 'meet' && 'about'].filter(Boolean);
+  const tab = tabs.includes(state.placeTab) ? state.placeTab : 'overview';
+
+  const gallery = photos.length
+    ? `<div class="gallery${photos.length === 1 ? ' single' : ''}">${photos.slice(0, 8).map((ph, k) => `<button class="g-item" data-action="photo" data-i="${k}" aria-label="Photo ${k + 1} of ${photos.length}"><img src="${esc(ph.url)}" alt="${esc(ph.caption || '')}" ${k > 1 ? 'loading="lazy"' : ''} decoding="async"></button>`).join('')}</div>`
+    : loading ? '<div class="gallery"><span class="g-item skel"></span><span class="g-item skel"></span></div>'
+      : `<div class="hero-art" style="--c:${TAB_COLOR[p.tab] || '#007aff'}">${glyph(p.tab === 'meet' ? 'pin' : p.tab, 40, 1.6)}</div>`;
+  const meta = [p.id === 'meet' ? 'Meeting point' : p.group, PRICE[r?.priceLevel], p.id === 'meet' ? '' : `${fmtDist(p.fromCenter)} from the meeting point`].filter(Boolean);
+  const quick = [
+    `<button class="q primary" data-action="choose">${glyph('send', 19)}<span>Send</span></button>`,
+    `<button class="q" data-action="place-tab" data-tab="overview" data-scroll="getting-there">${glyph('route', 19)}<span>Directions</span></button>`,
+    phone ? `<a class="q" href="tel:${esc(phone.replace(/[^\d+]/g, ''))}">${glyph('phone', 19)}<span>Call</span></a>` : '',
+    site ? `<a class="q" href="${esc(site)}" target="_blank" rel="noopener">${glyph('globe', 19)}<span>Website</span></a>` : '',
+    menu ? `<a class="q" href="${esc(menu)}" target="_blank" rel="noopener">${glyph('menu', 19)}<span>Menu</span></a>` : '',
+  ].join('');
+  const bodies = { overview: placeOverview, reviews: placeReviews, photos: placePhotos, about: placeAbout };
+  return `
+    ${p.id === 'meet' ? backBtn('back-results', 'Places') : backBtn('back-group', s.group === '*' ? 'Back' : s.group)}
+    ${gallery}
+    <div class="place-title">
+      <h2>${esc(p.name)}</h2>
+      ${r?.rating != null ? `<div class="place-rating">${ratingHtml(r, { big: true })}${r.count ? `<button class="btn btn-plain" data-action="place-tab" data-tab="reviews">${Number(r.count).toLocaleString()} reviews</button>` : ''}</div>` : loading && ratingsOn ? '<span class="skel" style="width:150px;height:16px"></span>' : ''}
+      <div class="footnote">${esc(meta.join(' · '))}</div>
+      ${st ? `<div class="place-status">${statusHtml(st)}</div>` : ''}
+    </div>
+    <div class="quick">${quick}</div>
+    ${tabs.length > 1 ? `<div class="segmented place-tabs" role="tablist">${tabs.map((t) => `<button class="seg${t === tab ? ' active' : ''}" role="tab" aria-selected="${t === tab}" data-action="place-tab" data-tab="${t}">${PLACE_TABS[t]}</button>`).join('')}</div>` : ''}
+    ${bodies[tab](p, d, r, ds)}`;
+}
+
+function placeOverview(p, d, r, ds) {
+  const s = state.search;
   const when = state.when || { type: 'now' };
   const anyTransit = s.people.some((x) => x.mode === 'transit');
   const anyRoad = s.people.some((x) => x.mode !== 'transit');
   const credits = [anyTransit && ATTRIBUTION.transit, anyRoad && ATTRIBUTION.routing].filter(Boolean)
     .map((a) => `<a href="${a.url}" target="_blank" rel="noopener">${esc(a.text)}</a>`).join(' · ');
+  const site = hrefOf(d.website || p.website);
+  const phone = d.phone || p.phone;
+  const week = weekTable(p.hours);
+  const st = openStatus(p.hours);
+  const hours = week
+    ? `<details class="hours"><summary>${st ? statusHtml(st) : 'Opening hours'}</summary><table>${week.map((w) => `<tr${w.today ? ' class="today"' : ''}><th>${w.day}</th><td>${esc(w.text)}</td></tr>`).join('')}</table></details>`
+    : d.hours?.length ? d.hours.map(esc).join('<br>') : p.hours ? esc(p.hours) : '';
+  const summary = d.ranking || d.description || p.description;
+  const links = mapLinks(p);
   return `
-    ${p.id === 'meet' ? backBtn('back-results', 'Places') : backBtn('back-group', s.group === '*' ? 'Back' : s.group)}
-    <div class="place-head">${tile(p.tab, 'xl')}<div style="min-width:0"><h2>${esc(p.name)}</h2><div class="footnote">${esc(tags.join(' · '))}</div></div></div>
-    <button class="btn btn-primary btn-block btn-lg" data-action="choose">Send location</button>
-    <div class="section-title">Getting there</div>
+    ${summary ? `<p class="place-summary">${esc(d.ranking ? d.ranking : '')}${d.ranking && (d.description || p.description) ? '<br>' : ''}${esc(truncate(d.description || p.description || '', 220))}</p>` : ''}
+    <div class="section-title" id="getting-there">Getting there</div>
     ${modeSwitch('dir-mode')}
     ${anyTransit ? `<div class="when-row">
       <select id="dir-when-type" aria-label="When">
@@ -4940,13 +5480,69 @@ function renderPlace() {
     <p class="footnote attrib">Test town: routes follow its own streets. The real app uses live routing and public transport.</p>
     <div class="section-title">Details</div>
     <ul class="group kv">
-      <li><div class="cell"><span class="k">Address</span><span class="v">${esc(p.address || 'Not listed')}${p.id === 'meet' ? '' : `<br><span class="footnote">${fmtDist(p.fromCenter)} from the meeting point</span>`}</span></div></li>
-      ${p.hours ? `<li><div class="cell"><span class="k">Hours</span><span class="v">${esc(p.hours)}</span></div></li>` : ''}
-      ${p.phone ? `<li><div class="cell"><span class="k">Phone</span><a class="v" href="tel:${esc(p.phone.replace(/\s/g, ''))}">${esc(p.phone)}</a></div></li>` : ''}
-      ${website ? `<li><div class="cell"><span class="k">Website</span><a class="v" href="${esc(website)}" target="_blank" rel="noopener">${esc(website.replace(/^https?:\/\//, '').replace(/\/$/, ''))}</a></div></li>` : ''}
+      <li><div class="cell"><span class="k">Address</span><span class="v">${esc(p.address || d.address || 'Not listed')}</span></div></li>
+      ${hours ? `<li><div class="cell"><span class="k">Hours</span><span class="v">${hours}</span></div></li>` : ''}
+      ${phone ? `<li><div class="cell"><span class="k">Phone</span><a class="v" href="tel:${esc(phone.replace(/[^\d+]/g, ''))}">${esc(phone)}</a></div></li>` : ''}
+      ${site ? `<li><div class="cell"><span class="k">Website</span><a class="v" href="${esc(site)}" target="_blank" rel="noopener">${esc(site.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''))}</a></div></li>` : ''}
     </ul>
     <div class="actions">
     </div>`;
+}
+
+const truncate = (t, n) => (t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t);
+const fmtDate = (iso) => { const t = Date.parse(iso); return Number.isFinite(t) ? new Date(t).toLocaleDateString([], { month: 'short', year: 'numeric' }) : ''; };
+
+function placeReviews(p, d, r) {
+  if (d.status === 'loading') return '<div class="empty"><span class="spinner"></span></div>';
+  const total = (d.breakdown || []).reduce((a, b) => a + b.count, 0);
+  const bars = total ? `<div class="bars">${[5, 4, 3, 2, 1].map((n) => {
+    const c = d.breakdown.find((b) => b.rating === n)?.count || 0;
+    return `<div class="bar"><span>${n}</span><i><b style="width:${((c / total) * 100).toFixed(1)}%"></b></i></div>`;
+  }).join('')}</div>` : '';
+  const reviews = (d.reviews || []).map((rv) => `<li class="review">
+      <div class="rv-head"><span class="avatar sm" style="--c:#8e8e93">${rv.avatar ? `<img src="${esc(rv.avatar)}" alt="" loading="lazy">` : esc(initial(rv.user))}</span>
+        <div class="rv-who"><b>${esc(rv.user)}</b><span class="footnote">${esc([fmtDate(rv.date), TRIP[rv.tripType]].filter(Boolean).join(' · '))}</span></div></div>
+      <div class="rv-rating">${rv.ratingImage ? `<img class="bubbles" src="${esc(rv.ratingImage)}" alt="${rv.rating} of 5" width="66" height="13">` : stars(rv.rating)}</div>
+      ${rv.title ? `<h4>${esc(rv.title)}</h4>` : ''}
+      <p class="rv-text" data-action="rv-more">${esc(rv.text)}</p>
+      ${rv.reply ? `<div class="rv-reply"><b>Reply from the owner</b><p class="rv-text" data-action="rv-more">${esc(rv.reply)}</p></div>` : ''}
+    </li>`).join('');
+  const from = d.attribution || (d.source === 'tripadvisor' ? 'Ratings and reviews from Tripadvisor' : '');
+  return `
+    ${r?.rating != null ? `<div class="rev-summary"><div class="big-num">${Number(r.rating).toFixed(1)}</div>
+      <div class="rev-mid">${ratingHtml({ ...r, count: 0 }, { big: true, number: false })}<span class="footnote">${Number(r.count || 0).toLocaleString()} reviews</span></div>${bars}</div>` : ''}
+    ${d.subratings?.length ? `<div class="subratings">${d.subratings.map((x) => `<span class="chip">${esc(x.name)} <b>${Number(x.rating).toFixed(1)}</b></span>`).join('')}</div>` : ''}
+    ${reviews ? `<ul class="reviews">${reviews}</ul>` : '<div class="empty">No reviews to show here yet.</div>'}
+    <div class="actions">
+      ${r?.url ? `<a class="btn btn-tinted" href="${esc(r.url)}" target="_blank" rel="noopener">All reviews on Tripadvisor</a>` : ''}
+      ${d.writeReview ? `<a class="btn btn-tinted" href="${esc(d.writeReview)}" target="_blank" rel="noopener">Write a review</a>` : ''}
+    </div>
+    ${from ? `<p class="footnote attrib">${esc(from)}</p>` : ''}`;
+}
+
+function placePhotos(p, d) {
+  const photos = d.photos || [];
+  const free = photos.some((ph) => ph.credit);
+  return `<div class="photo-grid">${photos.map((ph, k) => `<button class="g-item" data-action="photo" data-i="${k}" aria-label="Photo ${k + 1}"><img src="${esc(ph.url)}" alt="${esc(ph.caption || '')}" loading="lazy" decoding="async"></button>`).join('')}</div>
+    <p class="footnote attrib">${esc([d.source === 'tripadvisor' && 'Photos from Tripadvisor', free && 'Photos from Wikimedia Commons (tap one for its credit)', d.photoNote].filter(Boolean).join(' · '))}</p>`;
+}
+
+function placeAbout(p, d) {
+  const yes = (v) => v === 'yes' || v === 'only';
+  const feats = [
+    p.outdoor && 'Outdoor seating', yes(p.takeaway) && 'Takeaway', yes(p.delivery) && 'Delivery', yes(p.reservation) && 'Takes bookings',
+    p.wifi && 'Wi-Fi', p.wheelchair === 'yes' && 'Step-free access', p.vegan ? 'Vegan options' : p.vegetarian && 'Vegetarian options',
+    yes(p.dogs) && 'Dogs welcome', ...(d.features || []),
+  ].filter(Boolean);
+  const unique = [...new Set(feats)];
+  const cuisines = (p.cuisine || '').split(/[;,]/).map((c) => c.trim().replace(/_/g, ' ')).filter(Boolean);
+  return `
+    ${d.description || p.description ? `<p class="place-summary">${esc(d.description || p.description)}</p>` : ''}
+    ${cuisines.length || d.categories?.length ? `<div class="section-title">Food</div><div class="subratings">${[...new Set([...cuisines.map((c) => c[0].toUpperCase() + c.slice(1)), ...(d.categories || [])])].map((c) => `<span class="chip">${esc(c)}</span>`).join('')}</div>` : ''}
+    ${unique.length ? `<div class="section-title">Good to know</div><ul class="group features">${unique.map((f) => `<li><div class="cell"><span class="check">✓</span>${esc(f)}</div></li>`).join('')}</ul>` : ''}
+    ${d.ranking || d.awards?.length ? `<div class="section-title">Recognition</div><ul class="group features">${[d.ranking, ...(d.awards || [])].filter(Boolean).map((a) => `<li><div class="cell">${esc(a)}</div></li>`).join('')}</ul>` : ''}
+    ${!unique.length && !cuisines.length && !d.description && !p.description ? '<div class="empty">No more details listed for this place.</div>' : ''}
+    <p class="footnote attrib">Place details from <a href="https://www.openstreetmap.org/${esc(p.id)}" target="_blank" rel="noopener">OpenStreetMap</a>${d.source === 'tripadvisor' ? ' and Tripadvisor' : ''}</p>`;
 }
 
 afterRender.place = () => {
@@ -4963,6 +5559,42 @@ afterRender.place = () => {
     if (e.target.value) { state.when = { type: 'arrive', time: e.target.value }; render({ keepScroll: true }); }
   });
 };
+
+// ------------------------------------------------ photo viewer
+
+function openLightbox(photos, start) {
+  let i = start;
+  const box = document.createElement('div');
+  box.className = 'lightbox';
+  box.setAttribute('role', 'dialog');
+  box.setAttribute('aria-label', 'Photos');
+  const show = () => {
+    const ph = photos[i];
+    box.innerHTML = `<button class="lb-close" aria-label="Close">${glyph('close', 18, 2.4)}</button>
+      ${photos.length > 1 ? `<button class="lb-prev" aria-label="Previous photo">‹</button><button class="lb-next" aria-label="Next photo">›</button>` : ''}
+      <figure><img src="${esc(ph.url)}" alt="${esc(ph.caption || '')}"><figcaption>${esc([ph.caption, ph.by && `by ${ph.by}`, ph.credit].filter(Boolean).join(' · '))}
+      ${ph.link ? ` · <a href="${esc(ph.link)}" target="_blank" rel="noopener">Licence &amp; source</a>` : ''}<span class="lb-count">${i + 1} / ${photos.length}</span></figcaption></figure>`;
+  };
+  const close = () => { box.remove(); document.removeEventListener('keydown', onKey); };
+  const step = (k) => { i = (i + k + photos.length) % photos.length; show(); };
+  const onKey = (e) => {
+    if (e.key === 'Escape') close();
+    else if (e.key === 'ArrowRight') step(1);
+    else if (e.key === 'ArrowLeft') step(-1);
+  };
+  box.addEventListener('click', (e) => {
+    if (e.target.closest('.lb-close') || e.target === box) close();
+    else if (e.target.closest('.lb-next')) step(1);
+    else if (e.target.closest('.lb-prev')) step(-1);
+  });
+  let x0 = null;
+  box.addEventListener('pointerdown', (e) => { x0 = e.clientX; });
+  box.addEventListener('pointerup', (e) => { if (x0 != null && Math.abs(e.clientX - x0) > 50) step(e.clientX < x0 ? 1 : -1); x0 = null; });
+  document.addEventListener('keydown', onKey);
+  show();
+  document.body.appendChild(box);
+  $('.lb-close', box).focus();
+}
 
 /** Fetch each person's real directions to the open place (once per place / mode / time). */
 function loadPlaceDirections() {
@@ -5181,21 +5813,21 @@ function initPanel() {
         const ctrl = new AbortController();
         searchAbort = ctrl;
         await loadPois(s, ctrl.signal, Number(el.dataset.r)).catch(() => {});
-        s.poiDist.clear();
         render();
         break;
       }
       case 'surprise': {
         const pick = s.pois[Math.floor(Math.random() * s.pois.length)];
-        s.tab = pick.tab; s.group = pick.group; s.place = pick; s.placeDrawn = null;
-        setView('place');
+        s.tab = pick.tab; s.group = pick.group;
+        openPlace(pick.id);
         break;
       }
       case 'replay': findPlaces({ replay: true }); break;
       case 'meet-place': {
-        const m = s.solution.meet;
+        const m = s.meet;
         s.place = { id: 'meet', name: s.area ? shortAddr(s.area) : 'Meeting point', lat: m.lat, lon: m.lon, tab: 'meet', group: 'Meeting point', address: s.area || '', fromCenter: 0 };
         s.placeDrawn = null;
+        state.placeTab = 'overview';
         setView('place');
         break;
       }
@@ -5204,7 +5836,7 @@ function initPanel() {
         poiLayer.clearLayers();
         s.markersKey = null;
         setView('results');
-        fitTo([...s.people.map((p) => [p.lat, p.lon]), [s.solution.meet.lat, s.solution.meet.lon]], { maxZoom: 16 });
+        fitTo([...s.people.map((p) => [p.lat, p.lon]), [s.meet.lat, s.meet.lon]], { maxZoom: 16 });
         break;
       case 'sort': s.sort = el.dataset.sort; render(); break;
       case 'place': openPlace(id); break;
@@ -5233,6 +5865,16 @@ function initPanel() {
         break;
       }
       case 'choose': enterShare(); break;
+      case 'place-tab': {
+        state.placeTab = el.dataset.tab;
+        render({ keepScroll: true });
+        const target = el.dataset.scroll ? document.getElementById(el.dataset.scroll) : $('.place-tabs');
+        if (isMobile() && sheet.snap === 'peek') setSheet('mid');
+        target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        break;
+      }
+      case 'photo': openLightbox(s.place.details?.photos || [], Number(el.dataset.i)); break;
+      case 'rv-more': el.classList.toggle('open'); break;
       case 'back-place': setView('place'); break;
       case 'back-people': state.sharePlace = null; poiLayer.clearLayers(); setView('people'); break;
       case 'native-share': {
@@ -5251,6 +5893,9 @@ function initPanel() {
       default: break;
     }
   });
+  // Pictures fade in once loaded; broken ones disappear.
+  body.addEventListener('load', (e) => { if (e.target.tagName === 'IMG') e.target.classList.add('in'); }, true);
+  body.addEventListener('error', (e) => { if (e.target.tagName === 'IMG') e.target.classList.add('broken'); }, true);
   body.addEventListener('keydown', (e) => {
     const t = e.target;
     if ((e.key === 'Enter' || e.key === ' ') && t.getAttribute?.('role') === 'button' && t.tagName !== 'BUTTON') { e.preventDefault(); t.click(); }
@@ -5283,13 +5928,9 @@ function nextHalfHour() {
 
 function applyTheme() {
   const t = state.settings.theme;
-  if (t === 'auto') {
-    document.documentElement.removeAttribute('data-theme');
-    document.documentElement.toggleAttribute('data-dark-tiles', window.matchMedia('(prefers-color-scheme: dark)').matches);
-  } else {
-    document.documentElement.setAttribute('data-theme', t);
-    document.documentElement.removeAttribute('data-dark-tiles');
-  }
+  if (t === 'auto') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', t);
+  if (map) addBasemap();
 }
 
 function syncSettingsUI() {
@@ -5397,6 +6038,7 @@ async function boot() {
   initSheet();
   initDrawer();
   window.addEventListener('resize', () => map?.invalidateSize());
+  ratingsSource().then((src) => { ratingsOn = !!src; ratingsName = src === 'tripadvisor' ? 'Tripadvisor' : src || ''; });
   onUser(await api.start());
 }
 

@@ -1,0 +1,159 @@
+// Finding the meeting point.
+//
+// Instead of downloading every street in the area, Meet asks a routing
+// service for real travel times from everyone to a grid of candidate spots
+// (one small request per way of travelling), keeps the best spot and zooms
+// in around it a few times. "Fairest" means the longest trip is as short as
+// possible; "least total" means everyone's trips add up to the least time.
+// People on public transport are first estimated from walking distance, then
+// the two best spots are checked against real timetables.
+import { haversine, paddedBBox, centroid, smallestEnclosingCircle } from './geo.js';
+
+export const SPEEDS = { walk: 1.35, bike: 4.2, transit: 6.5, drive: 9.5 }; // m/s, urban averages
+const DETOUR = 1.3; // roads are about this much longer than a straight line
+const TRANSIT_OVERHEAD = 360; // walking to the stop and waiting, seconds
+
+/** Public transport estimate from a walking distance: never slower than walking. */
+export const transitFromWalk = (m) => Math.min(m / SPEEDS.walk, TRANSIT_OVERHEAD + m / SPEEDS.transit);
+
+/** Rough door-to-door seconds for a straight-line distance. */
+export function estimateSeconds(mode, straightM) {
+  const road = straightM * DETOUR;
+  return mode === 'transit' ? transitFromWalk(road) : road / (SPEEDS[mode] || SPEEDS.walk);
+}
+
+/** n × n points spread evenly over a bounding box. */
+export function grid(bbox, n) {
+  const out = [];
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      out.push({ lat: bbox.s + ((bbox.n - bbox.s) * r) / (n - 1), lon: bbox.w + ((bbox.e - bbox.w) * c) / (n - 1) });
+    }
+  }
+  return out;
+}
+
+const score = (times, rule) => {
+  let max = 0, sum = 0;
+  for (const t of times) { if (t == null || !Number.isFinite(t)) return Infinity; max = Math.max(max, t); sum += t; }
+  return rule === 'total' ? sum + max * 0.01 : max + sum * 0.01;
+};
+
+const timeout = (promise, ms) => Promise.race([promise, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
+
+/**
+ * Travel times (seconds) and distances (metres) from every person to every
+ * candidate: people × candidates. Falls back to straight-line estimates for a
+ * way of travelling whose service does not answer.
+ */
+async function evaluate(people, cands, { travelTimes, signal }) {
+  const times = people.map(() => cands.map(() => null));
+  const dists = people.map(() => cands.map(() => null));
+  let snapped = null;
+  let approx = false;
+  // Walkers and public transport riders share one walking request.
+  const groups = { walk: [], bike: [], drive: [] };
+  people.forEach((p, i) => (groups[p.mode === 'transit' ? 'walk' : p.mode] || groups.walk).push(i));
+  await Promise.all(Object.entries(groups).map(async ([mode, idx]) => {
+    if (!idx.length) return;
+    try {
+      const t = await timeout(travelTimes(mode, idx.map((i) => people[i]), cands, { signal }), 12000);
+      if (t.destinations?.length === cands.length && (!snapped || mode === 'walk')) snapped = t.destinations;
+      idx.forEach((pi, k) => {
+        cands.forEach((_, j) => {
+          const d = t.distances?.[k]?.[j];
+          const s = t.durations?.[k]?.[j];
+          dists[pi][j] = d ?? null;
+          times[pi][j] = people[pi].mode === 'transit'
+            ? (d != null ? transitFromWalk(d) : s != null ? transitFromWalk(s * SPEEDS.walk) : null)
+            : s;
+        });
+      });
+    } catch (err) {
+      if (signal?.aborted) throw err;
+      approx = true;
+      for (const pi of idx) {
+        cands.forEach((c, j) => {
+          const m = haversine(people[pi].lat, people[pi].lon, c.lat, c.lon);
+          dists[pi][j] = m * DETOUR;
+          times[pi][j] = estimateSeconds(people[pi].mode, m);
+        });
+      }
+    }
+  }));
+  const points = cands.map((c, j) => (snapped?.[j] ? { lat: snapped[j][0], lon: snapped[j][1] } : { lat: c.lat, lon: c.lon }));
+  return points.map((pt, j) => ({ ...pt, times: times.map((row) => row[j]), dists: dists.map((row) => row[j]), approx }));
+}
+
+/**
+ * @param people [{ lat, lon, mode }]
+ * @param opts.rule 'fair' | 'total'
+ * @param opts.travelTimes (mode, sources, destinations, {signal}) → { durations, distances, destinations? }
+ * @param opts.directions optional (mode, from, to) → { duration }: used to check public transport
+ * @returns { meet: {lat, lon}, times: [s], dists: [m], real: [bool], approx }
+ */
+export async function findMeetingPoint(people, { rule = 'fair', travelTimes, directions, signal, onStatus = () => {} } = {}) {
+  if (people.length < 2) throw new Error('Add at least two people');
+  const all = [];
+  const add = (rows) => { for (const r of rows) { r.score = score(r.times, rule); all.push(r); } };
+  const best = () => all.reduce((a, b) => (b.score < a.score ? b : a));
+
+  // Round 1: a coarse grid over everyone, plus the middle and the geometric fairest spot.
+  const box = paddedBBox(people, 0.12, 400);
+  const sec = smallestEnclosingCircle(people);
+  let cellLat = (box.n - box.s) / 6, cellLon = (box.e - box.w) / 6;
+  onStatus('Finding the fairest spot…');
+  add(await evaluate(people, [...grid(box, 7), centroid(people), { lat: sec.lat, lon: sec.lon }], { travelTimes, signal }));
+
+  // Then zoom in around the best spot so far, until the grid is about 200 m apart.
+  for (let round = 0; round < 3; round++) {
+    const b = best();
+    if (!Number.isFinite(b.score)) break;
+    const cellM = Math.max(cellLat * 111320, cellLon * 111320 * Math.cos((b.lat * Math.PI) / 180));
+    if (round > 0 && cellM < 200) break;
+    const fine = { s: b.lat - cellLat, n: b.lat + cellLat, w: b.lon - cellLon, e: b.lon + cellLon };
+    add(await evaluate(people, grid(fine, 5), { travelTimes, signal }));
+    cellLat /= 2; cellLon /= 2;
+  }
+  if (!all.some((r) => Number.isFinite(r.score))) throw new Error('No spot can be reached by everyone');
+
+  // Public transport: check the two best (distinct) spots against real timetables.
+  const riders = people.map((p, i) => (p.mode === 'transit' ? i : -1)).filter((i) => i >= 0);
+  const real = people.map((p) => p.mode !== 'transit');
+  let chosen = best();
+  if (riders.length && directions) {
+    const ranked = all.filter((r) => Number.isFinite(r.score)).sort((a, b) => a.score - b.score);
+    const top = [];
+    for (const r of ranked) {
+      if (top.every((t) => haversine(t.lat, t.lon, r.lat, r.lon) > 250)) top.push(r);
+      if (top.length === 2) break;
+    }
+    onStatus('Checking public transport…');
+    const checked = await Promise.all(top.map(async (cand) => {
+      const times = [...cand.times];
+      const ok = await Promise.all(riders.map(async (i) => {
+        try {
+          const d = await timeout(directions('transit', people[i], cand, { signal }), 9000);
+          // Walking straight there can beat the timetable.
+          times[i] = Math.min(d.duration, cand.dists[i] != null ? cand.dists[i] / SPEEDS.walk : Infinity);
+          return true;
+        } catch (err) {
+          if (signal?.aborted) throw err;
+          return false;
+        }
+      }));
+      return { ...cand, times, score: score(times, rule), checked: ok };
+    }));
+    chosen = checked.reduce((a, b) => (b.score < a.score ? b : a));
+    riders.forEach((i, k) => { real[i] = chosen.checked[k]; });
+  }
+  if (chosen.approx) real.fill(false);
+  return {
+    meet: { lat: chosen.lat, lon: chosen.lon },
+    times: chosen.times.map((t) => Math.round(t)),
+    dists: chosen.dists.map((d, i) => Math.round(d ?? haversine(people[i].lat, people[i].lon, chosen.lat, chosen.lon) * DETOUR)),
+    real,
+    approx: !!chosen.approx,
+    tried: all.length,
+  };
+}

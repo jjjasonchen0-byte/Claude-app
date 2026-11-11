@@ -5,9 +5,12 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { Store } from './lib/store.js';
 import { osrmRouteUrl, osrmTableUrl, transitUrl, normalizeOsrm, normalizeOsrmTable, normalizeTransit } from './public/js/directions.js';
+import { simplify } from './public/js/geo.js';
+import { createTripadvisor } from './lib/tripadvisor.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
@@ -24,8 +27,30 @@ const TRANSIT_DAILY_LIMIT = Number(process.env.TRANSIT_DAILY_LIMIT) || 600;
 
 const store = new Store(DATA_FILE);
 
+// Optional: ratings, photos and reviews from Tripadvisor (see README).
+const NO_MATCH_DAYS = 30; // look a place up again after this long if it had no listing
+const tripadvisor = createTripadvisor({
+  apiKey: (process.env.TRIPADVISOR_API_KEY || '').trim(),
+  dailyLimit: Number(process.env.TRIPADVISOR_DAILY_LIMIT) || 150,
+  ids: {
+    get(key) {
+      const v = store.data.taIds[key];
+      if (v === undefined) return undefined;
+      if (typeof v === 'number') return v;
+      return Date.now() - (v?.none || 0) < NO_MATCH_DAYS * 864e5 ? null : undefined;
+    },
+    set(key, id) {
+      if (Object.keys(store.data.taIds).length > 50000) store.data.taIds = {};
+      store.data.taIds[key] = id == null ? { none: Date.now() } : id;
+    },
+  },
+  onIdsChanged: () => store.save(),
+});
+
 const STATIC_ROOTS = [
   { prefix: '/vendor/leaflet/', dir: path.join(__dirname, 'node_modules', 'leaflet', 'dist') },
+  { prefix: '/vendor/maplibre/', dir: path.join(__dirname, 'node_modules', 'maplibre-gl', 'dist') },
+  { prefix: '/vendor/maplibre-leaflet/', dir: path.join(__dirname, 'node_modules', '@maplibre', 'maplibre-gl-leaflet') },
   { prefix: '/', dir: path.join(__dirname, 'public') },
 ];
 
@@ -279,12 +304,39 @@ const upstreamCache = new Map(); // url -> { at, ttl, data }
 let transitDay = '', transitCount = 0;
 const visitors = new Map(); // ip -> { start, n }
 
-function rateLimit(req, max = 90, windowMs = 10 * 60 * 1000) {
+function rateLimit(req, max = 240, windowMs = 10 * 60 * 1000) {
   const ip = req.socket.remoteAddress || 'unknown';
   const now = Date.now();
   const v = visitors.get(ip);
   if (!v || now - v.start > windowMs) { visitors.set(ip, { start: now, n: 1 }); return; }
-  if (++v.n > max) throw new HttpError(429, 'Too many directions requests — try again in a few minutes');
+  if (++v.n > max) throw new HttpError(429, 'Too many requests — try again in a few minutes');
+}
+
+/**
+ * GET JSON. With `hedgeAfterMs`, a request that has not answered by then is
+ * sent once more and the first answer wins: the public routing server
+ * usually replies in under a second but now and then stalls for ten.
+ */
+async function fetchJson(url, { hedgeAfterMs = 0 } = {}) {
+  const ctrls = [];
+  const once = async () => {
+    const ctrl = new AbortController();
+    ctrls.push(ctrl);
+    const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' }, signal: AbortSignal.any([ctrl.signal, AbortSignal.timeout(20000)]) });
+    let data = null;
+    try { data = await res.json(); } catch { /* not JSON */ }
+    return { res, data };
+  };
+  try {
+    const first = once();
+    if (!hedgeAfterMs) return await first;
+    const early = await Promise.race([first.then((v) => ({ v }), (e) => ({ e })), new Promise((r) => setTimeout(() => r(null), hedgeAfterMs))]);
+    if (early?.e) throw early.e;
+    if (early) return early.v;
+    return await Promise.any([first, once()]);
+  } finally {
+    for (const c of ctrls) c.abort(); // stop the slower copy
+  }
 }
 
 async function upstream(url, ttlMs, { transit = false } = {}) {
@@ -296,14 +348,13 @@ async function upstream(url, ttlMs, { transit = false } = {}) {
     if (transitCount >= TRANSIT_DAILY_LIMIT) throw new HttpError(429, 'Public transport directions are paused until tomorrow (daily limit reached)');
     transitCount++;
   }
-  let res;
+  let res, data;
   try {
-    res = await fetch(url, { headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' }, signal: AbortSignal.timeout(20000) });
+    // Transitous is a volunteer service with a daily budget: never sent twice.
+    ({ res, data } = await fetchJson(url, { hedgeAfterMs: transit ? 0 : 1000 }));
   } catch {
     throw new HttpError(502, 'The directions service could not be reached');
   }
-  let data;
-  try { data = await res.json(); } catch { data = null; }
   if (!res.ok && !data) throw new HttpError(502, `The directions service answered ${res.status}`);
   if (upstreamCache.size > 800) upstreamCache.delete(upstreamCache.keys().next().value);
   upstreamCache.set(url, { at: Date.now(), ttl: ttlMs, data });
@@ -315,7 +366,8 @@ function parsePoint(s) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) throw new HttpError(400, 'Invalid coordinates');
   return { lat, lon };
 }
-const roundGeom = (pts) => pts.map(([a, b]) => [Math.round(a * 1e5) / 1e5, Math.round(b * 1e5) / 1e5]);
+// Routes are simplified to about 2 m and rounded to ~1 m: same look, a fraction of the download.
+const roundGeom = (pts) => simplify(pts, 2).map(([a, b]) => [Math.round(a * 1e5) / 1e5, Math.round(b * 1e5) / 1e5]);
 const ROAD_MODES = ['walk', 'bike', 'drive'];
 
 route('GET', '/api/directions', async (req, res) => {
@@ -336,9 +388,10 @@ route('GET', '/api/directions', async (req, res) => {
     for (const o of out.options) for (const l of o.legs) l.geometry = roundGeom(l.geometry);
     out.geometry = roundGeom(out.geometry);
   } else if (ROAD_MODES.includes(mode)) {
-    const data = await upstream(osrmRouteUrl(mode, from, to), 24 * 3600 * 1000);
+    const data = await upstream(osrmRouteUrl(mode, from, to, { alternatives: q.get('alt') === '1' }), 24 * 3600 * 1000);
     try { out = normalizeOsrm(data, mode); } catch (err) { throw new HttpError(err.status || 502, err.message); }
     out.geometry = roundGeom(out.geometry);
+    out.alternatives = out.alternatives.map(roundGeom);
   } else {
     throw new HttpError(400, 'mode must be transit, walk, bike or drive');
   }
@@ -359,7 +412,67 @@ route('GET', '/api/traveltimes', async (req, res) => {
   catch (err) { throw new HttpError(err.status || 502, err.message); }
 });
 
+// ---------------------------------------------------------------- places: ratings, photos, reviews
+
+route('GET', '/api/config', async (req, res) => {
+  send(res, 200, { ratings: tripadvisor.enabled ? 'tripadvisor' : null }, { 'Cache-Control': 'private, max-age=300' });
+});
+
+function requireRatings() {
+  if (!tripadvisor.enabled) throw new HttpError(404, 'Ratings are not set up on this server');
+}
+const TA_CATEGORIES = ['RESTAURANT', 'ATTRACTION'];
+const taId = (s) => {
+  if (!/^\d{1,12}$/.test(String(s || ''))) throw new HttpError(400, 'Invalid place');
+  return Number(s);
+};
+
+route('POST', '/api/places/ratings', async (req, res) => {
+  requireRatings();
+  rateLimit(req);
+  const body = await readBody(req);
+  const items = Array.isArray(body.items) ? body.items.slice(0, 12) : [];
+  const clean = items.map((it) => {
+    const lat = Number(it.lat), lon = Number(it.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) throw new HttpError(400, 'Invalid coordinates');
+    const key = String(it.key || '').slice(0, 40);
+    if (!key) throw new HttpError(400, 'Each place needs a key');
+    return { key, name: String(it.name || '').slice(0, 120), lat, lon, category: TA_CATEGORIES.includes(it.category) ? it.category : undefined };
+  });
+  send(res, 200, { ratings: clean.length ? await tripadvisor.ratings(clean) : {}, source: 'tripadvisor' });
+});
+
+route('GET', '/api/places/photo/:id', async (req, res, { id }) => {
+  requireRatings();
+  rateLimit(req);
+  send(res, 200, { photo: await tripadvisor.photo(taId(id)) });
+});
+
+route('GET', '/api/places/details/:id', async (req, res, { id }) => {
+  requireRatings();
+  rateLimit(req);
+  send(res, 200, { place: await tripadvisor.place(taId(id)), source: 'tripadvisor' });
+});
+
 // ---------------------------------------------------------------- static
+
+// Text files are sent compressed (the map library is ~1 MB raw, ~300 KB as Brotli).
+const COMPRESSIBLE = new Set(['.html', '.js', '.mjs', '.css', '.json', '.svg', '.webmanifest', '.map']);
+const compressed = new Map(); // file -> { mtimeMs, br, gzip }
+function compressedBody(file, stat, encoding) {
+  let c = compressed.get(file);
+  if (!c || c.mtimeMs !== stat.mtimeMs) {
+    c = { mtimeMs: stat.mtimeMs };
+    compressed.set(file, c);
+  }
+  if (!c[encoding]) {
+    const raw = fs.readFileSync(file);
+    c[encoding] = encoding === 'br'
+      ? zlib.brotliCompressSync(raw, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 9, [zlib.constants.BROTLI_PARAM_SIZE_HINT]: raw.length } })
+      : zlib.gzipSync(raw, { level: 9 });
+  }
+  return c[encoding];
+}
 
 function serveStatic(req, res) {
   const url = new URL(req.url, 'http://x');
@@ -373,11 +486,20 @@ function serveStatic(req, res) {
     try { stat = fs.statSync(file); } catch { stat = null; }
     if (stat?.isFile()) {
       const ext = path.extname(file).toLowerCase();
-      res.writeHead(200, {
+      const vendor = prefix.startsWith('/vendor/'); // pinned versions: safe to keep a day
+      const headers = {
         'Content-Type': MIME[ext] || 'application/octet-stream',
-        'Content-Length': stat.size,
-        'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=300',
-      });
+        'Cache-Control': ext === '.html' ? 'no-cache' : vendor ? 'public, max-age=86400' : 'public, max-age=300',
+        Vary: 'Accept-Encoding',
+      };
+      const accept = String(req.headers['accept-encoding'] || '');
+      const encoding = COMPRESSIBLE.has(ext) && stat.size > 1024 ? (/\bbr\b/.test(accept) ? 'br' : /\bgzip\b/.test(accept) ? 'gzip' : null) : null;
+      if (encoding) {
+        const body = compressedBody(file, stat, encoding);
+        res.writeHead(200, { ...headers, 'Content-Encoding': encoding, 'Content-Length': body.length });
+        return res.end(req.method === 'HEAD' ? undefined : body);
+      }
+      res.writeHead(200, { ...headers, 'Content-Length': stat.size });
       if (req.method === 'HEAD') return res.end();
       fs.createReadStream(file).pipe(res);
       return;
@@ -422,6 +544,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   server.listen(PORT, HOST, () => {
     console.log(`Meet running at http://localhost:${PORT}`);
     if (!CONTACT) console.warn('Tip: set MEET_CONTACT to a website or email so the directions services can reach you (Transitous asks every app for this).');
+    console.log(tripadvisor.enabled ? 'Ratings, photos and reviews: Tripadvisor' : 'Ratings: off (set TRIPADVISOR_API_KEY to show Tripadvisor ratings, photos and reviews)');
   });
   const shutdown = () => { store.flush(); process.exit(0); };
   process.on('SIGINT', shutdown);

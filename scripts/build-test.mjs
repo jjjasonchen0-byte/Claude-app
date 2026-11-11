@@ -30,8 +30,8 @@ function wrapModule(name, src) {
 let app = read('public/js/app.js');
 app = replaceOnce(app, "map = L.map('map', { zoomControl: false, worldCopyJump: true });",
   "map = L.map('map', { zoomControl: false, zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 80, minZoom: 8, maxZoom: 18, maxBounds: __m.demo.getBounds(), maxBoundsViscosity: 0.8 });", 'map init');
-app = app.replace(/ {2}L\.tileLayer\([\s\S]*?\}\)\.addTo\(map\);\n/, '  __m.demo.addBasemap(map);\n');
-if (app.includes('tile.openstreetmap.org')) throw new Error('build-test: tile layer not replaced');
+app = app.replace(/\/\/ basemap:start[\s\S]*?\/\/ basemap:end\n/, 'function addBasemap() { if (!baseLayer) baseLayer = __m.demo.addBasemap(map) || true; }\n');
+if (app.includes('basemaps.cartocdn.com')) throw new Error('build-test: base map not replaced');
 app = replaceOnce(app, 'map.attributionControl.setPrefix(false);', "map.attributionControl.setPrefix(false).addAttribution('Port Verity is a made-up test town');", 'attribution');
 // The town is fictional, so links to real map apps and calendar files are left out.
 for (const [from, label] of [
@@ -62,8 +62,9 @@ body = replaceOnce(body, '      <p class="intro-foot" id="home-signin-row">', ` 
 
 // ---- styles
 const tokens = (t) => Object.entries(t).map(([k, v]) => `--map-${k}: ${v};`).join(' ');
-const light = tokens({ forest: '#dcebcf', motorway: '#ffbd6b', 'motorway-casing': '#ec9b45', land: '#f6f4ef', park: '#cfe8bf', water: '#a8d4f5', road: '#ffffff', casing: '#e3ded4', major: '#ffe28a', 'major-casing': '#efc65a', label: '#6e6e73', halo: 'rgba(255,255,255,.92)', 'park-label': '#3c7a35', 'water-label': '#3b7bb5' });
-const dark = tokens({ forest: '#1c2a1f', motorway: '#7a5427', 'motorway-casing': '#5b3e1c', land: '#1e1f22', park: '#1f3324', water: '#13304a', road: '#3a3b3f', casing: '#26272a', major: '#6b5a2a', 'major-casing': '#4c4121', label: '#aeaeb2', halo: 'rgba(20,20,22,.9)', 'park-label': '#7cc47a', 'water-label': '#6fb1ea' });
+// A quiet palette in the spirit of Apple Maps: pale land, white streets, soft greens and blues.
+const light = tokens({ forest: '#dfeed6', motorway: '#fbd38d', 'motorway-casing': '#f0bb6a', land: '#f7f6f2', park: '#d6ecc9', water: '#b4dcf7', road: '#ffffff', casing: '#ebe8e1', major: '#fdf0c4', 'major-casing': '#f0dc9c', label: '#8a8a8e', halo: 'rgba(255,255,255,.95)', 'park-label': '#4f8a48', 'water-label': '#4b88bf' });
+const dark = tokens({ forest: '#1d2620', motorway: '#6a5232', 'motorway-casing': '#4f3d25', land: '#1f2023', park: '#203024', water: '#152a3d', road: '#36373b', casing: '#28292c', major: '#4f4a3a', 'major-casing': '#3c382c', label: '#98989d', halo: 'rgba(20,20,22,.9)', 'park-label': '#79b378', 'water-label': '#6aa5d9' });
 const css = `${read('node_modules/leaflet/dist/leaflet.css')}\n${read('public/css/styles.css')}
 :root { ${light} }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { ${dark} } }
@@ -86,10 +87,12 @@ const css = `${read('node_modules/leaflet/dist/leaflet.css')}\n${read('public/cs
 // ---- scripts
 const modules = [
   ['geo', 'public/js/geo.js'],
-  ['network', 'public/js/network.js'],
-  ['meet', 'public/js/meet.js'],
+  ['graph', 'public/js/graph.js'],
+  ['meetpoint', 'public/js/meetpoint.js'],
   ['growth', 'public/js/growth.js'],
   ['pois', 'public/js/pois.js'],
+  ['hours', 'public/js/hours.js'],
+  ['rated', 'public/js/rated.js'],
   ['share', 'public/js/share.js'],
   ['directions', 'public/js/directions.js'],
   ['demo', 'public/js/demo.js'],
@@ -102,7 +105,7 @@ js += `// ---- test-mode wiring: local stand-ins for the server and map services
   const d = __m.demo;
   __m.remote = { remote: d.api };
   __m.geocode = { searchAddress: d.searchAddress, reverseGeocode: d.reverseGeocode, currentPosition: d.currentPosition };
-  __m.network = { ...__m.network, loadNetwork: d.loadNetwork };
+  __m.rated = { ...__m.rated, ...d.rated };
   __m.pois = { ...__m.pois, findPois: d.findPois };
   __m.directions = { ...__m.directions, getDirections: d.directions, getTravelTimes: d.travelTimes };
   const baseText = __m.share.shareText;

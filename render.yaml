@@ -16,3 +16,7 @@ services:
       # asks every app for a way to reach its owner. Render asks for it on setup.
       - key: MEET_CONTACT
         sync: false
+      # Optional: Tripadvisor ratings, photos and reviews (see README).
+      # Leave empty to run without them. Render asks for it on setup.
+      - key: TRIPADVISOR_API_KEY
+        sync: false

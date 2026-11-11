@@ -94,3 +94,39 @@ export function smallestEnclosingCircle(points) {
   const ll = proj.toLL(c);
   return { lat: ll.lat, lon: ll.lon, radius: c.r };
 }
+
+/**
+ * Douglas–Peucker line simplification of [[lat, lon], ...] with a tolerance
+ * in metres. Routes keep their shape on screen at a fraction of the size.
+ */
+export function simplify(pts, toleranceM = 3) {
+  if (!Array.isArray(pts) || pts.length < 3) return pts || [];
+  const proj = makeProjector({ lat: pts[0][0], lon: pts[0][1] });
+  const xy = pts.map(([lat, lon]) => proj.toXY({ lat, lon }));
+  const keep = new Uint8Array(pts.length);
+  keep[0] = keep[pts.length - 1] = 1;
+  const stack = [[0, pts.length - 1]];
+  const tol2 = toleranceM * toleranceM;
+  while (stack.length) {
+    const [a, b] = stack.pop();
+    const ax = xy[a].x, ay = xy[a].y, dx = xy[b].x - ax, dy = xy[b].y - ay;
+    const len2 = dx * dx + dy * dy;
+    let worst = -1, worstD = tol2;
+    for (let i = a + 1; i < b; i++) {
+      let t = len2 ? ((xy[i].x - ax) * dx + (xy[i].y - ay) * dy) / len2 : 0;
+      t = Math.max(0, Math.min(1, t));
+      const ex = xy[i].x - (ax + t * dx), ey = xy[i].y - (ay + t * dy);
+      const d = ex * ex + ey * ey;
+      if (d > worstD) { worstD = d; worst = i; }
+    }
+    if (worst > 0) { keep[worst] = 1; stack.push([a, worst], [worst, b]); }
+  }
+  return pts.filter((_, i) => keep[i]);
+}
+
+/** Length of a [[lat, lon], ...] line in metres. */
+export function lineLength(pts) {
+  let m = 0;
+  for (let i = 1; i < pts.length; i++) m += haversine(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]);
+  return m;
+}

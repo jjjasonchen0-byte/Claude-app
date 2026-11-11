@@ -6,8 +6,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  decodePolyline, normalizeOsrm, normalizeOsrmTable, normalizeTransit, transitUrl, osrmTableUrl, isWalkLeg,
+  decodePolyline, normalizeOsrm, normalizeOsrmTable, normalizeTransit, transitUrl, osrmTableUrl, osrmRouteUrl, isWalkLeg,
 } from '../../public/js/directions.js';
+import { simplify, lineLength } from '../../public/js/geo.js';
 
 const fixture = (name) => JSON.parse(fs.readFileSync(new URL(`../fixtures/${name}`, import.meta.url), 'utf8'));
 const inLondon = ([lat, lon]) => lat > 51.3 && lat < 51.7 && lon > -0.5 && lon < 0.3;
@@ -25,11 +26,30 @@ test('walking route: time, distance and a lat/lon line in London', () => {
   assert.ok(r.geometry.length > 5 && r.geometry.every(inLondon));
 });
 
-test('travel-time table: sources × destinations, rounded', () => {
+test('travel-time table: sources × destinations, rounded, with spots snapped to roads', () => {
   const t = normalizeOsrmTable(fixture('osrm-table.json'));
   assert.equal(t.durations.length, 2);
   assert.equal(t.durations[0].length, 2);
   assert.ok(t.durations.flat().every((v) => Number.isInteger(v) && v > 0));
+  assert.equal(t.destinations.length, 2);
+  assert.ok(t.destinations.every(inLondon), 'snapped [lat, lon]');
+});
+
+test('route alternatives come back as extra lines', () => {
+  const r = normalizeOsrm(fixture('osrm-route-alternatives.json'), 'walk');
+  assert.ok(r.alternatives.length >= 1);
+  assert.ok(r.alternatives.every((g) => g.length > 5 && g.every(inLondon)));
+  assert.match(osrmRouteUrl('walk', { lat: 51.5, lon: -0.1 }, { lat: 51.51, lon: -0.09 }, { alternatives: true }), /alternatives=2/);
+  assert.doesNotMatch(osrmRouteUrl('walk', { lat: 51.5, lon: -0.1 }, { lat: 51.51, lon: -0.09 }), /alternatives/);
+});
+
+test('simplified routes keep their shape with far fewer points', () => {
+  const full = normalizeOsrm(fixture('osrm-route-alternatives.json'), 'walk').geometry;
+  const slim = simplify(full, 2);
+  assert.ok(slim.length < full.length * 0.8, `${full.length} → ${slim.length} points`);
+  assert.deepEqual(slim[0], full[0]);
+  assert.deepEqual(slim.at(-1), full.at(-1));
+  assert.ok(Math.abs(lineLength(slim) - lineLength(full)) / lineLength(full) < 0.02, 'length within 2%');
 });
 
 test('public transport: options, line names and colours, walking legs, geometry', () => {
@@ -81,7 +101,8 @@ test('server relays directions with caching, a daily transit cap and validation'
   globalThis.fetch = async (url, init) => {
     calls.push({ url: String(url), ua: init?.headers?.['User-Agent'] });
     const body = String(url).includes('transitous') ? fixture('transitous-plan.json')
-      : String(url).includes('/table/') ? fixture('osrm-table.json') : fixture('osrm-route.json');
+      : String(url).includes('/table/') ? fixture('osrm-table.json')
+        : String(url).includes('alternatives=2') ? fixture('osrm-route-alternatives.json') : fixture('osrm-route.json');
     return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
   };
   const { server } = await import(`../../server.js?${Date.now()}`);
@@ -93,6 +114,12 @@ test('server relays directions with caching, a daily transit cap and validation'
     assert.equal(walk.status, 200);
     assert.equal(walk.body.mode, 'walk');
     assert.ok(calls[0].ua.startsWith('Meet/'), 'identifies the app');
+    assert.deepEqual(walk.body.alternatives, []);
+
+    const alt = await get('/api/directions?mode=walk&from=51.5072,-0.1276&to=51.5155,-0.0877&alt=1');
+    assert.ok(alt.body.alternatives.length >= 1, 'alternatives on request');
+    const raw = fixture('osrm-route-alternatives.json').routes[0].geometry.coordinates.length;
+    assert.ok(alt.body.geometry.length < raw, 'geometry is slimmed down before it is sent');
 
     const t1 = await get('/api/directions?mode=transit&from=51.5205,-0.1568&to=51.4645,-0.1302&time=2026-01-01T09:00:10Z');
     assert.equal(t1.status, 200);
@@ -109,6 +136,7 @@ test('server relays directions with caching, a daily transit cap and validation'
     const times = await get('/api/traveltimes?mode=bike&from=51.5205,-0.1568;51.5215,-0.0717&to=51.5074,-0.1278;51.5101,-0.1340');
     assert.equal(times.status, 200);
     assert.equal(times.body.durations.length, 2);
+    assert.equal(times.body.destinations.length, 2);
 
     assert.equal((await get('/api/directions?mode=fly&from=1,1&to=2,2')).status, 400);
     assert.equal((await get('/api/directions?mode=walk&from=999,1&to=2,2')).status, 400);
