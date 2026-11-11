@@ -1,20 +1,25 @@
-// Canvas overlay that shows everyone's real routes to the meeting point
-// growing on one shared clock: after "10 minutes" each line has covered what
-// that person travels in 10 minutes, so whoever has further to go is still
-// moving when the others have arrived. A dot marks where each person is.
-// A person's other good routes grow lighter alongside; once everyone has
-// arrived they fade and the main route stays, like a directions line.
+// Canvas overlay that races everyone's possible routes to the meeting point.
+//
+// Each person has several real routes ("branches"), all heading towards the
+// meeting point. They grow together on one shared clock at that person's
+// travel speed, so after "10 minutes" every branch has covered what that
+// person travels in 10 minutes along it, and a dot marks each branch's tip.
+// The first branch to reach the meeting point wins: it flashes bold, like a
+// directions line, and the others stop and fade. Whoever has furthest to go
+// is still moving when the others have arrived.
 // Coordinates are pre-projected to Web Mercator at zoom 0, so each frame is a
 // cheap scale + translate.
 
-const MAIN = { width: 3, alpha: 0.95 };
-const ALT = { width: 2, alpha: 0.32 };
-const ALT_DONE = { width: 1.8, alpha: 0.14 };
+const RACE = { width: 2.2, alpha: 0.62 };   // every branch while racing
+const LOST = { alpha: 0.1 };                  // branches that lost, once faded
+const WIN = { width: 3.6, flash: 7, casing: 3.5 };
+const FADE_MS = 650;
+const FLASH_MS = 450;
 
 /**
- * One person's journey, for the animation:
- *   { color, pieces: [{ pts: [[lat, lon]], t0, t1, walk }], alts: [[[lat, lon]]], duration }
- * `t0`/`t1` are seconds after leaving; walking parts are drawn dotted.
+ * tracks: one per person,
+ *   { color, branches: [{ pieces: [{ pts: [[lat, lon]], t0, t1, walk }], duration }], best }
+ * `t0`/`t1` are seconds after setting off; `best` is the branch that arrives first.
  */
 export class GrowthAnimation {
   constructor(map, tracks) {
@@ -22,18 +27,21 @@ export class GrowthAnimation {
     this.clock = 0;
     this.done = false;
     this.raf = 0;
+    this.now = performance.now();
     const crs = L.CRS.EPSG3857;
     const proj = ([lat, lon]) => crs.latLngToPoint(L.latLng(lat, lon), 0);
-    this.total = Math.max(60, ...tracks.map((t) => t.duration || 0));
     this.tracks = tracks.map((t) => {
-      const segs = [];
-      for (const piece of t.pieces) addTimed(segs, piece.pts.map(proj), piece.t0, piece.t1, piece.walk);
-      const alts = [];
-      for (const line of t.alts || []) addTimed(alts, line.map(proj), 0, t.duration, false);
-      segs.sort((a, b) => a.s0 - b.s0);
-      alts.sort((a, b) => a.s0 - b.s0);
-      return { color: t.color, segs, alts, duration: t.duration };
+      const best = t.best ?? 0;
+      const branches = t.branches.map((b) => {
+        const segs = [];
+        for (const piece of b.pieces) addTimed(segs, piece.pts.map(proj), piece.t0, piece.t1, piece.walk);
+        segs.sort((x, y) => x.s0 - y.s0);
+        return { segs, duration: b.duration };
+      });
+      return { color: t.color, branches, best, arrive: t.branches[best].duration, arrivedAt: null };
     });
+    this.total = Math.max(60, ...this.tracks.map((t) => t.arrive));
+    this.branchCount = this.tracks.reduce((n, t) => n + t.branches.length, 0);
 
     this.canvas = document.createElement('canvas');
     this.canvas.className = 'growth-canvas';
@@ -79,30 +87,36 @@ export class GrowthAnimation {
     this.canvas.style.transform = '';
   }
 
-  /** Animate until everyone has arrived. Resolves true if completed, false if cancelled. */
+  /** Race until everyone's winning route has arrived. Resolves true if completed, false if cancelled. */
   play({ duration = 6000, onProgress } = {}) {
     cancelAnimationFrame(this.raf);
     this.done = false;
     this.skipRequested = false;
+    for (const t of this.tracks) t.arrivedAt = null;
     return new Promise((resolve) => {
       this.resolve = resolve;
       const start = performance.now();
+      let finishedAt = null;
       const step = (now) => {
+        this.now = now;
         const t = Math.min(1, (now - start) / duration);
         // Steady clock; only the first 6% eases in.
         const eased = t < 0.06 ? (t * t) / 0.12 : t - 0.03;
-        this.clock = this.total * Math.min(1, eased / 0.97);
-        if (t >= 1 || this.skipRequested) {
-          this.clock = this.total;
+        this.clock = this.skipRequested ? this.total : this.total * Math.min(1, eased / 0.97);
+        for (const tr of this.tracks) {
+          if (tr.arrivedAt == null && this.clock >= tr.arrive) tr.arrivedAt = this.skipRequested ? now - FADE_MS : now;
+        }
+        onProgress?.(this.clock, this.total);
+        // Let the last winner's flash and the fading finish before handing over.
+        if (this.clock >= this.total) finishedAt ??= now;
+        if (finishedAt != null && now - finishedAt >= (this.skipRequested ? 0 : FADE_MS)) {
           this.done = true;
           this.draw();
-          onProgress?.(this.total, this.total);
           this.resolve = null;
           resolve(true);
           return;
         }
         this.draw();
-        onProgress?.(this.clock, this.total);
         this.raf = requestAnimationFrame(step);
       };
       this.raf = requestAnimationFrame(step);
@@ -117,17 +131,15 @@ export class GrowthAnimation {
     const scale = 2 ** map.getZoom();
     const origin = map.getPixelBounds().min;
     const ox = origin.x, oy = origin.y;
-    const c = this.clock;
-    const finished = this.done;
+    const X = (x) => x * scale - ox, Y = (y) => y * scale - oy;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, this.size.x, this.size.y);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    const X = (x) => x * scale - ox, Y = (y) => y * scale - oy;
 
     const trace = (segs, upTo) => {
       const ride = new Path2D(), walk = new Path2D();
-      let head = null;
+      let tip = null;
       for (const s of segs) {
         if (s.s0 > upTo) break;
         const x0 = X(s.ax), y0 = Y(s.ay);
@@ -138,37 +150,51 @@ export class GrowthAnimation {
         }
         const path = s.walk ? walk : ride;
         path.moveTo(x0, y0); path.lineTo(x1, y1);
-        if (!head || s.s0 >= head.s) head = { x: x1, y: y1, s: s.s0 };
+        if (!tip || s.s0 >= tip.s) tip = { x: x1, y: y1, s: s.s0 };
       }
-      return { ride, walk, head };
+      return { ride, walk, tip };
+    };
+    const stroke = (p, { color, width, alpha, dotted = false }) => {
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.setLineDash(dotted ? [0.1, width * 2.6] : []);
+      ctx.stroke(p);
     };
 
-    // Lighter alternatives underneath.
+    const tips = [];
+    const winners = [];
     for (const t of this.tracks) {
-      if (!t.alts.length) continue;
-      const { ride } = trace(t.alts, finished ? Infinity : c);
-      const st = finished ? ALT_DONE : ALT;
-      ctx.globalAlpha = st.alpha; ctx.lineWidth = st.width; ctx.strokeStyle = t.color; ctx.setLineDash([]);
-      ctx.stroke(ride);
+      const fade = this.done ? 1 : t.arrivedAt == null ? 0 : Math.min(1, (this.now - t.arrivedAt) / FADE_MS);
+      // Branches stop growing once this person's winner arrives.
+      const upTo = Math.min(this.clock, t.arrive);
+      t.branches.forEach((b, i) => {
+        if (i === t.best && t.arrivedAt != null) return; // drawn on top below
+        const { ride, walk, tip } = trace(b.segs, upTo);
+        const alpha = RACE.alpha * (1 - fade) + LOST.alpha * fade;
+        // Racing branches are thin solid lines; only the chosen route shows walking as dots.
+        stroke(ride, { color: t.color, width: RACE.width, alpha });
+        stroke(walk, { color: t.color, width: RACE.width, alpha });
+        if (t.arrivedAt == null && tip) tips.push({ ...tip, color: t.color, r: 3.4 });
+      });
+      if (t.arrivedAt != null) winners.push(t);
     }
-    // Main routes: white casing for rides, dotted walking parts, a dot for where each person is.
-    const heads = [];
-    for (const t of this.tracks) {
-      const { ride, walk, head } = trace(t.segs, finished ? Infinity : c);
-      ctx.globalAlpha = 1;
-      ctx.setLineDash([]);
-      ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.lineWidth = MAIN.width + 3.5; ctx.stroke(ride);
-      ctx.strokeStyle = t.color; ctx.lineWidth = MAIN.width; ctx.globalAlpha = MAIN.alpha; ctx.stroke(ride);
-      ctx.globalAlpha = 1; ctx.setLineDash([0.1, 7]); ctx.lineWidth = 4; ctx.stroke(walk);
-      if (!finished && head && c < t.duration) heads.push({ ...head, color: t.color });
+    // The chosen routes: white casing, bold, with a short flash when they arrive.
+    for (const t of winners) {
+      const { ride, walk } = trace(t.branches[t.best].segs, t.arrive);
+      const flash = this.done ? 0 : Math.max(0, 1 - (this.now - t.arrivedAt) / FLASH_MS);
+      const width = WIN.width + (WIN.flash - WIN.width) * flash;
+      stroke(ride, { color: 'rgba(255,255,255,0.95)', width: width + WIN.casing, alpha: 1 });
+      stroke(ride, { color: t.color, width, alpha: 1 });
+      stroke(walk, { color: t.color, width: width + 0.8, alpha: 1, dotted: true });
     }
     ctx.setLineDash([]);
-    for (const h of heads) {
-      ctx.beginPath(); ctx.arc(h.x, h.y, 6, 0, Math.PI * 2);
-      ctx.fillStyle = h.color; ctx.fill();
-      ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; ctx.stroke();
-    }
     ctx.globalAlpha = 1;
+    for (const h of tips) {
+      ctx.beginPath(); ctx.arc(h.x, h.y, h.r, 0, Math.PI * 2);
+      ctx.fillStyle = h.color; ctx.fill();
+      ctx.lineWidth = 1.6; ctx.strokeStyle = '#fff'; ctx.stroke();
+    }
   }
 
   destroy() {

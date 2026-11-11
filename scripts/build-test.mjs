@@ -90,6 +90,7 @@ const modules = [
   ['graph', 'public/js/graph.js'],
   ['meetpoint', 'public/js/meetpoint.js'],
   ['growth', 'public/js/growth.js'],
+  ['branches', 'public/js/branches.js'],
   ['pois', 'public/js/pois.js'],
   ['hours', 'public/js/hours.js'],
   ['rated', 'public/js/rated.js'],

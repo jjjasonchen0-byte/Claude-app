@@ -313,11 +313,12 @@ function rateLimit(req, max = 240, windowMs = 10 * 60 * 1000) {
 }
 
 /**
- * GET JSON. With `hedgeAfterMs`, a request that has not answered by then is
- * sent once more and the first answer wins: the public routing server
- * usually replies in under a second but now and then stalls for ten.
+ * GET JSON. With `hedgeAfterMs` (a list of delays), a request that has not
+ * answered by each delay is sent once more, and the first answer wins: the
+ * public routing server usually replies in under a second but now and then
+ * stalls for ten.
  */
-async function fetchJson(url, { hedgeAfterMs = 0 } = {}) {
+async function fetchJson(url, { hedgeAfterMs = [] } = {}) {
   const ctrls = [];
   const once = async () => {
     const ctrl = new AbortController();
@@ -327,15 +328,25 @@ async function fetchJson(url, { hedgeAfterMs = 0 } = {}) {
     try { data = await res.json(); } catch { /* not JSON */ }
     return { res, data };
   };
+  const timers = [];
   try {
-    const first = once();
-    if (!hedgeAfterMs) return await first;
-    const early = await Promise.race([first.then((v) => ({ v }), (e) => ({ e })), new Promise((r) => setTimeout(() => r(null), hedgeAfterMs))]);
-    if (early?.e) throw early.e;
-    if (early) return early.v;
-    return await Promise.any([first, once()]);
+    return await new Promise((resolve, reject) => {
+      let pending = 0, failed = null, launched = 0;
+      const total = 1 + hedgeAfterMs.length;
+      const launch = () => {
+        launched++; pending++;
+        once().then(resolve, (err) => {
+          failed = err;
+          if (--pending === 0 && launched === total) reject(failed);
+          else if (pending === 0) { for (const t of timers) clearTimeout(t); launch(); } // failed fast: try the next copy now
+        });
+      };
+      launch();
+      for (const ms of hedgeAfterMs) timers.push(setTimeout(() => { if (launched < total) launch(); }, ms));
+    });
   } finally {
-    for (const c of ctrls) c.abort(); // stop the slower copy
+    for (const t of timers) clearTimeout(t);
+    for (const c of ctrls) c.abort(); // stop the slower copies
   }
 }
 
@@ -351,7 +362,7 @@ async function upstream(url, ttlMs, { transit = false } = {}) {
   let res, data;
   try {
     // Transitous is a volunteer service with a daily budget: never sent twice.
-    ({ res, data } = await fetchJson(url, { hedgeAfterMs: transit ? 0 : 1000 }));
+    ({ res, data } = await fetchJson(url, { hedgeAfterMs: transit ? [] : [1000, 3500] }));
   } catch {
     throw new HttpError(502, 'The directions service could not be reached');
   }
@@ -388,10 +399,11 @@ route('GET', '/api/directions', async (req, res) => {
     for (const o of out.options) for (const l of o.legs) l.geometry = roundGeom(l.geometry);
     out.geometry = roundGeom(out.geometry);
   } else if (ROAD_MODES.includes(mode)) {
-    const data = await upstream(osrmRouteUrl(mode, from, to, { alternatives: q.get('alt') === '1' }), 24 * 3600 * 1000);
+    const via = q.get('via') ? parsePoint(q.get('via')) : null;
+    const data = await upstream(osrmRouteUrl(mode, from, to, { alternatives: q.get('alt') === '1', via }), 24 * 3600 * 1000);
     try { out = normalizeOsrm(data, mode); } catch (err) { throw new HttpError(err.status || 502, err.message); }
     out.geometry = roundGeom(out.geometry);
-    out.alternatives = out.alternatives.map(roundGeom);
+    for (const a of out.alternatives) a.geometry = roundGeom(a.geometry);
   } else {
     throw new HttpError(400, 'mode must be transit, walk, bike or drive');
   }

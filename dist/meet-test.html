@@ -1870,23 +1870,28 @@ __m["meetpoint"] = { SPEEDS, transitFromWalk, estimateSeconds, grid, makeScore, 
 })();
 // ---- growth
 (() => {
-// Canvas overlay that shows everyone's real routes to the meeting point
-// growing on one shared clock: after "10 minutes" each line has covered what
-// that person travels in 10 minutes, so whoever has further to go is still
-// moving when the others have arrived. A dot marks where each person is.
-// A person's other good routes grow lighter alongside; once everyone has
-// arrived they fade and the main route stays, like a directions line.
+// Canvas overlay that races everyone's possible routes to the meeting point.
+//
+// Each person has several real routes ("branches"), all heading towards the
+// meeting point. They grow together on one shared clock at that person's
+// travel speed, so after "10 minutes" every branch has covered what that
+// person travels in 10 minutes along it, and a dot marks each branch's tip.
+// The first branch to reach the meeting point wins: it flashes bold, like a
+// directions line, and the others stop and fade. Whoever has furthest to go
+// is still moving when the others have arrived.
 // Coordinates are pre-projected to Web Mercator at zoom 0, so each frame is a
 // cheap scale + translate.
 
-const MAIN = { width: 3, alpha: 0.95 };
-const ALT = { width: 2, alpha: 0.32 };
-const ALT_DONE = { width: 1.8, alpha: 0.14 };
+const RACE = { width: 2.2, alpha: 0.62 };   // every branch while racing
+const LOST = { alpha: 0.1 };                  // branches that lost, once faded
+const WIN = { width: 3.6, flash: 7, casing: 3.5 };
+const FADE_MS = 650;
+const FLASH_MS = 450;
 
 /**
- * One person's journey, for the animation:
- *   { color, pieces: [{ pts: [[lat, lon]], t0, t1, walk }], alts: [[[lat, lon]]], duration }
- * `t0`/`t1` are seconds after leaving; walking parts are drawn dotted.
+ * tracks: one per person,
+ *   { color, branches: [{ pieces: [{ pts: [[lat, lon]], t0, t1, walk }], duration }], best }
+ * `t0`/`t1` are seconds after setting off; `best` is the branch that arrives first.
  */
 class GrowthAnimation {
   constructor(map, tracks) {
@@ -1894,18 +1899,21 @@ class GrowthAnimation {
     this.clock = 0;
     this.done = false;
     this.raf = 0;
+    this.now = performance.now();
     const crs = L.CRS.EPSG3857;
     const proj = ([lat, lon]) => crs.latLngToPoint(L.latLng(lat, lon), 0);
-    this.total = Math.max(60, ...tracks.map((t) => t.duration || 0));
     this.tracks = tracks.map((t) => {
-      const segs = [];
-      for (const piece of t.pieces) addTimed(segs, piece.pts.map(proj), piece.t0, piece.t1, piece.walk);
-      const alts = [];
-      for (const line of t.alts || []) addTimed(alts, line.map(proj), 0, t.duration, false);
-      segs.sort((a, b) => a.s0 - b.s0);
-      alts.sort((a, b) => a.s0 - b.s0);
-      return { color: t.color, segs, alts, duration: t.duration };
+      const best = t.best ?? 0;
+      const branches = t.branches.map((b) => {
+        const segs = [];
+        for (const piece of b.pieces) addTimed(segs, piece.pts.map(proj), piece.t0, piece.t1, piece.walk);
+        segs.sort((x, y) => x.s0 - y.s0);
+        return { segs, duration: b.duration };
+      });
+      return { color: t.color, branches, best, arrive: t.branches[best].duration, arrivedAt: null };
     });
+    this.total = Math.max(60, ...this.tracks.map((t) => t.arrive));
+    this.branchCount = this.tracks.reduce((n, t) => n + t.branches.length, 0);
 
     this.canvas = document.createElement('canvas');
     this.canvas.className = 'growth-canvas';
@@ -1951,30 +1959,36 @@ class GrowthAnimation {
     this.canvas.style.transform = '';
   }
 
-  /** Animate until everyone has arrived. Resolves true if completed, false if cancelled. */
+  /** Race until everyone's winning route has arrived. Resolves true if completed, false if cancelled. */
   play({ duration = 6000, onProgress } = {}) {
     cancelAnimationFrame(this.raf);
     this.done = false;
     this.skipRequested = false;
+    for (const t of this.tracks) t.arrivedAt = null;
     return new Promise((resolve) => {
       this.resolve = resolve;
       const start = performance.now();
+      let finishedAt = null;
       const step = (now) => {
+        this.now = now;
         const t = Math.min(1, (now - start) / duration);
         // Steady clock; only the first 6% eases in.
         const eased = t < 0.06 ? (t * t) / 0.12 : t - 0.03;
-        this.clock = this.total * Math.min(1, eased / 0.97);
-        if (t >= 1 || this.skipRequested) {
-          this.clock = this.total;
+        this.clock = this.skipRequested ? this.total : this.total * Math.min(1, eased / 0.97);
+        for (const tr of this.tracks) {
+          if (tr.arrivedAt == null && this.clock >= tr.arrive) tr.arrivedAt = this.skipRequested ? now - FADE_MS : now;
+        }
+        onProgress?.(this.clock, this.total);
+        // Let the last winner's flash and the fading finish before handing over.
+        if (this.clock >= this.total) finishedAt ??= now;
+        if (finishedAt != null && now - finishedAt >= (this.skipRequested ? 0 : FADE_MS)) {
           this.done = true;
           this.draw();
-          onProgress?.(this.total, this.total);
           this.resolve = null;
           resolve(true);
           return;
         }
         this.draw();
-        onProgress?.(this.clock, this.total);
         this.raf = requestAnimationFrame(step);
       };
       this.raf = requestAnimationFrame(step);
@@ -1989,17 +2003,15 @@ class GrowthAnimation {
     const scale = 2 ** map.getZoom();
     const origin = map.getPixelBounds().min;
     const ox = origin.x, oy = origin.y;
-    const c = this.clock;
-    const finished = this.done;
+    const X = (x) => x * scale - ox, Y = (y) => y * scale - oy;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, this.size.x, this.size.y);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    const X = (x) => x * scale - ox, Y = (y) => y * scale - oy;
 
     const trace = (segs, upTo) => {
       const ride = new Path2D(), walk = new Path2D();
-      let head = null;
+      let tip = null;
       for (const s of segs) {
         if (s.s0 > upTo) break;
         const x0 = X(s.ax), y0 = Y(s.ay);
@@ -2010,37 +2022,51 @@ class GrowthAnimation {
         }
         const path = s.walk ? walk : ride;
         path.moveTo(x0, y0); path.lineTo(x1, y1);
-        if (!head || s.s0 >= head.s) head = { x: x1, y: y1, s: s.s0 };
+        if (!tip || s.s0 >= tip.s) tip = { x: x1, y: y1, s: s.s0 };
       }
-      return { ride, walk, head };
+      return { ride, walk, tip };
+    };
+    const stroke = (p, { color, width, alpha, dotted = false }) => {
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.setLineDash(dotted ? [0.1, width * 2.6] : []);
+      ctx.stroke(p);
     };
 
-    // Lighter alternatives underneath.
+    const tips = [];
+    const winners = [];
     for (const t of this.tracks) {
-      if (!t.alts.length) continue;
-      const { ride } = trace(t.alts, finished ? Infinity : c);
-      const st = finished ? ALT_DONE : ALT;
-      ctx.globalAlpha = st.alpha; ctx.lineWidth = st.width; ctx.strokeStyle = t.color; ctx.setLineDash([]);
-      ctx.stroke(ride);
+      const fade = this.done ? 1 : t.arrivedAt == null ? 0 : Math.min(1, (this.now - t.arrivedAt) / FADE_MS);
+      // Branches stop growing once this person's winner arrives.
+      const upTo = Math.min(this.clock, t.arrive);
+      t.branches.forEach((b, i) => {
+        if (i === t.best && t.arrivedAt != null) return; // drawn on top below
+        const { ride, walk, tip } = trace(b.segs, upTo);
+        const alpha = RACE.alpha * (1 - fade) + LOST.alpha * fade;
+        // Racing branches are thin solid lines; only the chosen route shows walking as dots.
+        stroke(ride, { color: t.color, width: RACE.width, alpha });
+        stroke(walk, { color: t.color, width: RACE.width, alpha });
+        if (t.arrivedAt == null && tip) tips.push({ ...tip, color: t.color, r: 3.4 });
+      });
+      if (t.arrivedAt != null) winners.push(t);
     }
-    // Main routes: white casing for rides, dotted walking parts, a dot for where each person is.
-    const heads = [];
-    for (const t of this.tracks) {
-      const { ride, walk, head } = trace(t.segs, finished ? Infinity : c);
-      ctx.globalAlpha = 1;
-      ctx.setLineDash([]);
-      ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.lineWidth = MAIN.width + 3.5; ctx.stroke(ride);
-      ctx.strokeStyle = t.color; ctx.lineWidth = MAIN.width; ctx.globalAlpha = MAIN.alpha; ctx.stroke(ride);
-      ctx.globalAlpha = 1; ctx.setLineDash([0.1, 7]); ctx.lineWidth = 4; ctx.stroke(walk);
-      if (!finished && head && c < t.duration) heads.push({ ...head, color: t.color });
+    // The chosen routes: white casing, bold, with a short flash when they arrive.
+    for (const t of winners) {
+      const { ride, walk } = trace(t.branches[t.best].segs, t.arrive);
+      const flash = this.done ? 0 : Math.max(0, 1 - (this.now - t.arrivedAt) / FLASH_MS);
+      const width = WIN.width + (WIN.flash - WIN.width) * flash;
+      stroke(ride, { color: 'rgba(255,255,255,0.95)', width: width + WIN.casing, alpha: 1 });
+      stroke(ride, { color: t.color, width, alpha: 1 });
+      stroke(walk, { color: t.color, width: width + 0.8, alpha: 1, dotted: true });
     }
     ctx.setLineDash([]);
-    for (const h of heads) {
-      ctx.beginPath(); ctx.arc(h.x, h.y, 6, 0, Math.PI * 2);
-      ctx.fillStyle = h.color; ctx.fill();
-      ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; ctx.stroke();
-    }
     ctx.globalAlpha = 1;
+    for (const h of tips) {
+      ctx.beginPath(); ctx.arc(h.x, h.y, h.r, 0, Math.PI * 2);
+      ctx.fillStyle = h.color; ctx.fill();
+      ctx.lineWidth = 1.6; ctx.strokeStyle = '#fff'; ctx.stroke();
+    }
   }
 
   destroy() {
@@ -2069,6 +2095,98 @@ function addTimed(out, pts, t0, t1, walk) {
 }
 
 __m["growth"] = { GrowthAnimation };
+})();
+// ---- branches
+(() => {
+// Extra routes for the meeting-point animation ("branches").
+//
+// Besides each person's best route, the routing service is asked for routes
+// through a few points on either side of the straight line to the meeting
+// point. Only routes that keep heading towards the meeting point, aren't
+// much slower and aren't copies of one already kept make it onto the map.
+// The animation then races them: the first to arrive is the one chosen.
+const { haversine, makeProjector } = __m["geo"];
+// Where to route through: fraction of the way there, and how far to the side
+// (as a share of the straight-line distance).
+const VIA = [[0.35, 0.22], [0.35, -0.22], [0.6, 0.32], [0.6, -0.32]];
+const MAX_SIDE_M = 6000;
+
+/** Points to either side of the line from `from` to `to`; none for very short trips. */
+function viaPoints(from, to, { minM = 350 } = {}) {
+  const L = haversine(from.lat, from.lon, to.lat, to.lon);
+  if (L < minM) return [];
+  const proj = makeProjector(from);
+  const b = proj.toXY(to);
+  const ux = b.x / L, uy = b.y / L; // along
+  const nx = -uy, ny = ux; // to the left
+  return VIA.map(([f, s]) => {
+    const side = Math.sign(s) * Math.min(Math.abs(s) * L, MAX_SIDE_M);
+    return proj.toLL({ x: ux * f * L + nx * side, y: uy * f * L + ny * side });
+  });
+}
+
+/**
+ * Does a route keep heading towards `target`? Allowed to drift away by a
+ * little (`slackM`, or 6% of the trip), never to double back further.
+ */
+function headsTowards(pts, target, { slackM } = {}) {
+  if (pts.length < 2) return true;
+  const start = haversine(pts[0][0], pts[0][1], target.lat, target.lon);
+  const slack = slackM ?? Math.max(120, start * 0.06);
+  let closest = start;
+  for (const [lat, lon] of pts) {
+    const d = haversine(lat, lon, target.lat, target.lon);
+    if (d > closest + slack) return false;
+    if (d < closest) closest = d;
+  }
+  return true;
+}
+
+/** Share of `a`'s length that runs within `nearM` metres of line `b`. */
+function overlapShare(a, b, nearM = 25) {
+  if (a.length < 2 || b.length < 2) return 0;
+  const proj = makeProjector({ lat: a[0][0], lon: a[0][1] });
+  const B = b.map(([lat, lon]) => proj.toXY({ lat, lon }));
+  const near = (p) => {
+    for (let i = 1; i < B.length; i++) {
+      const ax = B[i - 1].x, ay = B[i - 1].y, dx = B[i].x - ax, dy = B[i].y - ay;
+      const len2 = dx * dx + dy * dy;
+      const t = len2 ? Math.max(0, Math.min(1, ((p.x - ax) * dx + (p.y - ay) * dy) / len2)) : 0;
+      if (Math.hypot(p.x - (ax + t * dx), p.y - (ay + t * dy)) <= nearM) return true;
+    }
+    return false;
+  };
+  let total = 0, shared = 0;
+  let prev = proj.toXY({ lat: a[0][0], lon: a[0][1] });
+  for (let i = 1; i < a.length; i++) {
+    const cur = proj.toXY({ lat: a[i][0], lon: a[i][1] });
+    const len = Math.hypot(cur.x - prev.x, cur.y - prev.y);
+    total += len;
+    if (near({ x: (prev.x + cur.x) / 2, y: (prev.y + cur.y) / 2 })) shared += len;
+    prev = cur;
+  }
+  return total ? shared / total : 1;
+}
+
+/**
+ * The routes worth showing, best first: the main route, then candidates that
+ * head towards the meeting point, take at most `maxSlower` times as long, and
+ * differ from every route kept so far. Each item: { geometry, duration }.
+ */
+function pickBranches(main, candidates, { target, maxSlower = 1.6, maxSame = 0.8, max = 6 } = {}) {
+  const kept = [main];
+  const sorted = candidates.filter((c) => c?.geometry?.length > 1 && Number.isFinite(c.duration)).sort((a, b) => a.duration - b.duration);
+  for (const c of sorted) {
+    if (kept.length >= max) break;
+    if (c.duration > main.duration * maxSlower) continue;
+    if (!headsTowards(c.geometry, target)) continue;
+    if (kept.some((k) => overlapShare(c.geometry, k.geometry) > maxSame)) continue;
+    kept.push(c);
+  }
+  return kept;
+}
+
+__m["branches"] = { viaPoints, headsTowards, overlapShare, pickBranches };
 })();
 // ---- pois
 (() => {
@@ -2772,8 +2890,10 @@ const ATTRIBUTION = {
 const ll = (p) => `${Number(p.lat).toFixed(6)},${Number(p.lon).toFixed(6)}`;
 const lonlat = (p) => `${Number(p.lon).toFixed(6)},${Number(p.lat).toFixed(6)}`;
 
-function osrmRouteUrl(mode, from, to, { alternatives = false } = {}) {
-  return `${OSRM}/${OSRM_PROFILE[mode]}/route/v1/driving/${lonlat(from)};${lonlat(to)}?overview=full&geometries=geojson&steps=false${alternatives ? '&alternatives=2' : ''}`;
+/** A route, optionally through a `via` point, optionally with other good routes. */
+function osrmRouteUrl(mode, from, to, { alternatives = false, via = null } = {}) {
+  const pts = [from, ...(via ? [via] : []), to].map(lonlat).join(';');
+  return `${OSRM}/${OSRM_PROFILE[mode]}/route/v1/driving/${pts}?overview=full&geometries=geojson&steps=false${alternatives && !via ? '&alternatives=2' : ''}`;
 }
 
 function osrmTableUrl(mode, sources, destinations) {
@@ -2817,7 +2937,7 @@ const coords = (g) => (g?.coordinates || []).map(([lon, lat]) => [lat, lon]);
 
 /**
  * OSRM route → { mode, duration (s), distance (m), geometry: [[lat, lon]],
- * alternatives: [[[lat, lon]], ...] } (other good routes, if asked for).
+ * alternatives: [{ duration, distance, geometry }] } (other good routes, if asked for).
  */
 function normalizeOsrm(json, mode) {
   const r = json?.routes?.[0];
@@ -2826,7 +2946,7 @@ function normalizeOsrm(json, mode) {
     mode, provider: 'osrm',
     duration: Math.round(r.duration), distance: Math.round(r.distance),
     geometry: coords(r.geometry),
-    alternatives: json.routes.slice(1, 3).map((a) => coords(a.geometry)),
+    alternatives: json.routes.slice(1, 3).map((a) => ({ duration: Math.round(a.duration), distance: Math.round(a.distance), geometry: coords(a.geometry) })),
   };
 }
 
@@ -2930,19 +3050,23 @@ async function viaServerOr(path, direct, signal) {
 
 /**
  * Directions for one person. mode: transit | walk | bike | drive.
- * `alternatives` also returns other good road routes (for the route animation).
+ * For walk, bike and drive, `alternatives` also returns other good routes and
+ * `via` routes through a given point (both used by the route animation).
  */
-function getDirections(mode, from, to, { time, arriveBy = false, alternatives = false, signal } = {}) {
-  const alt = alternatives && mode !== 'transit';
-  const key = [mode, ll(from), ll(to), time || '', arriveBy, alt].join('|');
+function getDirections(mode, from, to, { time, arriveBy = false, alternatives = false, via = null, signal } = {}) {
+  const road = mode !== 'transit';
+  const viaPt = road && via ? via : null;
+  const alt = road && alternatives && !viaPt;
+  const key = [mode, ll(from), ll(to), time || '', arriveBy, alt, viaPt ? ll(viaPt) : ''].join('|');
   if (cache.has(key)) return cache.get(key);
   const q = new URLSearchParams({ mode, from: ll(from), to: ll(to) });
   if (time) q.set('time', new Date(time).toISOString());
   if (arriveBy) q.set('arriveBy', '1');
   if (alt) q.set('alt', '1');
+  if (viaPt) q.set('via', ll(viaPt));
   const promise = viaServerOr(`/api/directions?${q}`, async () => {
     if (mode === 'transit') return normalizeTransit(await getJson(transitUrl(from, to, { time, arriveBy }), { signal }), { arriveBy });
-    return normalizeOsrm(await getJson(osrmRouteUrl(mode, from, to, { alternatives: alt }), { signal }), mode);
+    return normalizeOsrm(await getJson(osrmRouteUrl(mode, from, to, { alternatives: alt, via: viaPt }), { signal }), mode);
   }, signal);
   cache.set(key, promise);
   promise.catch(() => cache.delete(key));
@@ -3863,17 +3987,43 @@ const api = {
 const TOWN_SPEED = { walk: 1.35, bike: 4.5, drive: 8.5 }; // m/s
 const noTimetables = () => Object.assign(new Error('No timetables in the test town'), { status: 404, friendly: true });
 
-async function directions(mode, from, to) {
+// Shortest-path trees are kept for the last few starting corners: a search
+// asks for several routes from the same people to the same meeting point.
+const trees = new Map();
+function treeFrom(node) {
+  if (!trees.has(node)) {
+    if (trees.size >= 12) trees.delete(trees.keys().next().value);
+    trees.set(node, dijkstra(town.graph, node));
+  }
+  return trees.get(node);
+}
+const pathTo = (tree, b) => {
+  const g = town.graph;
+  const pts = [];
+  for (let v = b; v !== -1; v = tree.parent[v]) pts.push([g.lat[v], g.lon[v]]);
+  return pts.reverse();
+};
+
+/** A route from one place to another, through `via` if given (like the real routing service). */
+async function directions(mode, from, to, { via } = {}) {
   ensure();
   if (mode === 'transit') throw noTimetables();
-  const g = town.graph;
   const a = nearestAddress(from.lat, from.lon).node, b = nearestAddress(to.lat, to.lon).node;
-  const { dist, parent } = dijkstra(g, a);
-  if (!Number.isFinite(dist[b])) throw Object.assign(new Error('No route found'), { status: 404 });
-  const geometry = [];
-  for (let v = b; v !== -1; v = parent[v]) geometry.push([g.lat[v], g.lon[v]]);
-  geometry.reverse();
-  return { mode, provider: 'test-town', distance: Math.round(dist[b]), duration: Math.round(dist[b] / TOWN_SPEED[mode] + (mode === 'drive' ? 90 : 0)), geometry, alternatives: [] };
+  let geometry, dist;
+  if (via) {
+    // From the start to the via corner, then the meeting point's tree read backwards (streets go both ways).
+    const v = nearestAddress(via.lat, via.lon).node;
+    const fromA = treeFrom(a), fromB = treeFrom(b);
+    if (!Number.isFinite(fromA.dist[v]) || !Number.isFinite(fromB.dist[v])) throw Object.assign(new Error('No route found'), { status: 404 });
+    dist = fromA.dist[v] + fromB.dist[v];
+    geometry = [...pathTo(fromA, v), ...pathTo(fromB, v).reverse().slice(1)];
+  } else {
+    const tree = treeFrom(a);
+    if (!Number.isFinite(tree.dist[b])) throw Object.assign(new Error('No route found'), { status: 404 });
+    dist = tree.dist[b];
+    geometry = pathTo(tree, b);
+  }
+  return { mode, provider: 'test-town', distance: Math.round(dist), duration: Math.round(dist / TOWN_SPEED[mode] + (mode === 'drive' ? 90 : 0)), geometry, alternatives: [] };
 }
 
 async function travelTimes(mode, sources, destinations) {
@@ -3884,7 +4034,7 @@ async function travelTimes(mode, sources, destinations) {
   const durations = [], distances = [];
   await new Promise((r) => setTimeout(r, 60));
   for (const src of sources) {
-    const { dist } = dijkstra(g, nearestAddress(src.lat, src.lon).node);
+    const { dist } = treeFrom(nearestAddress(src.lat, src.lon).node);
     distances.push(targets.map((t) => (Number.isFinite(dist[t]) ? Math.round(dist[t]) : null)));
     durations.push(targets.map((t) => (Number.isFinite(dist[t]) ? Math.round(dist[t] / TOWN_SPEED[mode] + (mode === 'drive' ? 90 : 0)) : null)));
   }
@@ -4355,6 +4505,7 @@ const { api } = __m["api"];
 const { searchAddress, reverseGeocode, currentPosition } = __m["geocode"];
 const { findMeetingPoint, estimateSeconds, SPEEDS } = __m["meetpoint"];
 const { GrowthAnimation } = __m["growth"];
+const { viaPoints, pickBranches } = __m["branches"];
 const { TABS, findPois, groupPois } = __m["pois"];
 const { ratingsSource, rateAll, thumbFor, detailsFor } = __m["rated"];
 const { openStatus, weekTable } = __m["hours"];
@@ -4996,29 +5147,47 @@ function cancelSearch() {
 const withTimeout = (promise, ms) => Promise.race([promise, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
 const routeMode = (r) => (r?.options ? 'transit' : r?.mode);
 
-/** One person's route as timed pieces for the animation (a straight dotted line if there is no route). */
-function trackFor(person, route, meet, estimate) {
+/**
+ * One person's routes for the race animation: their best route plus other
+ * routes that also head to the meeting point (a straight dotted line if there
+ * is no route at all). The best route is the one that arrives first.
+ */
+function trackFor(person, route, extra, meet, estimate) {
   const door = [person.lat, person.lon], end = [meet.lat, meet.lon];
-  if (!route) return { color: person.color, duration: estimate, pieces: [{ pts: [door, end], t0: 0, t1: estimate, walk: true }], alts: [] };
+  if (!route) return { color: person.color, best: 0, branches: [{ duration: estimate, pieces: [{ pts: [door, end], t0: 0, t1: estimate, walk: true }] }] };
   if (route.options) {
-    const o = route.options[0];
-    const start = Date.parse(o.start);
-    let t = 0;
-    const pieces = o.legs.filter((l) => l.geometry.length > 1).map((l) => {
-      const a = Date.parse(l.from.time);
-      const t0 = Number.isFinite(a) && Number.isFinite(start) ? Math.max(t, (a - start) / 1000) : t;
-      t = t0 + l.duration;
-      return { pts: l.geometry, t0, t1: t, walk: isWalkLeg(l) };
-    });
-    if (pieces.length) pieces.unshift({ pts: [door, pieces[0].pts[0]], t0: 0, t1: 0, walk: true });
-    return { color: person.color, duration: Math.max(t, o.duration), pieces, alts: route.options.slice(1).map((x) => x.legs.flatMap((l) => l.geometry)) };
+    // Public transport: each journey option is a branch, timed from the earliest departure,
+    // so the one that gets there first (the one shown in directions) wins.
+    const starts = route.options.map((o) => Date.parse(o.start)).filter(Number.isFinite);
+    const base = starts.length ? Math.min(...starts) : NaN;
+    const branches = route.options.map((o) => {
+      const off = Number.isFinite(base) && Number.isFinite(Date.parse(o.start)) ? (Date.parse(o.start) - base) / 1000 : 0;
+      let t = off;
+      const pieces = o.legs.filter((l) => l.geometry.length > 1).map((l) => {
+        const a = Date.parse(l.from.time);
+        const t0 = Number.isFinite(a) && Number.isFinite(base) ? Math.max(t, (a - base) / 1000) : t;
+        t = t0 + l.duration;
+        return { pts: l.geometry, t0, t1: t, walk: isWalkLeg(l) };
+      });
+      if (pieces.length) pieces.unshift({ pts: [door, pieces[0].pts[0]], t0: off, t1: off, walk: true });
+      const endAt = Date.parse(o.end);
+      return { pieces, duration: Number.isFinite(endAt) && Number.isFinite(base) ? Math.max(t, (endAt - base) / 1000) : Math.max(t, off + o.duration) };
+    }).filter((b) => b.pieces.length);
+    if (!branches.length) return trackFor(person, null, [], meet, estimate);
+    return { color: person.color, branches, best: 0 };
   }
-  return {
-    color: person.color,
-    duration: route.duration,
-    pieces: [{ pts: [door, ...route.geometry, end], t0: 0, t1: route.duration, walk: route.mode === 'walk' }],
-    alts: route.alternatives || [],
-  };
+  // Walk, bike, drive: the best route, the routing service's alternatives and
+  // routes through points to either side, keeping those that head to the meeting point.
+  const walk = person.mode === 'walk';
+  const branch = (r, minDuration = 0) => ({
+    geometry: r.geometry,
+    duration: Math.max(r.duration, minDuration),
+    pieces: [{ pts: [door, ...r.geometry, end], t0: 0, t1: Math.max(r.duration, minDuration), walk }],
+  });
+  const main = branch(route);
+  // Nothing may beat the best route: a side route can't be quicker in reality.
+  const others = [...(route.alternatives || []), ...(extra || [])].map((r) => branch(r, route.duration + 1));
+  return { color: person.color, branches: pickBranches(main, others, { target: meet }), best: 0 };
 }
 
 async function findPlaces({ replay = false } = {}) {
@@ -5041,7 +5210,7 @@ async function findPlaces({ replay = false } = {}) {
     if (ctrl.signal.aborted) return;
     const meet = meeting.meet;
     const search = state.search = {
-      people, meeting, meet, routes: prev?.routes || null,
+      people, meeting, meet, routes: prev?.routes || null, extras: prev?.extras || null,
       rule: prev?.rule || (state.settings.mode === 'total' ? 'total' : 'similar'),
       pois: prev?.pois || null, grouped: prev?.grouped || null, radius: prev?.radius || null, tab: prev?.tab || null,
       group: null, place: null, area: prev?.area || null, poiError: prev?.poiError || null, sort: prev?.sort, showRadius: prev?.showRadius,
@@ -5055,17 +5224,26 @@ async function findPlaces({ replay = false } = {}) {
         .catch(() => {});
     }
 
-    // 3. Everyone's real route there.
+    // 3. Everyone's real route there, plus other routes that also head there
+    //    (through points to either side), all asked for at once.
     if (!search.routes) {
-      setStatus('Getting everyone’s routes…');
-      search.routes = await Promise.all(people.map((p) => withTimeout(getDirections(p.mode, p, meet, { alternatives: true, signal: ctrl.signal }), 10000).catch(() => null)));
+      setStatus('Finding everyone’s routes…');
+      const ask = (p, opts, ms) => withTimeout(getDirections(p.mode, p, meet, { ...opts, signal: ctrl.signal }), ms).catch(() => null);
+      [search.routes, search.extras] = await Promise.all([
+        Promise.all(people.map((p) => ask(p, { alternatives: true }, 10000))),
+        Promise.all(people.map((p) => (p.mode === 'transit' ? []
+          : Promise.all(viaPoints(p, meet).map((via) => ask(p, { via }, 7000))).then((rs) => rs.filter(Boolean))))),
+      ]);
       if (ctrl.signal.aborted) return;
     }
-    const tracks = people.map((p, i) => trackFor(p, search.routes[i], meet, meeting.times[i]));
+    const tracks = people.map((p, i) => trackFor(p, search.routes[i], search.extras?.[i], meet, meeting.times[i]));
     anim = new GrowthAnimation(map, tracks);
+    const tried = anim.branchCount;
     const done = await anim.play({
       duration: ANIM_MS[state.settings.speed] || ANIM_MS.normal,
-      onProgress: (sec) => setStatus(`Everyone on their way · ${fmtTime(Math.max(1, Math.round(sec / 60)))}`, { skip: true }),
+      onProgress: (sec, total) => setStatus(sec >= total
+        ? 'Picked the quickest routes'
+        : `Racing ${tried} routes · ${fmtTime(Math.max(1, Math.round(sec / 60)))}`, { skip: sec < total }),
     });
     if (!done || ctrl.signal.aborted) return;
 

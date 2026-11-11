@@ -887,17 +887,43 @@ export const api = {
 const TOWN_SPEED = { walk: 1.35, bike: 4.5, drive: 8.5 }; // m/s
 const noTimetables = () => Object.assign(new Error('No timetables in the test town'), { status: 404, friendly: true });
 
-export async function directions(mode, from, to) {
+// Shortest-path trees are kept for the last few starting corners: a search
+// asks for several routes from the same people to the same meeting point.
+const trees = new Map();
+function treeFrom(node) {
+  if (!trees.has(node)) {
+    if (trees.size >= 12) trees.delete(trees.keys().next().value);
+    trees.set(node, dijkstra(town.graph, node));
+  }
+  return trees.get(node);
+}
+const pathTo = (tree, b) => {
+  const g = town.graph;
+  const pts = [];
+  for (let v = b; v !== -1; v = tree.parent[v]) pts.push([g.lat[v], g.lon[v]]);
+  return pts.reverse();
+};
+
+/** A route from one place to another, through `via` if given (like the real routing service). */
+export async function directions(mode, from, to, { via } = {}) {
   ensure();
   if (mode === 'transit') throw noTimetables();
-  const g = town.graph;
   const a = nearestAddress(from.lat, from.lon).node, b = nearestAddress(to.lat, to.lon).node;
-  const { dist, parent } = dijkstra(g, a);
-  if (!Number.isFinite(dist[b])) throw Object.assign(new Error('No route found'), { status: 404 });
-  const geometry = [];
-  for (let v = b; v !== -1; v = parent[v]) geometry.push([g.lat[v], g.lon[v]]);
-  geometry.reverse();
-  return { mode, provider: 'test-town', distance: Math.round(dist[b]), duration: Math.round(dist[b] / TOWN_SPEED[mode] + (mode === 'drive' ? 90 : 0)), geometry, alternatives: [] };
+  let geometry, dist;
+  if (via) {
+    // From the start to the via corner, then the meeting point's tree read backwards (streets go both ways).
+    const v = nearestAddress(via.lat, via.lon).node;
+    const fromA = treeFrom(a), fromB = treeFrom(b);
+    if (!Number.isFinite(fromA.dist[v]) || !Number.isFinite(fromB.dist[v])) throw Object.assign(new Error('No route found'), { status: 404 });
+    dist = fromA.dist[v] + fromB.dist[v];
+    geometry = [...pathTo(fromA, v), ...pathTo(fromB, v).reverse().slice(1)];
+  } else {
+    const tree = treeFrom(a);
+    if (!Number.isFinite(tree.dist[b])) throw Object.assign(new Error('No route found'), { status: 404 });
+    dist = tree.dist[b];
+    geometry = pathTo(tree, b);
+  }
+  return { mode, provider: 'test-town', distance: Math.round(dist), duration: Math.round(dist / TOWN_SPEED[mode] + (mode === 'drive' ? 90 : 0)), geometry, alternatives: [] };
 }
 
 export async function travelTimes(mode, sources, destinations) {
@@ -908,7 +934,7 @@ export async function travelTimes(mode, sources, destinations) {
   const durations = [], distances = [];
   await new Promise((r) => setTimeout(r, 60));
   for (const src of sources) {
-    const { dist } = dijkstra(g, nearestAddress(src.lat, src.lon).node);
+    const { dist } = treeFrom(nearestAddress(src.lat, src.lon).node);
     distances.push(targets.map((t) => (Number.isFinite(dist[t]) ? Math.round(dist[t]) : null)));
     durations.push(targets.map((t) => (Number.isFinite(dist[t]) ? Math.round(dist[t] / TOWN_SPEED[mode] + (mode === 'drive' ? 90 : 0)) : null)));
   }

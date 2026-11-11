@@ -4,6 +4,7 @@ import { api } from './api.js';
 import { searchAddress, reverseGeocode, currentPosition } from './geocode.js';
 import { findMeetingPoint, estimateSeconds, SPEEDS } from './meetpoint.js';
 import { GrowthAnimation } from './growth.js';
+import { viaPoints, pickBranches } from './branches.js';
 import { TABS, findPois, groupPois } from './pois.js';
 import { ratingsSource, rateAll, thumbFor, detailsFor } from './rated.js';
 import { openStatus, weekTable } from './hours.js';
@@ -747,29 +748,47 @@ function cancelSearch() {
 const withTimeout = (promise, ms) => Promise.race([promise, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
 const routeMode = (r) => (r?.options ? 'transit' : r?.mode);
 
-/** One person's route as timed pieces for the animation (a straight dotted line if there is no route). */
-function trackFor(person, route, meet, estimate) {
+/**
+ * One person's routes for the race animation: their best route plus other
+ * routes that also head to the meeting point (a straight dotted line if there
+ * is no route at all). The best route is the one that arrives first.
+ */
+function trackFor(person, route, extra, meet, estimate) {
   const door = [person.lat, person.lon], end = [meet.lat, meet.lon];
-  if (!route) return { color: person.color, duration: estimate, pieces: [{ pts: [door, end], t0: 0, t1: estimate, walk: true }], alts: [] };
+  if (!route) return { color: person.color, best: 0, branches: [{ duration: estimate, pieces: [{ pts: [door, end], t0: 0, t1: estimate, walk: true }] }] };
   if (route.options) {
-    const o = route.options[0];
-    const start = Date.parse(o.start);
-    let t = 0;
-    const pieces = o.legs.filter((l) => l.geometry.length > 1).map((l) => {
-      const a = Date.parse(l.from.time);
-      const t0 = Number.isFinite(a) && Number.isFinite(start) ? Math.max(t, (a - start) / 1000) : t;
-      t = t0 + l.duration;
-      return { pts: l.geometry, t0, t1: t, walk: isWalkLeg(l) };
-    });
-    if (pieces.length) pieces.unshift({ pts: [door, pieces[0].pts[0]], t0: 0, t1: 0, walk: true });
-    return { color: person.color, duration: Math.max(t, o.duration), pieces, alts: route.options.slice(1).map((x) => x.legs.flatMap((l) => l.geometry)) };
+    // Public transport: each journey option is a branch, timed from the earliest departure,
+    // so the one that gets there first (the one shown in directions) wins.
+    const starts = route.options.map((o) => Date.parse(o.start)).filter(Number.isFinite);
+    const base = starts.length ? Math.min(...starts) : NaN;
+    const branches = route.options.map((o) => {
+      const off = Number.isFinite(base) && Number.isFinite(Date.parse(o.start)) ? (Date.parse(o.start) - base) / 1000 : 0;
+      let t = off;
+      const pieces = o.legs.filter((l) => l.geometry.length > 1).map((l) => {
+        const a = Date.parse(l.from.time);
+        const t0 = Number.isFinite(a) && Number.isFinite(base) ? Math.max(t, (a - base) / 1000) : t;
+        t = t0 + l.duration;
+        return { pts: l.geometry, t0, t1: t, walk: isWalkLeg(l) };
+      });
+      if (pieces.length) pieces.unshift({ pts: [door, pieces[0].pts[0]], t0: off, t1: off, walk: true });
+      const endAt = Date.parse(o.end);
+      return { pieces, duration: Number.isFinite(endAt) && Number.isFinite(base) ? Math.max(t, (endAt - base) / 1000) : Math.max(t, off + o.duration) };
+    }).filter((b) => b.pieces.length);
+    if (!branches.length) return trackFor(person, null, [], meet, estimate);
+    return { color: person.color, branches, best: 0 };
   }
-  return {
-    color: person.color,
-    duration: route.duration,
-    pieces: [{ pts: [door, ...route.geometry, end], t0: 0, t1: route.duration, walk: route.mode === 'walk' }],
-    alts: route.alternatives || [],
-  };
+  // Walk, bike, drive: the best route, the routing service's alternatives and
+  // routes through points to either side, keeping those that head to the meeting point.
+  const walk = person.mode === 'walk';
+  const branch = (r, minDuration = 0) => ({
+    geometry: r.geometry,
+    duration: Math.max(r.duration, minDuration),
+    pieces: [{ pts: [door, ...r.geometry, end], t0: 0, t1: Math.max(r.duration, minDuration), walk }],
+  });
+  const main = branch(route);
+  // Nothing may beat the best route: a side route can't be quicker in reality.
+  const others = [...(route.alternatives || []), ...(extra || [])].map((r) => branch(r, route.duration + 1));
+  return { color: person.color, branches: pickBranches(main, others, { target: meet }), best: 0 };
 }
 
 async function findPlaces({ replay = false } = {}) {
@@ -792,7 +811,7 @@ async function findPlaces({ replay = false } = {}) {
     if (ctrl.signal.aborted) return;
     const meet = meeting.meet;
     const search = state.search = {
-      people, meeting, meet, routes: prev?.routes || null,
+      people, meeting, meet, routes: prev?.routes || null, extras: prev?.extras || null,
       rule: prev?.rule || (state.settings.mode === 'total' ? 'total' : 'similar'),
       pois: prev?.pois || null, grouped: prev?.grouped || null, radius: prev?.radius || null, tab: prev?.tab || null,
       group: null, place: null, area: prev?.area || null, poiError: prev?.poiError || null, sort: prev?.sort, showRadius: prev?.showRadius,
@@ -806,17 +825,26 @@ async function findPlaces({ replay = false } = {}) {
         .catch(() => {});
     }
 
-    // 3. Everyone's real route there.
+    // 3. Everyone's real route there, plus other routes that also head there
+    //    (through points to either side), all asked for at once.
     if (!search.routes) {
-      setStatus('Getting everyone’s routes…');
-      search.routes = await Promise.all(people.map((p) => withTimeout(getDirections(p.mode, p, meet, { alternatives: true, signal: ctrl.signal }), 10000).catch(() => null)));
+      setStatus('Finding everyone’s routes…');
+      const ask = (p, opts, ms) => withTimeout(getDirections(p.mode, p, meet, { ...opts, signal: ctrl.signal }), ms).catch(() => null);
+      [search.routes, search.extras] = await Promise.all([
+        Promise.all(people.map((p) => ask(p, { alternatives: true }, 10000))),
+        Promise.all(people.map((p) => (p.mode === 'transit' ? []
+          : Promise.all(viaPoints(p, meet).map((via) => ask(p, { via }, 7000))).then((rs) => rs.filter(Boolean))))),
+      ]);
       if (ctrl.signal.aborted) return;
     }
-    const tracks = people.map((p, i) => trackFor(p, search.routes[i], meet, meeting.times[i]));
+    const tracks = people.map((p, i) => trackFor(p, search.routes[i], search.extras?.[i], meet, meeting.times[i]));
     anim = new GrowthAnimation(map, tracks);
+    const tried = anim.branchCount;
     const done = await anim.play({
       duration: ANIM_MS[state.settings.speed] || ANIM_MS.normal,
-      onProgress: (sec) => setStatus(`Everyone on their way · ${fmtTime(Math.max(1, Math.round(sec / 60)))}`, { skip: true }),
+      onProgress: (sec, total) => setStatus(sec >= total
+        ? 'Picked the quickest routes'
+        : `Racing ${tried} routes · ${fmtTime(Math.max(1, Math.round(sec / 60)))}`, { skip: sec < total }),
     });
     if (!done || ctrl.signal.aborted) return;
 

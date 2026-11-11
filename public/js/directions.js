@@ -26,8 +26,10 @@ export const ATTRIBUTION = {
 const ll = (p) => `${Number(p.lat).toFixed(6)},${Number(p.lon).toFixed(6)}`;
 const lonlat = (p) => `${Number(p.lon).toFixed(6)},${Number(p.lat).toFixed(6)}`;
 
-export function osrmRouteUrl(mode, from, to, { alternatives = false } = {}) {
-  return `${OSRM}/${OSRM_PROFILE[mode]}/route/v1/driving/${lonlat(from)};${lonlat(to)}?overview=full&geometries=geojson&steps=false${alternatives ? '&alternatives=2' : ''}`;
+/** A route, optionally through a `via` point, optionally with other good routes. */
+export function osrmRouteUrl(mode, from, to, { alternatives = false, via = null } = {}) {
+  const pts = [from, ...(via ? [via] : []), to].map(lonlat).join(';');
+  return `${OSRM}/${OSRM_PROFILE[mode]}/route/v1/driving/${pts}?overview=full&geometries=geojson&steps=false${alternatives && !via ? '&alternatives=2' : ''}`;
 }
 
 export function osrmTableUrl(mode, sources, destinations) {
@@ -71,7 +73,7 @@ const coords = (g) => (g?.coordinates || []).map(([lon, lat]) => [lat, lon]);
 
 /**
  * OSRM route → { mode, duration (s), distance (m), geometry: [[lat, lon]],
- * alternatives: [[[lat, lon]], ...] } (other good routes, if asked for).
+ * alternatives: [{ duration, distance, geometry }] } (other good routes, if asked for).
  */
 export function normalizeOsrm(json, mode) {
   const r = json?.routes?.[0];
@@ -80,7 +82,7 @@ export function normalizeOsrm(json, mode) {
     mode, provider: 'osrm',
     duration: Math.round(r.duration), distance: Math.round(r.distance),
     geometry: coords(r.geometry),
-    alternatives: json.routes.slice(1, 3).map((a) => coords(a.geometry)),
+    alternatives: json.routes.slice(1, 3).map((a) => ({ duration: Math.round(a.duration), distance: Math.round(a.distance), geometry: coords(a.geometry) })),
   };
 }
 
@@ -184,19 +186,23 @@ async function viaServerOr(path, direct, signal) {
 
 /**
  * Directions for one person. mode: transit | walk | bike | drive.
- * `alternatives` also returns other good road routes (for the route animation).
+ * For walk, bike and drive, `alternatives` also returns other good routes and
+ * `via` routes through a given point (both used by the route animation).
  */
-export function getDirections(mode, from, to, { time, arriveBy = false, alternatives = false, signal } = {}) {
-  const alt = alternatives && mode !== 'transit';
-  const key = [mode, ll(from), ll(to), time || '', arriveBy, alt].join('|');
+export function getDirections(mode, from, to, { time, arriveBy = false, alternatives = false, via = null, signal } = {}) {
+  const road = mode !== 'transit';
+  const viaPt = road && via ? via : null;
+  const alt = road && alternatives && !viaPt;
+  const key = [mode, ll(from), ll(to), time || '', arriveBy, alt, viaPt ? ll(viaPt) : ''].join('|');
   if (cache.has(key)) return cache.get(key);
   const q = new URLSearchParams({ mode, from: ll(from), to: ll(to) });
   if (time) q.set('time', new Date(time).toISOString());
   if (arriveBy) q.set('arriveBy', '1');
   if (alt) q.set('alt', '1');
+  if (viaPt) q.set('via', ll(viaPt));
   const promise = viaServerOr(`/api/directions?${q}`, async () => {
     if (mode === 'transit') return normalizeTransit(await getJson(transitUrl(from, to, { time, arriveBy }), { signal }), { arriveBy });
-    return normalizeOsrm(await getJson(osrmRouteUrl(mode, from, to, { alternatives: alt }), { signal }), mode);
+    return normalizeOsrm(await getJson(osrmRouteUrl(mode, from, to, { alternatives: alt, via: viaPt }), { signal }), mode);
   }, signal);
   cache.set(key, promise);
   promise.catch(() => cache.delete(key));

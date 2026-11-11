@@ -38,9 +38,14 @@ test('travel-time table: sources × destinations, rounded, with spots snapped to
 test('route alternatives come back as extra lines', () => {
   const r = normalizeOsrm(fixture('osrm-route-alternatives.json'), 'walk');
   assert.ok(r.alternatives.length >= 1);
-  assert.ok(r.alternatives.every((g) => g.length > 5 && g.every(inLondon)));
+  assert.ok(r.alternatives.every((a) => a.geometry.length > 5 && a.geometry.every(inLondon)));
+  assert.ok(r.alternatives.every((a) => a.duration > 1500 && a.distance > 2000), 'each alternative keeps its time and length');
   assert.match(osrmRouteUrl('walk', { lat: 51.5, lon: -0.1 }, { lat: 51.51, lon: -0.09 }, { alternatives: true }), /alternatives=2/);
   assert.doesNotMatch(osrmRouteUrl('walk', { lat: 51.5, lon: -0.1 }, { lat: 51.51, lon: -0.09 }), /alternatives/);
+  // A route through a point to one side: three coordinates, no alternatives.
+  const via = osrmRouteUrl('bike', { lat: 51.5, lon: -0.1 }, { lat: 51.51, lon: -0.09 }, { alternatives: true, via: { lat: 51.506, lon: -0.098 } });
+  assert.match(via, /driving\/-0\.100000,51\.500000;-0\.098000,51\.506000;-0\.090000,51\.510000\?/);
+  assert.doesNotMatch(via, /alternatives/);
 });
 
 test('simplified routes keep their shape with far fewer points', () => {
@@ -118,6 +123,10 @@ test('server relays directions with caching, a daily transit cap and validation'
 
     const alt = await get('/api/directions?mode=walk&from=51.5072,-0.1276&to=51.5155,-0.0877&alt=1');
     assert.ok(alt.body.alternatives.length >= 1, 'alternatives on request');
+    const through = await get('/api/directions?mode=walk&from=51.5072,-0.1276&to=51.5155,-0.0877&via=51.512,-0.11');
+    assert.equal(through.status, 200);
+    assert.match(calls.at(-1).url, /-0\.127600,51\.507200;-0\.110000,51\.512000;-0\.087700,51\.515500/, 'route through the given point');
+    assert.equal((await get('/api/directions?mode=walk&from=51.5072,-0.1276&to=51.5155,-0.0877&via=999,1')).status, 400);
     const raw = fixture('osrm-route-alternatives.json').routes[0].geometry.coordinates.length;
     assert.ok(alt.body.geometry.length < raw, 'geometry is slimmed down before it is sent');
 
@@ -141,6 +150,42 @@ test('server relays directions with caching, a daily transit cap and validation'
     assert.equal((await get('/api/directions?mode=fly&from=1,1&to=2,2')).status, 400);
     assert.equal((await get('/api/directions?mode=walk&from=999,1&to=2,2')).status, 400);
     assert.equal((await get('/api/traveltimes?mode=transit&from=1,1&to=2,2')).status, 400);
+  } finally {
+    globalThis.fetch = realFetch;
+    await new Promise((r) => server.close(r));
+    fs.rmSync(process.env.DATA_FILE, { force: true });
+  }
+});
+
+test('server: a stalled routing request is sent again and the first answer wins; transit never is', async () => {
+  process.env.DATA_FILE = path.join(os.tmpdir(), `meet-hedge-test-${Date.now()}.json`);
+  const sent = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    const u = String(url);
+    sent.push(u);
+    const n = sent.filter((x) => x === u).length;
+    const body = u.includes('transitous') ? fixture('transitous-plan.json') : fixture('osrm-route.json');
+    // The first two copies of a road request stall (until aborted); the third answers.
+    if (!u.includes('transitous') && n <= 2) {
+      await new Promise((resolve, reject) => init.signal.addEventListener('abort', () => reject(new Error('aborted'))));
+    }
+    if (u.includes('transitous')) await new Promise((r) => setTimeout(r, 1300));
+    return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  const { server } = await import(`../../server.js?hedge-${Date.now()}`);
+  await new Promise((r) => server.listen(0, r));
+  const base = `http://localhost:${server.address().port}`;
+  try {
+    const t0 = Date.now();
+    const res = await realFetch(`${base}/api/directions?mode=bike&from=51.52,-0.15&to=51.50,-0.12`);
+    const took = Date.now() - t0;
+    assert.equal(res.status, 200);
+    assert.equal(sent.filter((u) => u.includes('routed-bike')).length, 3, 'sent at 0 s, 1 s and 3.5 s');
+    assert.ok(took >= 3400 && took < 5000, `answered after ${took} ms instead of stalling`);
+    const tr = await realFetch(`${base}/api/directions?mode=transit&from=51.52,-0.15&to=51.50,-0.12`);
+    assert.equal(tr.status, 200);
+    assert.equal(sent.filter((u) => u.includes('transitous')).length, 1, 'public transport is asked once, even when slow');
   } finally {
     globalThis.fetch = realFetch;
     await new Promise((r) => server.close(r));
