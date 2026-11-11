@@ -215,6 +215,8 @@ try {
   await page.waitForSelector('#history-list [data-hid]');
   await shot('09-menu');
   await page.click('#btn-signin');
+  // The form puts the cursor in the email box just after opening; wait for that before typing.
+  await page.waitForFunction(() => document.activeElement?.id === 'auth-email');
   await page.fill('#auth-name', 'Alex');
   await page.fill('#auth-email', 'alex@example.com');
   await page.fill('#auth-password', 'secret123');
@@ -245,6 +247,12 @@ try {
   assert.equal(await page.locator('.panel .trip').count(), 2, 'two travellers');
   await page.waitForTimeout(600);
   await shot('11-two-people-results');
+  // Changing the meeting rule in the menu looks for a spot again straight away.
+  assert.match(await page.textContent('.result-head .eyebrow'), /Similar travel times · \d/);
+  await page.click('#btn-menu');
+  await page.click('#set-mode [data-value=total]');
+  await page.waitForSelector('#drawer', { state: 'hidden' });
+  await page.waitForFunction(() => /Least total travel/.test(document.querySelector('.panel:not(.away) .result-head .eyebrow')?.textContent || ''), null, { timeout: 30000 });
 
   // Mobile layout check
   await page.setViewportSize({ width: 390, height: 844 });

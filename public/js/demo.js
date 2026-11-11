@@ -921,7 +921,8 @@ export function sampleGroup() {
   const at = (x, y) => { const ll = toLL(x, y); const a = nearestAddress(ll.lat, ll.lon); return { address: fmtAddress(a), lat: a.lat, lon: a.lon }; };
   return {
     home: { ...at(-3600, 2600), mode: 'walk' },
-    friends: [['Sam', 3400, 3300, 'bike'], ['Priya', 2600, -2800, 'walk'], ['Leo', -2800, -2400, 'drive']].map(([nickname, x, y, mode]) => ({ ...at(x, y), nickname, mode })),
+    // Everyone walks, so similar travel times are possible; change anyone's mode with their pill.
+    friends: [['Sam', 3400, 3300, 'walk'], ['Priya', 2600, -2800, 'walk'], ['Leo', -2800, -2400, 'walk']].map(([nickname, x, y, mode]) => ({ ...at(x, y), nickname, mode })),
   };
 }
 

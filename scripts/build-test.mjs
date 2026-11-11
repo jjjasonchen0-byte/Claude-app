@@ -41,7 +41,7 @@ for (const [from, label] of [
   ['      <a class="btn btn-tinted" href="${links.apple}" target="_blank" rel="noopener">Apple Maps</a>\n', 'apple maps button'],
 ]) app = replaceOnce(app, from, '', label);
 // The test town has no timetables, so start on walking directions.
-app = replaceOnce(app, "const DEFAULT_SETTINGS = { mode: 'fair', travel: 'transit',", "const DEFAULT_SETTINGS = { mode: 'fair', travel: 'walk',", 'default travel mode');
+app = replaceOnce(app, "const DEFAULT_SETTINGS = { mode: 'similar', travel: 'transit',", "const DEFAULT_SETTINGS = { mode: 'similar', travel: 'walk',", 'default travel mode');
 // Directions in the test town come from its own streets, not the real routing services.
 app = app.replace(/ {2}map\.attributionControl\.addAttribution\(`Routes[^\n]*\n/, '');
 app = app.replace(/ {2}const handoff = `[^\n]*\n/, "  const handoff = '';\n");

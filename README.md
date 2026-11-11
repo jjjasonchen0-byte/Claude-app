@@ -4,7 +4,7 @@ Find somewhere that's roughly as close for everyone in a group, with a press of 
 
 1. **Enter where you're starting from.** No account is needed. The map centres on your address.
 2. **Add the people you're meeting**, each with an optional name. You can type an address, tap the map, or drag a dot. Everyone has their own **way of travelling** (public transport, walk, bike or drive): tap the pill next to a name to change it. It's remembered.
-3. Press **Find a place to meet.** Meet asks a routing service for real travel times from everyone to a grid of spots around the group, keeps the best one and zooms in around it, so the meeting point is fair in **travel time**: someone driving is asked to go further than someone walking. For public transport the two best spots are checked against real timetables. Then everyone's real route grows on the map on one shared clock, with a dot showing where each person is, until they all arrive.
+3. Press **Find a place to meet.** Meet asks a routing service for real travel times from everyone to a grid of spots around the group, keeps the best one and zooms in around it, so everyone's **travel times are as similar as possible**: someone driving is asked to go further than someone walking. For public transport the two best spots are checked against real timetables. Then everyone's real route grows on the map on one shared clock, with a dot showing where each person is, until they all arrive.
 4. A panel lists what's nearby in tabs (Food, Drinks, Fun, Culture, Outdoors, Shopping). Each tab has listings with counts, e.g. `Italian 4`.
 5. Pick a listing to see the places **with a photo, rating, opening status and address**, and as numbered pins on the map. Sort by nearest, fairest for everyone, or top rated.
 6. Open a place for a **full page like a search result**: photos (tap to view full screen), rating with a breakdown, reviews, opening hours, phone, website and menu, what it offers (outdoor seating, takeaway, step-free…), and **real directions for everyone, each in their own way of travelling**: public transport (lines in their official colours, times, changes, walking legs, with *Leave now* or *Arrive by*), walking, cycling or driving.
@@ -91,8 +91,8 @@ The browser asks the Meet server for directions (`/api/directions`, `/api/travel
 
 - Leave people out of a search without deleting them. Rename them, and undo a delete.
 - Address suggestions are biased towards your starting point and work with the keyboard.
-- **Two ways to pick the meeting point** (in the menu):
-  - *Fairest*: the longest trip is as short as possible.
+- **Two ways to pick the meeting point** (in the menu; changing it looks again straight away):
+  - *Similar times* (default): everyone's trip takes about as long. To even things out, the longest trip may grow by up to 30% (or 5 minutes) over the shortest it could be. People travelling very differently (one walking, one driving) can't always be evened out; the results show the range, e.g. "35–42 min".
   - *Least travel*: everyone's trips add up to the least overall.
 - Travel time and distance for each person in their own mode. The menu sets the default mode for people you add.
 - Opening hours read from OpenStreetMap: "Open · Closes 22:00", "Closes soon", "Closed · Opens Tue 09:00", and a weekly table.

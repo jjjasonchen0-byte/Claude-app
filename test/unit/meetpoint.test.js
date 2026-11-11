@@ -39,16 +39,32 @@ const london = [
   { lat: 51.4645, lon: -0.1302, mode: 'walk' },
 ];
 
-test('three walkers meet where the longest walk is as short as possible', async () => {
+const spread = (t) => Math.max(...t) - Math.min(...t);
+
+test('three walkers get similar walks, none much longer than it has to be', async () => {
   const { travelTimes, calls } = fakeRouter();
   const r = await findMeetingPoint(london, { travelTimes });
   const opt = bruteForce(london);
   const got = Math.max(...r.times);
-  assert.ok(got <= opt * 1.03, `longest trip ${got.toFixed(0)} s vs best ${opt.toFixed(0)} s`);
-  assert.ok(Math.max(...r.times) - Math.min(...r.times) < 0.15 * got, 'trips are balanced');
+  assert.ok(got <= opt * 1.3, `longest trip ${got.toFixed(0)} s vs shortest possible ${opt.toFixed(0)} s`);
+  assert.ok(spread(r.times) < 0.1 * got, `trips within ${spread(r.times).toFixed(0)} s of each other`);
   assert.equal(r.approx, false);
   assert.ok(calls.length <= 4, `only ${calls.length} small requests`);
   assert.ok(calls.every((c) => c.m <= 80));
+});
+
+test('similar times: two far apart and one in between all travel about as long', async () => {
+  // The "shortest longest trip" spot is halfway between the two far apart,
+  // where the third has a much shorter trip. Similar times moves the spot so
+  // the third travels about as long as the others.
+  const people = [{ lat: 51.50, lon: -0.18, mode: 'walk' }, { lat: 51.50, lon: -0.10, mode: 'walk' }, { lat: 51.509, lon: -0.14, mode: 'walk' }];
+  const { travelTimes } = fakeRouter();
+  const r = await findMeetingPoint(people, { travelTimes });
+  const total = await findMeetingPoint(people, { travelTimes, rule: 'total' });
+  const opt = bruteForce(people);
+  assert.ok(spread(r.times) < 0.2 * Math.max(...r.times), `times ${r.times.map((t) => Math.round(t / 60))} min`);
+  assert.ok(Math.max(...r.times) <= opt * 1.31, 'the longest trip grows by at most about 30%');
+  assert.ok(spread(total.times) > 2 * spread(r.times), '"least travel" leaves times much less even');
 });
 
 test('a driver goes further so a walker does not have to', async () => {
@@ -61,13 +77,13 @@ test('a driver goes further so a walker does not have to', async () => {
   assert.ok(Math.abs(r.times[0] - r.times[1]) < 0.2 * Math.max(...r.times), 'similar travel times');
 });
 
-test('"least total travel" sides with the group, "fairest" with the one far away', async () => {
+test('"least total travel" sides with the group, "similar times" with the one far away', async () => {
   const people = [
     { lat: 51.50, lon: -0.10, mode: 'walk' }, { lat: 51.501, lon: -0.101, mode: 'walk' },
     { lat: 51.502, lon: -0.099, mode: 'walk' }, { lat: 51.50, lon: -0.02, mode: 'walk' },
   ];
   const { travelTimes } = fakeRouter();
-  const fair = await findMeetingPoint(people, { travelTimes, rule: 'fair' });
+  const fair = await findMeetingPoint(people, { travelTimes, rule: 'similar' });
   const total = await findMeetingPoint(people, { travelTimes, rule: 'total' });
   assert.ok(total.meet.lon < fair.meet.lon - 0.02, 'total stays near the three friends');
   const sum = total.times.reduce((a, b) => a + b, 0);
@@ -92,7 +108,7 @@ test('without a routing service it still picks a sensible spot, marked as an est
   const r = await findMeetingPoint(london, { travelTimes });
   assert.equal(r.approx, true);
   assert.deepEqual(r.real, [false, false, false]);
-  assert.ok(Math.max(...r.times) <= bruteForce(london) * 1.15);
+  assert.ok(Math.max(...r.times) <= bruteForce(london) * 1.35);
 });
 
 test('the spot snapped onto a road by the routing service becomes the meeting point', async () => {

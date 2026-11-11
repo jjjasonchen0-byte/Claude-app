@@ -17,7 +17,7 @@ const COLORS = ['#007aff', '#ff9500', '#34c759', '#af52de', '#ff3b30', '#30b0c7'
 const ANIM_MS = { slow: 8000, normal: 5000, fast: 2800 };
 const RADII = [500, 1000, 2000, 5000];
 const PRICE = { 'Cheap Eats': '£', 'Mid Range': '££', 'Fine Dining': '£££' };
-const DEFAULT_SETTINGS = { mode: 'fair', travel: 'transit', speed: 'normal', theme: 'auto' };
+const DEFAULT_SETTINGS = { mode: 'similar', travel: 'transit', speed: 'normal', theme: 'auto' };
 const SHEET_DEFAULT = { people: 'mid', results: 'mid', group: 'mid', place: 'mid', share: 'full' };
 
 // Category icons: Settings-style coloured tiles with simple line glyphs.
@@ -180,6 +180,7 @@ function onUser(user) {
   state.user = user;
   state.places = user.places || [];
   state.settings = { ...DEFAULT_SETTINGS, ...(user.settings || {}) };
+  if (state.settings.mode !== 'total') state.settings.mode = 'similar'; // "fair" from before is now "similar"
   applyTheme();
   if (!user.home) showHomeScreen(false);
   else enterMain();
@@ -785,13 +786,14 @@ async function findPlaces({ replay = false } = {}) {
   try {
     // 1. The fairest spot, from real travel times (a few small requests).
     const meeting = prev ? prev.meeting : await findMeetingPoint(people, {
-      rule: state.settings.mode, travelTimes: getTravelTimes, directions: getDirections, signal: ctrl.signal,
+      rule: state.settings.mode === 'total' ? 'total' : 'similar', travelTimes: getTravelTimes, directions: getDirections, signal: ctrl.signal,
       onStatus: (t) => setStatus(t),
     });
     if (ctrl.signal.aborted) return;
     const meet = meeting.meet;
     const search = state.search = {
       people, meeting, meet, routes: prev?.routes || null,
+      rule: prev?.rule || (state.settings.mode === 'total' ? 'total' : 'similar'),
       pois: prev?.pois || null, grouped: prev?.grouped || null, radius: prev?.radius || null, tab: prev?.tab || null,
       group: null, place: null, area: prev?.area || null, poiError: prev?.poiError || null, sort: prev?.sort, showRadius: prev?.showRadius,
     };
@@ -950,6 +952,14 @@ function loadMeetTimes() {
 
 // ------------------------------------------------ results view
 
+/** " · 35–42 min": the shortest and longest trip to the meeting point. */
+function tripRange(s) {
+  const t = s.people.map((p, i) => s.meetTimes?.values[i] ?? s.meeting.times[i]).filter((x) => x != null);
+  if (!t.length) return '';
+  const lo = Math.max(1, Math.round(Math.min(...t) / 60)), hi = Math.max(1, Math.round(Math.max(...t) / 60));
+  return lo === hi ? ` · ${fmtTime(hi)} each` : ` · ${hi < 60 ? `${lo}–${hi} min` : `${fmtTime(lo)} – ${fmtTime(hi)}`}`;
+}
+
 function renderResults() {
   const s = state.search;
   loadMeetTimes();
@@ -976,7 +986,7 @@ function renderResults() {
     <div class="result-head">
       <span class="meet-badge"><i></i></span>
       <div style="min-width:0">
-        <div class="eyebrow">${state.settings.mode === 'fair' ? 'Fairest meeting point' : 'Least total travel'}</div>
+        <div class="eyebrow">${s.rule === 'total' ? 'Least total travel' : 'Similar travel times'}${tripRange(s)}</div>
         <h2>${esc(s.area ? shortAddr(s.area) : 'Your meeting point')}</h2>
       </div>
     </div>
@@ -1758,9 +1768,9 @@ function syncSettingsUI() {
   for (const [id, key] of [['#set-mode', 'mode'], ['#set-travel', 'travel'], ['#set-speed', 'speed'], ['#set-theme', 'theme']]) {
     for (const b of $$('.seg', $(id))) b.classList.toggle('active', b.dataset.value === state.settings[key]);
   }
-  $('#mode-hint').textContent = state.settings.mode === 'fair'
-    ? 'The longest trip is as short as possible.'
-    : 'Everyone’s trips add up to the least travel.';
+  $('#mode-hint').textContent = state.settings.mode === 'total'
+    ? 'Everyone’s trips add up to the least time, even if some take longer than others.'
+    : 'Everyone’s trip takes about as long, without making anyone travel much further than needed.';
 }
 
 function renderHistory() {
@@ -1792,9 +1802,14 @@ async function saveSettings(patch) {
   state.settings = { ...state.settings, ...patch };
   applyTheme();
   syncSettingsUI();
-  if (state.search && ['results', 'group', 'place'].includes(state.view)) {
-    if (patch.mode && patch.mode !== prevMode) toast('Run the search again to use this rule', { action: 'Run', onAction: () => { openDrawer(false); findPlaces(); } });
-    render({ keepScroll: true });
+  if (state.search && ['results', 'group', 'place', 'searching'].includes(state.view)) {
+    if (patch.mode && patch.mode !== prevMode) {
+      // A different rule means a different spot: look again straight away.
+      openDrawer(false);
+      findPlaces();
+    } else {
+      render({ keepScroll: true });
+    }
   }
   try { await api.updateMe({ settings: state.settings }); } catch { /* keep local */ }
 }

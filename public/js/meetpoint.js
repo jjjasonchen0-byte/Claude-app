@@ -3,11 +3,12 @@
 // Instead of downloading every street in the area, Meet asks a routing
 // service for real travel times from everyone to a grid of candidate spots
 // (one small request per way of travelling), keeps the best spot and zooms
-// in around it a few times. "Fairest" means the longest trip is as short as
-// possible; "least total" means everyone's trips add up to the least time.
+// in around it a few times. "Similar times" means everyone's trips take about
+// as long (without making the longest much longer than it has to be); "least
+// total" means everyone's trips add up to the least time.
 // People on public transport are first estimated from walking distance, then
 // the two best spots are checked against real timetables.
-import { haversine, paddedBBox, centroid, smallestEnclosingCircle } from './geo.js';
+import { haversine, paddedBBox, centroid, smallestEnclosingCircle, span } from './geo.js';
 
 export const SPEEDS = { walk: 1.35, bike: 4.2, transit: 6.5, drive: 9.5 }; // m/s, urban averages
 const DETOUR = 1.3; // roads are about this much longer than a straight line
@@ -33,11 +34,38 @@ export function grid(bbox, n) {
   return out;
 }
 
-const score = (times, rule) => {
-  let max = 0, sum = 0;
-  for (const t of times) { if (t == null || !Number.isFinite(t)) return Infinity; max = Math.max(max, t); sum += t; }
-  return rule === 'total' ? sum + max * 0.01 : max + sum * 0.01;
+const stats = (times) => {
+  let max = 0, min = Infinity, sum = 0;
+  for (const t of times) {
+    if (t == null || !Number.isFinite(t)) return null;
+    max = Math.max(max, t); min = Math.min(min, t); sum += t;
+  }
+  return { max, min, sum };
 };
+
+// "Similar times" may make the longest trip a little longer than it has to
+// be (up to 30%, or 5 minutes) if that brings everyone's times closer together.
+const SIMILAR_SLACK = 1.3;
+const SIMILAR_MIN_SLACK_S = 300;
+
+/**
+ * Scoring for a set of spots already measured (lower is better):
+ *  • 'similar' (the default; 'fair' in older settings): the smallest gap between
+ *    the longest and shortest trip, among spots whose longest trip is close to
+ *    the shortest it could be, then the shorter trips.
+ *  • 'total': everyone's trips add up to the least time.
+ */
+export function makeScore(rule, rows) {
+  if (rule === 'total') return (times) => { const s = stats(times); return s ? s.sum + s.max * 0.01 : Infinity; };
+  let bestMax = Infinity;
+  for (const r of rows) { const s = stats(r.times); if (s) bestMax = Math.min(bestMax, s.max); }
+  const cap = Math.max(bestMax * SIMILAR_SLACK, bestMax + SIMILAR_MIN_SLACK_S);
+  return (times) => {
+    const s = stats(times);
+    if (!s) return Infinity;
+    return (s.max - s.min) + 0.1 * s.max + 10 * Math.max(0, s.max - cap);
+  };
+}
 
 const timeout = (promise, ms) => Promise.race([promise, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
 
@@ -87,19 +115,27 @@ async function evaluate(people, cands, { travelTimes, signal }) {
 
 /**
  * @param people [{ lat, lon, mode }]
- * @param opts.rule 'fair' | 'total'
+ * @param opts.rule 'similar' | 'total'
  * @param opts.travelTimes (mode, sources, destinations, {signal}) → { durations, distances, destinations? }
  * @param opts.directions optional (mode, from, to) → { duration }: used to check public transport
  * @returns { meet: {lat, lon}, times: [s], dists: [m], real: [bool], approx }
  */
-export async function findMeetingPoint(people, { rule = 'fair', travelTimes, directions, signal, onStatus = () => {} } = {}) {
+export async function findMeetingPoint(people, { rule = 'similar', travelTimes, directions, signal, onStatus = () => {} } = {}) {
   if (people.length < 2) throw new Error('Add at least two people');
   const all = [];
-  const add = (rows) => { for (const r of rows) { r.score = score(r.times, rule); all.push(r); } };
+  // Scores depend on everything measured so far ("close to the shortest
+  // possible longest trip"), so they are worked out again after each round.
+  const add = (rows) => {
+    all.push(...rows);
+    const score = makeScore(rule, all);
+    for (const r of all) r.score = score(r.times);
+  };
   const best = () => all.reduce((a, b) => (b.score < a.score ? b : a));
 
   // Round 1: a coarse grid over everyone, plus the middle and the geometric fairest spot.
-  const box = paddedBBox(people, 0.12, 400);
+  // The area around the group, about half the group's width beyond everyone:
+  // the spot with the most similar times can lie a little outside the group.
+  const box = paddedBBox(people, 0.2, Math.max(400, span(people) * 0.45));
   const sec = smallestEnclosingCircle(people);
   let cellLat = (box.n - box.s) / 6, cellLon = (box.e - box.w) / 6;
   onStatus('Finding the fairest spot…');
@@ -129,6 +165,7 @@ export async function findMeetingPoint(people, { rule = 'fair', travelTimes, dir
       if (top.length === 2) break;
     }
     onStatus('Checking public transport…');
+    const score = makeScore(rule, all);
     const checked = await Promise.all(top.map(async (cand) => {
       const times = [...cand.times];
       const ok = await Promise.all(riders.map(async (i) => {
@@ -142,7 +179,7 @@ export async function findMeetingPoint(people, { rule = 'fair', travelTimes, dir
           return false;
         }
       }));
-      return { ...cand, times, score: score(times, rule), checked: ok };
+      return { ...cand, times, score: score(times), checked: ok };
     }));
     chosen = checked.reduce((a, b) => (b.score < a.score ? b : a));
     riders.forEach((i, k) => { real[i] = chosen.checked[k]; });
