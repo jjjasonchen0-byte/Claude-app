@@ -19,5 +19,9 @@
     "leaflet": "1.9.4",
     "maplibre-gl": "6.15.0"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@mapbox/vector-tile": "3.0.0",
+    "pbf": "5.1.2"
+  }
 }

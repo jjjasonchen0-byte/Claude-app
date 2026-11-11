@@ -85,7 +85,9 @@ The browser asks the Meet server for directions (`/api/directions`, `/api/travel
 
 ## Test version (no server, no internet)
 
-`node scripts/build-test.mjs` builds `dist/meet-test.html`, a single page that runs the same app code on a made-up island about 220 × 170 km across. Its coastal city, Port Verity (about 22 × 16 km), has districts at different angles, curving streets, a tangled old town, suburbs with dead ends, boulevards, a river with bridges, lakes and parks. Around it are 13 market towns and about 30 villages with their own streets, winding country lanes, A-roads and motorways routed between the towns, forests, lakes and a second river. In total that's about 90,000 street corners and 3,100 places. Names appear as you zoom in. Because the town is made up, places get **sample ratings, drawings instead of photos, and sample reviews**, all labelled as samples.
+`node scripts/build-test.mjs` builds `dist/meet-test.html`, a single page (about 2.5 MB) that runs the same app code on **central Sydney** built into the page: Pyrmont and Glebe to Bondi, North Sydney and Mosman to Newtown. That's about 150,000 street corners (every road, lane and footpath, so walking routes cross the Harbour Bridge and follow the foreshore), the harbour, bays, parks and beaches, 115 suburbs, about 21,000 house-number addresses and 6,400 real places: restaurants, cafés, pubs, bars, museums, parks and shops. Address search knows the streets, house numbers, suburbs and places. Walking, cycling and driving routes follow real streets (no walking on motorways, no driving on footpaths); there's no public transport. Because these are real businesses, the test version shows **no ratings, photos or reviews** rather than make any up.
+
+The Sydney data comes from OpenStreetMap via [OpenFreeMap](https://openfreemap.org)'s vector tiles (© OpenStreetMap contributors, ODbL; © OpenMapTiles), credited on the map. `node scripts/build-sydney.mjs` rebuilds it (`scripts/sydney/sydney-data.js`): it downloads about 50 tiles once (8 MB, cached in `.cache/`), joins streets cut at tile edges, keeps the connected street network, and packs everything into compact strings. It needs the dev dependencies (`npm install`).
 
 ## Extras
 
@@ -117,7 +119,8 @@ The browser asks the Meet server for directions (`/api/directions`, `/api/travel
 | `public/js/match.js` | Decides whether two listings are the same place (similar names, close together) |
 | `public/js/directions.js` | Real directions: request URLs and response normalisers for FOSSGIS OSRM (routes with alternatives, travel-time tables) and Transitous (itineraries with lines, colours, times and walking legs), and the browser client |
 | `public/js/share.js` | Share text, messaging links, map links and the `.ics` invite |
-| `public/js/demo.js`, `graph.js` | The made-up island for the test version, with its own street graph |
+| `public/js/demo.js`, `graph.js` | The test version's stand-ins: central Sydney's streets as a graph (routes by way of travelling), address search, places and the drawn map |
+| `scripts/build-sydney.mjs` | Builds the Sydney data for the test version from OpenFreeMap vector tiles |
 
 Map © OpenFreeMap, © OpenMapTiles, data © OpenStreetMap contributors. Routing by FOSSGIS OSRM. Public transport by Transitous and [its data sources](https://transitous.org/sources/). Ratings, photos and reviews (when enabled) by Tripadvisor.
 

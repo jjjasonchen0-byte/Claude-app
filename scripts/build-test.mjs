@@ -26,45 +26,39 @@ function wrapModule(name, src) {
   return `// ---- ${name}\n(() => {\n${body}\n__m[${JSON.stringify(name)}] = { ${exported.join(', ')} };\n})();\n`;
 }
 
-// ---- app tweaks for the test town
+// ---- app tweaks for the test version (central Sydney, built into the page)
 let app = read('public/js/app.js');
 app = replaceOnce(app, "map = L.map('map', { zoomControl: false, worldCopyJump: true });",
-  "map = L.map('map', { zoomControl: false, zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 80, minZoom: 8, maxZoom: 18, maxBounds: __m.demo.getBounds(), maxBoundsViscosity: 0.8 });", 'map init');
+  "map = L.map('map', { zoomControl: false, zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 80, minZoom: 11.5, maxZoom: 19, maxBounds: __m.demo.getBounds(), maxBoundsViscosity: 0.8 });", 'map init');
 app = app.replace(/\/\/ basemap:start[\s\S]*?\/\/ basemap:end\n/, 'function addBasemap() { if (!baseLayer) baseLayer = __m.demo.addBasemap(map) || true; }\n');
 if (app.includes('basemaps.cartocdn.com')) throw new Error('build-test: base map not replaced');
-app = replaceOnce(app, 'map.attributionControl.setPrefix(false);', "map.attributionControl.setPrefix(false).addAttribution('Port Verity is a made-up test town');", 'attribution');
-// The town is fictional, so links to real map apps and calendar files are left out.
-for (const [from, label] of [
-  ['      <a class="btn btn-tinted" href="${links.osm}" target="_blank" rel="noopener">Open in maps</a>\n', 'open in maps link'],
-  ['      <button class="btn btn-tinted" data-action="calendar">Calendar</button>\n', 'calendar button'],
-  ['      <a class="btn btn-tinted" href="${links.google}" target="_blank" rel="noopener">Google Maps</a>\n', 'google maps button'],
-  ['      <a class="btn btn-tinted" href="${links.apple}" target="_blank" rel="noopener">Apple Maps</a>\n', 'apple maps button'],
-]) app = replaceOnce(app, from, '', label);
-// The test town has no timetables, so start on walking directions.
+app = replaceOnce(app, 'map.attributionControl.setPrefix(false);', "map.attributionControl.setPrefix(false).addAttribution('Test version: central Sydney, built into this page');", 'attribution');
+// Calendar files can't be saved from inside the test page.
+app = replaceOnce(app, '      <button class="btn btn-tinted" data-action="calendar">Calendar</button>\n', '', 'calendar button');
+// The test version has no timetables, so start on walking directions.
 app = replaceOnce(app, "const DEFAULT_SETTINGS = { mode: 'similar', travel: 'transit',", "const DEFAULT_SETTINGS = { mode: 'similar', travel: 'walk',", 'default travel mode');
-// Directions in the test town come from its own streets, not the real routing services.
+// Directions come from the streets built into the page, not the real routing services.
 app = app.replace(/ {2}map\.attributionControl\.addAttribution\(`Routes[^\n]*\n/, '');
-app = app.replace(/ {2}const handoff = `[^\n]*\n/, "  const handoff = '';\n");
 app = replaceOnce(app, '    <p class="footnote attrib">${credits}</p>',
-  '    <p class="footnote attrib">Test town: routes follow its own streets. The real app uses live routing and public transport.</p>', 'routing attribution');
-if (app.includes('addAttribution(`Routes') || app.includes('links.google}" target="_blank" rel="noopener">Google Maps</a><a')) throw new Error('build-test: real-service links left in test build');
+  '    <p class="footnote attrib">Test version: routes follow Sydney\'s streets, built into this page. The real app uses live routing and public transport.</p>', 'routing attribution');
+if (app.includes('addAttribution(`Routes')) throw new Error('build-test: routing attribution left in test build');
 
 // ---- page markup
 const html = read('public/index.html');
 let body = html.slice(html.indexOf('<body>') + 6, html.indexOf('<script src="/vendor/leaflet/leaflet.js">'));
 body = replaceOnce(body, 'Use my current location', 'Pick a random address', 'locate label');
-body = replaceOnce(body, 'placeholder="Your address"', 'placeholder="Try “Hazel Street” or “12 Maple”"', 'home placeholder');
+body = replaceOnce(body, 'placeholder="Your address"', 'placeholder="Try “George Street” or “Bondi”"', 'home placeholder');
 body = replaceOnce(body, '      <p class="intro-foot" id="home-signin-row">', `      <div class="sample">
         <button class="btn btn-block btn-lg" type="button" id="demo-sample">Try a sample group</button>
-        <p class="footnote" style="margin:0 2px">Test version. Port Verity is a made-up city in a region of about 220 × 170 km with towns and villages around it, so address search only knows those streets. Everything stays in this browser.</p>
+        <p class="footnote" style="margin:0 2px">Test version: central Sydney (Pyrmont to Bondi, North Sydney to Newtown) from OpenStreetMap, built into this page. Address search knows its streets, house numbers and places, and routes follow real streets. There's no public transport, ratings or photos here. Everything stays in this browser.</p>
       </div>
       <p class="intro-foot" id="home-signin-row">`, 'sign-in row');
 
 // ---- styles
 const tokens = (t) => Object.entries(t).map(([k, v]) => `--map-${k}: ${v};`).join(' ');
 // A quiet palette in the spirit of Apple Maps: pale land, white streets, soft greens and blues.
-const light = tokens({ forest: '#dfeed6', motorway: '#fbd38d', 'motorway-casing': '#f0bb6a', land: '#f7f6f2', park: '#d6ecc9', water: '#b4dcf7', road: '#ffffff', casing: '#ebe8e1', major: '#fdf0c4', 'major-casing': '#f0dc9c', label: '#8a8a8e', halo: 'rgba(255,255,255,.95)', 'park-label': '#4f8a48', 'water-label': '#4b88bf' });
-const dark = tokens({ forest: '#1d2620', motorway: '#6a5232', 'motorway-casing': '#4f3d25', land: '#1f2023', park: '#203024', water: '#152a3d', road: '#36373b', casing: '#28292c', major: '#4f4a3a', 'major-casing': '#3c382c', label: '#98989d', halo: 'rgba(20,20,22,.9)', 'park-label': '#79b378', 'water-label': '#6aa5d9' });
+const light = tokens({ sand: '#f4ead0', path: '#d9d4c9', forest: '#dfeed6', motorway: '#fbd38d', 'motorway-casing': '#f0bb6a', land: '#f7f6f2', park: '#d6ecc9', water: '#b4dcf7', road: '#ffffff', casing: '#ebe8e1', major: '#fdf0c4', 'major-casing': '#f0dc9c', label: '#8a8a8e', halo: 'rgba(255,255,255,.95)', 'park-label': '#4f8a48', 'water-label': '#4b88bf' });
+const dark = tokens({ sand: '#3b3628', path: '#3d3e42', forest: '#1d2620', motorway: '#6a5232', 'motorway-casing': '#4f3d25', land: '#1f2023', park: '#203024', water: '#152a3d', road: '#36373b', casing: '#28292c', major: '#4f4a3a', 'major-casing': '#3c382c', label: '#98989d', halo: 'rgba(20,20,22,.9)', 'park-label': '#79b378', 'water-label': '#6aa5d9' });
 const css = `${read('node_modules/leaflet/dist/leaflet.css')}\n${read('public/css/styles.css')}
 :root { ${light} }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { ${dark} } }
@@ -96,6 +90,7 @@ const modules = [
   ['rated', 'public/js/rated.js'],
   ['share', 'public/js/share.js'],
   ['directions', 'public/js/directions.js'],
+  ['sydney-data', 'scripts/sydney/sydney-data.js'],
   ['demo', 'public/js/demo.js'],
   ['guest', 'public/js/guest.js'],
 ];
@@ -109,13 +104,11 @@ js += `// ---- test-mode wiring: local stand-ins for the server and map services
   __m.rated = { ...__m.rated, ...d.rated };
   __m.pois = { ...__m.pois, findPois: d.findPois };
   __m.directions = { ...__m.directions, getDirections: d.directions, getTravelTimes: d.travelTimes };
-  const baseText = __m.share.shareText;
-  __m.share = { ...__m.share, shareText: (p, o) => baseText(p, o).split('\\n').filter((l) => !l.startsWith('https://')).join('\\n') };
 })();
 `;
 js += wrapModule('api', read('public/js/api.js'));
 js += wrapModule('app', app);
-js += `// Build the region just after the page first appears, so it's ready when needed.
+js += `// Unpack Sydney just after the page first appears, so it's ready when needed.
 setTimeout(() => __m.demo.warm(), 120);
 document.getElementById('demo-sample').addEventListener('click', async (e) => {
   const btn = e.currentTarget;
