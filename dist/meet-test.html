@@ -2755,7 +2755,7 @@ class FloodAnimation {
 
   /**
    * How far each piece of a flood is from that person's route, for pulling
-   * the floods back from the route outwards. Distances come from a coarse
+   * the floods back towards it (the furthest first). Distances come from a coarse
    * distance map (about 300 cells across) rather than street by street.
    */
   prepareRetract() {
@@ -2828,8 +2828,9 @@ class FloodAnimation {
 
   /**
    * The floods pulling back: p = 0 as they were, 1 all gone. The streets
-   * nearest each person's route go first, then further and further out,
-   * behind a fading edge, so the route is left standing on its own.
+   * furthest from each person's route go first, closing in on it behind a
+   * fading edge, until the last ones, right beside the route, go as it
+   * reaches the meeting point.
    */
   drawRetract(p) {
     this.retract = p;
@@ -2842,14 +2843,15 @@ class FloodAnimation {
     for (const f of this.shown) {
       const r = f.retract;
       if (!r) continue;
-      const gone = r.max * p, edge = gone + r.max * 0.08;
+      // Streets still there: nearer the route than this (sorted nearest first).
+      const reach = r.max * (1 - p), edge = reach - r.max * 0.08;
       let k = 0;
-      { let lo = 0, hi = r.dist.length; while (lo < hi) { const mid = (lo + hi) >> 1; if (r.dist[mid] <= gone) lo = mid + 1; else hi = mid; } k = lo; }
+      { let lo = 0, hi = r.dist.length; while (lo < hi) { const mid = (lo + hi) >> 1; if (r.dist[mid] < reach) lo = mid + 1; else hi = mid; } k = lo; }
       const paths = [new Path2D(), new Path2D()], front = new Path2D();
-      for (let j = k; j < r.ids.length; j++) {
+      for (let j = 0; j < k; j++) {
         const q = r.ids[j];
         this.piece(f.fl, q, Infinity, paths[net.major[f.fl.edge[q]]], v);
-        if (r.dist[j] <= edge) this.piece(f.fl, q, Infinity, front, v);
+        if (r.dist[j] >= edge) this.piece(f.fl, q, Infinity, front, v);
       }
       this.strokeFlood(ctx, f, paths);
       ctx.globalCompositeOperation = this.theme.blend;
