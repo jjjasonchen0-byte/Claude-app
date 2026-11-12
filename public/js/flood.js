@@ -3,8 +3,9 @@
 // Then everyone's reach floods out along the streets at once, each in their
 // colour behind a bright white front, converging until the floods meet at
 // the meeting point. Finally everyone's real route lights up and they
-// travel along it to the pin, and the map turns back to normal with the
-// routes left on it.
+// travel along it to the pin, while the floods pull back along their
+// streets and are gone just as the routes arrive; then the map turns back
+// to normal with the routes left on it.
 //
 // The floods are shortest-path searches over the streets (graph.js), timed
 // in seconds at each person's way of travelling, so where the floods meet is
@@ -584,7 +585,14 @@ export class FloodAnimation {
     this.meetPt = proj([meet.lat, meet.lon]);
     this.routes = tracks.map((t) => {
       const segs = [];
-      for (const piece of t.pieces) addTimed(segs, piece.pts.filter(ok).map(proj), piece.t0, piece.t1, piece.walk);
+      let prev = null;
+      for (const piece of t.pieces) {
+        let pts = piece.pts.filter(ok).map(proj);
+        // Each piece starts where the last one ended, so the route is one unbroken line.
+        if (prev && pts.length && (pts[0].x !== prev.x || pts[0].y !== prev.y)) pts = [prev, ...pts];
+        addTimed(segs, pts, piece.t0, piece.t1, piece.walk);
+        if (pts.length) prev = pts[pts.length - 1];
+      }
       segs.sort((a, b) => a.s0 - b.s0);
       return { color: t.color, glow: shade(t.color, this.theme.shade), initial: t.initial, duration: t.duration, segs };
     });
@@ -592,10 +600,52 @@ export class FloodAnimation {
     this.gather = 0;
     this.glow = 1;
     const total = Math.max(1, ...this.routes.map((r) => r.duration));
-    if (!(await this.run(1900, (t) => { this.routeClock = total * easeInOut(t); this.drawTop(); }))) return false;
+    // The routes draw while the floods pull back: both on one clock, so the
+    // last of the floods goes just as the last route reaches the meeting point.
+    if (!(await this.run(1900, (t) => {
+      const p = easeInOut(t);
+      this.routeClock = total * p;
+      this.drawRetract(p);
+      this.drawTop();
+    }))) return false;
+    this.drawRetract(1);
     onArrive?.();
     if (!(await this.run(400, (t) => { this.gather = easeInOut(t); this.drawTop(); }))) return false;
     return this.run(750);
+  }
+
+  /**
+   * The floods pulling back along their streets: p = 0 as they were, 1 all
+   * gone. Each flood's clock runs backwards, so the furthest streets go
+   * first, behind a fading front.
+   */
+  drawRetract(p) {
+    this.retract = p;
+    if (!this.floodCanvas.isConnected) return;
+    const { fill: ctx, dpr, size } = this;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, size.x, size.y);
+    if (!this.net || p >= 1) return;
+    const v = this.view();
+    for (const f of this.shown) {
+      const { fl } = f;
+      const c = f.c * (1 - p);
+      const band = f.c * 0.06;
+      const all = upTo(fl, c), inner = upTo(fl, c - band);
+      const paths = [new Path2D(), new Path2D()];
+      this.trace(f, 0, all, paths, v);
+      this.strokeFlood(ctx, f, paths);
+      const front = new Path2D();
+      this.trace(f, inner, all, [front, front], v);
+      ctx.globalCompositeOperation = this.theme.blend;
+      ctx.globalAlpha = 0.55 * (1 - p);
+      ctx.strokeStyle = f.front;
+      ctx.lineWidth = 1.4;
+      ctx.lineCap = 'round';
+      ctx.stroke(front);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+    }
   }
 
   /** Back to the normal map, keeping the routes. */
@@ -626,28 +676,37 @@ export class FloodAnimation {
     const stroke = (p, color, width, alpha, dotted = false) => {
       if (alpha <= 0) return;
       ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = width;
-      ctx.setLineDash(dotted ? [0.1, width * 2.4] : []);
+      // Dots: round ends of zero-length dashes, evenly spaced along each walk.
+      ctx.setLineDash(dotted ? [0.001, width * 2.5] : []);
+      ctx.lineDashOffset = 0;
       ctx.stroke(p);
     };
     const tips = [];
     for (const r of this.routes) {
-      const upTo = Math.min(this.routeClock, r.duration);
-      const ride = new Path2D(), walk = new Path2D();
-      let tip = null;
+      const upToT = Math.min(this.routeClock, r.duration);
+      // One unbroken line for the whole route (the glow), and one per stretch of
+      // riding or walking: joined pieces continue the same line, so dots stay
+      // evenly spaced across corners and nothing is drawn twice.
+      const all = new Path2D(), ride = new Path2D(), walk = new Path2D();
+      let tip = null, last = null, lastKind = null;
       for (const s of r.segs) {
-        if (s.s0 > upTo) break;
+        if (s.s0 > upToT) break;
         const x0 = v.X(s.ax), y0 = v.Y(s.ay);
         let x1 = v.X(s.bx), y1 = v.Y(s.by);
-        if (s.s1 > upTo) { const f = s.s1 > s.s0 ? (upTo - s.s0) / (s.s1 - s.s0) : 1; x1 = x0 + (x1 - x0) * f; y1 = y0 + (y1 - y0) * f; }
-        const path = s.walk ? walk : ride;
-        path.moveTo(x0, y0); path.lineTo(x1, y1);
-        tip = { x: x1, y: y1 };
+        if (s.s1 > upToT) { const f = s.s1 > s.s0 ? (upToT - s.s0) / (s.s1 - s.s0) : 1; x1 = x0 + (x1 - x0) * f; y1 = y0 + (y1 - y0) * f; }
+        const kind = s.walk ? walk : ride;
+        const joined = last && Math.abs(last.x - x0) < 0.01 && Math.abs(last.y - y0) < 0.01;
+        if (!joined || lastKind !== kind) kind.moveTo(x0, y0);
+        kind.lineTo(x1, y1);
+        if (!joined) all.moveTo(x0, y0);
+        all.lineTo(x1, y1);
+        last = { x: x1, y: y1 };
+        lastKind = kind;
+        tip = last;
       }
-      // Glowing while the map is dark; a plain directions line once it is back to normal.
-      ctx.globalCompositeOperation = 'lighter';
-      stroke(ride, r.glow, ROUTE.halo, 0.3 * g);
-      stroke(walk, r.glow, ROUTE.halo * 0.7, 0.22 * g);
-      ctx.globalCompositeOperation = 'source-over';
+      // Glowing while the map is dark; a plain directions line once it is back
+      // to normal. Drawn over, never added: crossing routes don't brighten.
+      stroke(all, r.glow, ROUTE.halo, 0.26 * g);
       stroke(ride, 'rgba(255,255,255,0.95)', ROUTE.line + ROUTE.casing, 1 - g);
       const width = ROUTE.line + (ROUTE.core - ROUTE.line) * g;
       stroke(ride, g > 0.5 ? r.glow : r.color, width, 1);
@@ -680,7 +739,8 @@ export class FloodAnimation {
   redrawAll() {
     if (!this.size) return;
     this.drawBase();
-    if (this.floodCanvas.isConnected && this.net) {
+    if (this.retract != null) this.drawRetract(this.retract);
+    else if (this.floodCanvas.isConnected && this.net) {
       const { fill, dpr, size } = this;
       fill.setTransform(dpr, 0, 0, dpr, 0, 0);
       fill.clearRect(0, 0, size.x, size.y);
@@ -697,8 +757,17 @@ export class FloodAnimation {
   }
 }
 
+/** How many of a flood's pieces of street (in the order they finish) are finished by time c. */
+function upTo(fl, c) {
+  let lo = 0, hi = fl.count;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (fl.t1[fl.byEnd[mid]] <= c) lo = mid + 1; else hi = mid; }
+  return lo;
+}
+
 /** Split a projected line into segments timed evenly by length between t0 and t1. */
-function addTimed(out, pts, t0, t1, walk) {
+function addTimed(out, raw, t0, t1, walk) {
+  // Repeated points would make zero-length steps (and uneven dots).
+  const pts = raw.filter((p, i) => i === 0 || p.x !== raw[i - 1].x || p.y !== raw[i - 1].y);
   if (pts.length < 2) return;
   let total = 0;
   const lens = [];
