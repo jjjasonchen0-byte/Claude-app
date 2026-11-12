@@ -94,9 +94,10 @@ await ctx.route('https://photon.komoot.io/**', (r) => {
 const { normalizeOsrm, normalizeOsrmTable, normalizeTransit } = await import('../public/js/directions.js');
 const fx = (n) => JSON.parse(fs.readFileSync(new URL(`./fixtures/${n}`, import.meta.url), 'utf8'));
 let transitCalls = 0;
+const transitTimes = new Set(); // the departure times public transport was asked for
 await ctx.route('**/api/directions?**', (r) => {
   const mode = new URL(r.request().url()).searchParams.get('mode');
-  if (mode === 'transit') transitCalls++;
+  if (mode === 'transit') { transitCalls++; transitTimes.add(new URL(r.request().url()).searchParams.get('time')); }
   return r.fulfill({ json: mode === 'transit' ? normalizeTransit(fx('transitous-plan.json')) : normalizeOsrm(fx('osrm-route.json'), mode) });
 });
 await ctx.route('**/api/traveltimes?**', (r) => {
@@ -143,6 +144,16 @@ try {
   await shot('03-people');
   assert.equal(await page.locator('.person').count(), 3);
 
+  // Leaving: Now by default, or a chosen time, which the search asks public transport for.
+  assert.equal(await page.locator('.leave-row [data-action=leave-now].active').count(), 1, 'leaving now by default');
+  const later = new Date(Date.now() + 2 * 864e5);
+  later.setHours(9, 0, 0, 0);
+  const laterValue = new Date(later.getTime() - later.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  await page.fill('#leave-at', laterValue);
+  await page.dispatchEvent('#leave-at', 'change');
+  assert.equal(await page.locator('#leave-at.active').count(), 1);
+  assert.equal(await page.locator('.leave-row [data-action=leave-now].active').count(), 0);
+
   // Find places → the search animation: everyone's floods converge on the meeting point, then the routes.
   await page.click('[data-action=find]');
   await page.waitForSelector('.growth-canvas');
@@ -160,6 +171,8 @@ try {
   await page.waitForSelector('.panel:not(.away) .pills', { timeout: 30000 });
   assert.equal(await page.locator('.flood-base').count(), 0, 'the dark map is gone');
   assert.equal(await page.locator('#screen-main.flooding').count(), 0);
+  assert.deepEqual([...transitTimes], [later.toISOString()], 'public transport planned for the chosen time');
+  assert.match(await page.textContent('.panel'), /Times for leaving at 9:00/);
   await page.waitForTimeout(700);
   await shot('05-results');
   // Edit people sits right under the people; there is no "Surprise me" any more.
@@ -191,6 +204,7 @@ try {
   // Real directions: public transport by default, with line badges and an expandable journey.
   await page.waitForFunction(() => document.querySelectorAll('.dirs .line-badge').length >= 3);
   assert.ok(transitCalls >= 3, 'asked for public transport for everyone');
+  assert.equal(await page.locator('.growth-canvas.away').count(), 1, 'routes to the meeting point give way to routes to the place');
   await page.locator('.dirs [data-action=dir-toggle]').first().click();
   await page.waitForSelector('.dirs .legs .leg.ride');
   assert.ok(await page.locator('.dirs .legs .leg').count() >= 4, 'journey shows its legs');

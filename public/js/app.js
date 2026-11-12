@@ -60,6 +60,7 @@ const state = {
   view: 'people',
   search: null,
   editingId: null,
+  leaveAt: '', // when everyone leaves: '' for now, or a local date and time ("2026-11-14T09:00")
 };
 const sheet = { snap: 'mid', target: 0 };
 
@@ -620,7 +621,7 @@ function setView(view, { pop = false } = {}) {
   state.modeMenu = null;
   const panel = $('#panel');
   panel.classList.toggle('away', view === 'searching');
-  anim?.canvas.classList.toggle('dim', ['group', 'place', 'share'].includes(view));
+  showSearchRoutes();
   if (pop) { panel.classList.remove('pop'); void panel.offsetWidth; panel.classList.add('pop'); }
   render();
   if (SHEET_DEFAULT[view]) setSheet(SHEET_DEFAULT[view]);
@@ -706,12 +707,44 @@ function renderPeople() {
       <input id="add-nick" maxlength="60" placeholder="Their name (optional)" aria-label="Their name">
     </div>
     <p class="footnote" style="margin:0 6px">Or tap the map to drop a pin. Drag any pin to move it.</p>
+    ${leaveRow()}
     <div class="cta">
       <button class="btn btn-primary btn-block btn-lg" data-action="find" ${active < 2 ? 'disabled' : ''}>Find a place to meet</button>
     </div>`;
 }
 
+/** "Leaving: Now | [date and time]" above the Find button. */
+function leaveRow() {
+  const later = state.leaveAt || toLocalInput(nextHalfHour());
+  return `<div class="leave-row" role="group" aria-label="When everyone leaves">
+    <span class="leave-label">Leaving</span>
+    <button class="leave-opt${state.leaveAt ? '' : ' active'}" data-action="leave-now" aria-pressed="${!state.leaveAt}">Now</button>
+    <input type="datetime-local" id="leave-at" class="leave-opt${state.leaveAt ? ' active' : ''}" value="${esc(later)}" min="${esc(toLocalInput(new Date()))}" aria-label="Leave at a date and time">
+  </div>`;
+}
+/** A Date as a datetime-local value in this device's time zone. */
+const toLocalInput = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+/** The chosen departure as an ISO time, or null for now (also when the chosen time has passed). */
+function leaveTime() {
+  const t = state.leaveAt ? new Date(state.leaveAt) : null;
+  return t && t.getTime() > Date.now() + 60000 ? t.toISOString() : null;
+}
+/** "9:00 am on Saturday 14 November" (or "9:00 am today"). */
+function fmtLeave(iso) {
+  const d = new Date(iso);
+  const today = new Date(), tomorrow = new Date(today.getTime() + 864e5);
+  const day = d.toDateString() === today.toDateString() ? 'today' : d.toDateString() === tomorrow.toDateString() ? 'tomorrow'
+    : `on ${d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })}`;
+  return `${clock(iso)} ${day}`;
+}
+
 afterRender.people = () => {
+  const at = $('#leave-at');
+  if (at) {
+    const pick = () => { if (at.value) { state.leaveAt = at.value; $('.leave-row [data-action=leave-now]').classList.remove('active'); at.classList.add('active'); } };
+    at.addEventListener('change', pick);
+    at.addEventListener('click', pick); // tapping the shown time picks it
+  }
   attachSearch($('#add-search'), {
     near: () => state.user.home,
     onPick: (r) => addPlace({ ...r, nickname: $('#add-nick').value }),
@@ -891,6 +924,9 @@ async function findPlaces({ replay = false } = {}) {
   setView('searching');
   fitTo(people.map((p) => [p.lat, p.lon]), { maxZoom: 16, animate: false });
   const rule = prev?.rule || (state.settings.mode === 'total' ? 'total' : 'similar');
+  // Everyone leaves now, or at the time chosen above the Find button (public transport timetables use it).
+  const leaveAt = prev ? prev.leaveAt : leaveTime();
+  const at = leaveAt ? { time: leaveAt } : {};
   const fx = anim = new FloodAnimation(map, { people, pace: PACE[state.settings.speed] || PACE.normal, theme: isDark() ? 'dark' : 'light' });
   if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) fx.skip();
   const live = () => !ctrl.signal.aborted && anim === fx;
@@ -901,9 +937,10 @@ async function findPlaces({ replay = false } = {}) {
     // Started together: the fairest spot (a few small requests to the routing
     // service) and the streets for the animation.
     const meetingP = prev ? Promise.resolve(prev.meeting) : findMeetingPoint(people, {
-      rule, travelTimes: getTravelTimes, directions: getDirections, signal: ctrl.signal, onStatus: status,
+      rule, travelTimes: getTravelTimes, signal: ctrl.signal, onStatus: status,
+      directions: (mode, a, b, o) => getDirections(mode, a, b, { ...o, ...at }),
       // With Google: the best few spots checked against Google's travel times for everyone.
-      checkTimes: usingGoogle() ? getCheckTimes : undefined,
+      checkTimes: usingGoogle() ? (ps, spots, o) => getCheckTimes(ps, spots, { ...o, ...at }) : undefined,
     });
     meetingP.catch(() => {});
     const roadsP = withTimeout(loadRoads(streetsArea(), { signal: ctrl.signal }), 8000).catch(() => null);
@@ -921,7 +958,7 @@ async function findPlaces({ replay = false } = {}) {
     // Keep the meeting point in view (it can lie a little outside the group).
     if (!map.getBounds().pad(-0.06).contains([meet.lat, meet.lon])) fitTo([...people.map((p) => [p.lat, p.lon]), [meet.lat, meet.lon]], { maxZoom: 16, animate: false });
     const search = state.search = {
-      people, meeting, meet, routes: prev?.routes || null, rule,
+      people, meeting, meet, routes: prev?.routes || null, rule, leaveAt,
       pois: prev?.pois || null, grouped: prev?.grouped || null, radius: prev?.radius || null, tab: prev?.tab || null,
       group: null, place: null, area: prev?.area || null, poiError: prev?.poiError || null, sort: prev?.sort, showRadius: prev?.showRadius,
     };
@@ -932,7 +969,7 @@ async function findPlaces({ replay = false } = {}) {
       .then((r) => { search.area = r.address; if (state.view === 'results') render({ keepScroll: true }); })
       .catch(() => {});
     const routesP = search.routes ? Promise.resolve(search.routes)
-      : Promise.all(people.map((p) => withTimeout(getDirections(p.mode, p, meet, { signal: ctrl.signal }), 10000).catch(() => null)));
+      : Promise.all(people.map((p) => withTimeout(getDirections(p.mode, p, meet, { signal: ctrl.signal, ...at }), 10000).catch(() => null)));
     status('Finding everyone’s routes…');
     const ok2 = await fx.allAtOnce(meet);
     if (!ok2 || !live()) return;
@@ -1078,7 +1115,7 @@ function loadMeetTimes() {
   known.forEach((k, i) => { if (k) mt.values[i] = s.routes[i].duration; });
   s.people.forEach((person, i) => {
     if (person.mode !== 'transit' || known[i]) return;
-    getDirections('transit', person, meet).then((d) => { mt.values[i] = d.duration; refresh(); }).catch(() => {});
+    getDirections('transit', person, meet, s.leaveAt ? { time: s.leaveAt } : {}).then((d) => { mt.values[i] = d.duration; refresh(); }).catch(() => {});
   });
   for (const mode of ['walk', 'bike', 'drive']) {
     const idx = s.people.map((p, i) => (p.mode === mode && !known[i] ? i : -1)).filter((i) => i >= 0);
@@ -1131,6 +1168,7 @@ function renderResults() {
     <ul class="group icons">${s.people.map((p, i) => tripRow(p, s.routes?.[i]?.distance ?? s.meeting.dists[i], s.meetTimes?.values[i])).join('')}
       <li><button class="cell cell-btn" data-action="edit-people">${tile('pencil')}<span class="cell-main cell-title">Edit people</span>${CHEV}</button></li>
       <li><button class="cell cell-btn" data-action="meet-place">${tile('meet')}<span class="cell-main cell-title">Routes to this spot &amp; send it</span>${CHEV}</button></li></ul>
+    ${s.leaveAt ? `<p class="footnote" style="margin:-4px 6px 12px">Times for leaving at ${esc(fmtLeave(s.leaveAt))}.</p>` : ''}
     ${s.meeting.approx ? '<p class="notice">Travel times could not be checked right now, so this spot is estimated from distance.</p>' : ''}
     <div class="pills" role="tablist">${tabs}</div>
     ${list}
@@ -1440,7 +1478,7 @@ function placeOverview(p, d, r, ds) {
     ${modeSwitch('dir-mode')}
     ${anyTransit ? `<div class="when-row">
       <select id="dir-when-type" aria-label="When">
-        <option value="now"${when.type === 'now' ? ' selected' : ''}>Leave now</option>
+        <option value="now"${when.type === 'now' ? ' selected' : ''}>${s.leaveAt ? `Leave at ${esc(clock(s.leaveAt))}` : 'Leave now'}</option>
         <option value="arrive"${when.type === 'arrive' ? ' selected' : ''}>Arrive by…</option>
       </select>
       ${when.type === 'arrive' ? `<input type="datetime-local" id="dir-when-time" value="${esc(when.time || '')}" aria-label="Arrive by">` : ''}
@@ -1572,11 +1610,11 @@ function loadPlaceDirections() {
   const p = s.place;
   const modes = s.people.map((x) => x.mode);
   const when = modes.includes('transit') ? state.when || { type: 'now' } : { type: 'now' };
-  const key = [p.id, modes.join(','), when.type, when.time || ''].join('|');
+  const key = [p.id, modes.join(','), when.type, when.time || '', s.leaveAt || ''].join('|');
   if (state.dir?.key === key) return;
   const prev = state.dir;
   const dir = state.dir = { key, results: s.people.map(() => ({ status: 'loading' })), expanded: prev?.key?.startsWith(`${p.id}|`) ? prev.expanded : -1, fitted: false };
-  const opts = when.type === 'arrive' && when.time ? { time: new Date(when.time), arriveBy: true } : {};
+  const opts = when.type === 'arrive' && when.time ? { time: new Date(when.time), arriveBy: true } : s.leaveAt ? { time: s.leaveAt } : {};
   s.people.forEach((person, i) => {
     getDirections(person.mode, person, p, person.mode === 'transit' ? opts : {})
       .then((data) => { dir.results[i] = { status: 'ok', data, option: 0 }; })
@@ -1604,10 +1642,23 @@ const currentOption = (r) => r.data.options?.[r.option || 0];
 const routeGeometry = (r) => (r.data.options ? currentOption(r).legs.flatMap((l) => l.geometry) : r.data.geometry);
 
 /** Draw everyone's real routes on the map; walking parts dotted. */
+/**
+ * The routes to the meeting point: shown on the results, faded behind a
+ * category's places, and hidden once everyone's routes to a chosen place
+ * have come in (they replace them on the map).
+ */
+function showSearchRoutes() {
+  const view = state.view;
+  const rerouted = ['place', 'share'].includes(view) && state.dir?.results.some((r) => r.status === 'ok');
+  anim?.canvas.classList.toggle('away', !!rerouted);
+  anim?.canvas.classList.toggle('dim', !rerouted && ['group', 'place', 'share'].includes(view));
+}
+
 function drawDirections() {
   const dir = state.dir;
   const s = state.search;
   if (!dir) return;
+  showSearchRoutes();
   if (dir.layer) poiLayer.removeLayer(dir.layer);
   const layer = dir.layer = L.layerGroup().addTo(poiLayer);
   s.people.forEach((person, i) => {
@@ -1615,7 +1666,8 @@ function drawDirections() {
     const dim = dir.expanded >= 0 && dir.expanded !== i;
     const opacity = dim ? 0.3 : 1;
     if (r.status !== 'ok') {
-      L.polyline([[person.lat, person.lon], [s.place.lat, s.place.lon]], { color: person.color, weight: 3, opacity: 0.6 * opacity, dashArray: '1 8', lineCap: 'round', interactive: false }).addTo(layer);
+      // Still on its way (or none found): a dotted line straight there.
+      L.polyline([[person.lat, person.lon], [s.place.lat, s.place.lon]], { color: person.color, weight: 3, opacity: (r.status === 'loading' ? 0.35 : 0.6) * opacity, dashArray: '1 8', lineCap: 'round', interactive: false }).addTo(layer);
       return;
     }
     const pieces = r.data.options
@@ -1654,8 +1706,9 @@ function dirRow(person, i, d) {
     sub = `<span class="chips">${legs.map(legChip).join('<span class="sep">›</span>')}</span><span class="times">${clock(o.start)} – ${clock(o.end)}${o.transfers ? ` · ${o.transfers} change${o.transfers > 1 ? 's' : ''}` : ''}</span>`;
     end = `<b>${mins(o.duration)}</b>`;
   } else {
-    const arrive = new Date(Date.now() + r.data.duration * 1000).toISOString();
-    sub = `${fmtDist(r.data.distance)}<span class="times">Arrive about ${clock(arrive)} if you leave now</span>`;
+    const leave = state.search?.leaveAt;
+    const arrive = new Date((leave ? Date.parse(leave) : Date.now()) + r.data.duration * 1000).toISOString();
+    sub = `${fmtDist(r.data.distance)}<span class="times">Arrive about ${clock(arrive)} if you leave ${leave ? `at ${clock(leave)}` : 'now'}</span>`;
     end = `<b>${mins(r.data.duration)}</b>`;
   }
   return `<li class="dir${open ? ' open' : ''}">
@@ -1770,6 +1823,7 @@ function initPanel() {
     const s = state.search;
     switch (action) {
       case 'find': findPlaces(); break;
+      case 'leave-now': state.leaveAt = ''; render({ keepScroll: true }); break;
       case 'focus': {
         const p = everyone().find((x) => x.id === id);
         if (p) map.flyTo([p.lat, p.lon], Math.max(map.getZoom(), 15), { duration: 0.6 });

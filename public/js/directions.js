@@ -236,7 +236,7 @@ export function getTravelTimes(mode, sources, destinations, { signal } = {}) {
  * spots: [person][spot] seconds and metres, null where unknown. People are
  * grouped by how they travel, one request per group.
  */
-export async function getCheckTimes(people, spots, { signal } = {}) {
+export async function getCheckTimes(people, spots, { signal, time } = {}) {
   if (!google) throw Object.assign(new Error('Not available'), { status: 404 });
   const durations = people.map(() => spots.map(() => null));
   const distances = people.map(() => spots.map(() => null));
@@ -244,6 +244,7 @@ export async function getCheckTimes(people, spots, { signal } = {}) {
   people.forEach((p, i) => { if (!groups.has(p.mode)) groups.set(p.mode, []); groups.get(p.mode).push(i); });
   await Promise.all([...groups].map(async ([mode, idx]) => {
     const q = new URLSearchParams({ g: '1', mode, from: idx.map((i) => ll(people[i])).join(';'), to: spots.map(ll).join(';') });
+    if (time && mode === 'transit') q.set('time', new Date(time).toISOString());
     const t = await getJson(`/api/checktimes?${q}`, { signal, credentials: 'same-origin' });
     idx.forEach((pi, k) => spots.forEach((_, j) => {
       durations[pi][j] = t.durations?.[k]?.[j] ?? null;

@@ -219,6 +219,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .growth-canvas { position: absolute; left: 0; top: 0; z-index: 450; pointer-events: none; transform-origin: 0 0; transition: opacity 0.3s; }
 .growth-canvas.zooming { transition: transform 0.25s cubic-bezier(0, 0, 0.25, 1), opacity 0.3s; }
 .growth-canvas.dim { opacity: 0.25; }
+.growth-canvas.away { opacity: 0; }
 
 /* ---------------------------------------------------------------- search animation: the flood map */
 /* Light and dark like the rest of the app: ink is the text colour, glass the name tags and pins. */
@@ -459,6 +460,16 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+/* When everyone leaves: Now, or a chosen time (above the Find button). */
+.leave-row { display: flex; align-items: center; gap: 8px; margin: 14px 4px 0; }
+.leave-label { font-weight: 600; font-size: 15px; margin-right: 2px; }
+.leave-opt {
+  border: 0; border-radius: 10px; padding: 8px 12px; font: inherit; font-size: 15px; color: var(--text-2); background: var(--fill);
+  -webkit-appearance: none; appearance: none; min-height: 38px; transition: background 0.15s, color 0.15s;
+}
+input.leave-opt { flex: 1; min-width: 0; width: auto; padding: 8px 10px; }
+.leave-opt.active { background: var(--accent-tint); color: var(--accent); font-weight: 600; }
 
 /* ---------------------------------------------------------------- directions */
 .segmented.modes { margin: 0 0 10px; }
