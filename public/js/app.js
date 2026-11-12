@@ -3,7 +3,7 @@
 import { api } from './api.js';
 import { searchAddress, reverseGeocode, currentPosition } from './geocode.js';
 import { findMeetingPoint, estimateSeconds, SPEEDS } from './meetpoint.js';
-import { FloodAnimation } from './flood.js';
+import { FloodAnimation, LINE_STYLE } from './flood.js';
 import { loadRoads } from './roads.js';
 import { TABS, findPois, groupPois } from './pois.js';
 import { getConfig, ratingsSource, rateAll, thumbFor, detailsFor } from './rated.js';
@@ -896,7 +896,7 @@ const tripSeconds = (route, estimate) => (route?.options ? route.options[0]?.dur
 function trackFor(person, route, meet, estimate) {
   const door = [person.lat, person.lon], end = [meet.lat, meet.lon];
   const base = { color: person.color, initial: initial(person.name) };
-  const straight = { ...base, duration: estimate, pieces: [{ pts: [door, end], t0: 0, t1: estimate, walk: true }] };
+  const straight = { ...base, duration: estimate, pieces: [{ pts: [door, end], t0: 0, t1: estimate, mode: person.mode === 'transit' ? 'walk' : person.mode }] };
   if (!route) return straight;
   if (route.options) {
     // Public transport: the journey shown in directions, each leg at its real times.
@@ -907,13 +907,13 @@ function trackFor(person, route, meet, estimate) {
       const a = Date.parse(l.from.time);
       const t0 = Number.isFinite(a) && Number.isFinite(t00) ? Math.max(t, (a - t00) / 1000) : t;
       t = t0 + l.duration;
-      return { pts: l.geometry, t0, t1: t, walk: isWalkLeg(l) };
+      return { pts: l.geometry, t0, t1: t, mode: isWalkLeg(l) ? 'walk' : 'transit' };
     });
     if (!pieces.length) return straight;
-    pieces.unshift({ pts: [door, pieces[0].pts[0]], t0: 0, t1: 0, walk: true });
+    pieces.unshift({ pts: [door, pieces[0].pts[0]], t0: 0, t1: 0, mode: 'walk' });
     return { ...base, pieces, duration: Math.max(t, o.duration || 0) };
   }
-  return { ...base, duration: route.duration, pieces: [{ pts: [door, ...route.geometry, end], t0: 0, t1: route.duration, walk: person.mode === 'walk' }] };
+  return { ...base, duration: route.duration, pieces: [{ pts: [door, ...route.geometry, end], t0: 0, t1: route.duration, mode: person.mode }] };
 }
 
 async function findPlaces({ replay = false } = {}) {
@@ -1730,16 +1730,17 @@ function drawDirections() {
       return;
     }
     const pieces = r.data.options
-      ? currentOption(r).legs.map((l) => ({ pts: l.geometry, walk: isWalkLeg(l) }))
-      : [{ pts: r.data.geometry, walk: r.data.mode === 'walk' }];
+      ? currentOption(r).legs.map((l) => ({ pts: l.geometry, mode: isWalkLeg(l) ? 'walk' : 'transit' }))
+      : [{ pts: r.data.geometry, mode: r.data.mode || person.mode }];
+    // The same line for each way of travelling as in the search animation:
+    // dots walking, short dashes cycling, long dashes on public transport, solid driving.
     for (const piece of pieces) {
       if (piece.pts.length < 2) continue;
-      if (piece.walk) {
-        L.polyline(piece.pts, { color: person.color, weight: 4, opacity: 0.9 * opacity, dashArray: '0.1 7', lineCap: 'round', interactive: false }).addTo(layer);
-      } else {
-        L.polyline(piece.pts, { color: '#fff', weight: 8, opacity: 0.9 * opacity, interactive: false }).addTo(layer);
-        L.polyline(piece.pts, { color: person.color, weight: 4.5, opacity, interactive: false }).addTo(layer);
-      }
+      const st = LINE_STYLE[piece.mode] || LINE_STYLE.drive;
+      L.polyline(piece.pts, {
+        color: person.color, weight: 4.2, opacity, lineCap: st.cap, lineJoin: 'round', interactive: false,
+        dashArray: st.dash.length ? st.dash.map((d) => Math.max(0.1, d * 4.2)).join(' ') : null,
+      }).addTo(layer);
     }
   });
 }

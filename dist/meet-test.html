@@ -2332,7 +2332,15 @@ const THEMES = {
 const BASE = { minorW: 0.7, majorW: 1.2 };
 const FLOOD = { minorW: 1.05, majorW: 1.7, alpha: 0.88 };
 const FRONT = [1, 0.6, 0.3, 0.08]; // the front colour over the newest … oldest quarter of the front
-const ROUTE = { halo: 13, core: 5, line: 3.6, casing: 3.5 };
+// Route lines: one plain line in the person's colour, its pattern telling how
+// they travel (dash lengths are multiples of the line's width).
+const ROUTE = { width: 4.2 };
+const LINE_STYLE = {
+  walk: { dash: [0.001, 2.5], cap: 'round' },   // dots
+  bike: { dash: [1.5, 1.3], cap: 'butt' },      // short dashes
+  transit: { dash: [4.5, 1.4], cap: 'butt' },   // long dashes (bus, train, ferry…)
+  drive: { dash: [], cap: 'round' },            // solid
+};
 const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 
 /** A colour mixed towards white (amount > 0) or black (amount < 0). */
@@ -2720,7 +2728,7 @@ class FloodAnimation {
         let pts = piece.pts.filter(ok).map(proj);
         // Each piece starts where the last one ended, so the route is one unbroken line.
         if (prev && pts.length && (pts[0].x !== prev.x || pts[0].y !== prev.y)) pts = [prev, ...pts];
-        addTimed(segs, pts, piece.t0, piece.t1, piece.walk);
+        addTimed(segs, pts, piece.t0, piece.t1, piece.mode || (piece.walk ? 'walk' : 'drive'));
         if (pts.length) prev = pts[pts.length - 1];
       }
       segs.sort((a, b) => a.s0 - b.s0);
@@ -2730,6 +2738,7 @@ class FloodAnimation {
     this.gather = 0;
     this.glow = 1;
     const total = Math.max(1, ...this.routes.map((r) => r.duration));
+    this.prepareRetract();
     // The routes draw while the floods pull back: both on one clock, so the
     // last of the floods goes just as the last route reaches the meeting point.
     if (!(await this.run(1900, (t) => {
@@ -2745,9 +2754,82 @@ class FloodAnimation {
   }
 
   /**
-   * The floods pulling back along their streets: p = 0 as they were, 1 all
-   * gone. Each flood's clock runs backwards, so the furthest streets go
-   * first, behind a fading front.
+   * How far each piece of a flood is from that person's route, for pulling
+   * the floods back from the route outwards. Distances come from a coarse
+   * distance map (about 300 cells across) rather than street by street.
+   */
+  prepareRetract() {
+    if (!this.net) return;
+    const net = this.net;
+    for (const f of this.shown) {
+      const { fl } = f;
+      const route = this.routes?.[f.i];
+      const ids = [];
+      for (let j = 0; j < f.e; j++) {
+        const q = fl.byEnd[j];
+        if (!this.owner || this.owner[fl.edge[q]] === f.i) ids.push(q);
+      }
+      if (!ids.length || !route?.segs.length) { f.retract = null; continue; }
+      // Where each piece is: the middle of the stretch drawn.
+      const mx = new Float64Array(ids.length), my = new Float64Array(ids.length);
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      ids.forEach((q, k) => {
+        const a = fl.from[q], b = fl.to[q], h = fl.frac[q] / 2;
+        mx[k] = net.nx[a] + (net.nx[b] - net.nx[a]) * h;
+        my[k] = net.ny[a] + (net.ny[b] - net.ny[a]) * h;
+        x0 = Math.min(x0, mx[k]); x1 = Math.max(x1, mx[k]); y0 = Math.min(y0, my[k]); y1 = Math.max(y1, my[k]);
+      });
+      for (const sg of route.segs) {
+        x0 = Math.min(x0, sg.ax, sg.bx); x1 = Math.max(x1, sg.ax, sg.bx); y0 = Math.min(y0, sg.ay, sg.by); y1 = Math.max(y1, sg.ay, sg.by);
+      }
+      const cell = Math.max(x1 - x0, y1 - y0, 1e-9) / 300;
+      const W = Math.ceil((x1 - x0) / cell) + 1, H = Math.ceil((y1 - y0) / cell) + 1;
+      const D = new Float32Array(W * H).fill(Infinity);
+      const at = (x, y) => Math.min(H - 1, Math.max(0, Math.round((y - y0) / cell))) * W + Math.min(W - 1, Math.max(0, Math.round((x - x0) / cell)));
+      // The route itself is distance 0…
+      for (const sg of route.segs) {
+        const n = Math.max(1, Math.ceil(Math.hypot(sg.bx - sg.ax, sg.by - sg.ay) / (cell / 2)));
+        for (let i = 0; i <= n; i++) D[at(sg.ax + ((sg.bx - sg.ax) * i) / n, sg.ay + ((sg.by - sg.ay) * i) / n)] = 0;
+      }
+      // …and every other cell its distance from it (two sweeps, straight and diagonal steps).
+      const R2 = Math.SQRT2;
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const i = y * W + x;
+          let d = D[i];
+          if (x > 0) d = Math.min(d, D[i - 1] + 1);
+          if (y > 0) {
+            d = Math.min(d, D[i - W] + 1);
+            if (x > 0) d = Math.min(d, D[i - W - 1] + R2);
+            if (x < W - 1) d = Math.min(d, D[i - W + 1] + R2);
+          }
+          D[i] = d;
+        }
+      }
+      for (let y = H - 1; y >= 0; y--) {
+        for (let x = W - 1; x >= 0; x--) {
+          const i = y * W + x;
+          let d = D[i];
+          if (x < W - 1) d = Math.min(d, D[i + 1] + 1);
+          if (y < H - 1) {
+            d = Math.min(d, D[i + W] + 1);
+            if (x < W - 1) d = Math.min(d, D[i + W + 1] + R2);
+            if (x > 0) d = Math.min(d, D[i + W - 1] + R2);
+          }
+          D[i] = d;
+        }
+      }
+      const dist = Float32Array.from(ids, (_, k) => D[at(mx[k], my[k])]);
+      const order = Int32Array.from(ids.keys()).sort((a, b) => dist[a] - dist[b]);
+      f.retract = { ids: Int32Array.from(order, (k) => ids[k]), dist: Float32Array.from(order, (k) => dist[k]) };
+      f.retract.max = f.retract.dist[f.retract.dist.length - 1] || 0;
+    }
+  }
+
+  /**
+   * The floods pulling back: p = 0 as they were, 1 all gone. The streets
+   * nearest each person's route go first, then further and further out,
+   * behind a fading edge, so the route is left standing on its own.
    */
   drawRetract(p) {
     this.retract = p;
@@ -2756,17 +2838,20 @@ class FloodAnimation {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, size.x, size.y);
     if (!this.net || p >= 1) return;
-    const v = this.view();
+    const v = this.view(), net = this.net;
     for (const f of this.shown) {
-      const { fl } = f;
-      const c = f.c * (1 - p);
-      const band = f.c * 0.06;
-      const all = upTo(fl, c), inner = upTo(fl, c - band);
-      const paths = [new Path2D(), new Path2D()];
-      this.trace(f, 0, all, paths, v);
+      const r = f.retract;
+      if (!r) continue;
+      const gone = r.max * p, edge = gone + r.max * 0.08;
+      let k = 0;
+      { let lo = 0, hi = r.dist.length; while (lo < hi) { const mid = (lo + hi) >> 1; if (r.dist[mid] <= gone) lo = mid + 1; else hi = mid; } k = lo; }
+      const paths = [new Path2D(), new Path2D()], front = new Path2D();
+      for (let j = k; j < r.ids.length; j++) {
+        const q = r.ids[j];
+        this.piece(f.fl, q, Infinity, paths[net.major[f.fl.edge[q]]], v);
+        if (r.dist[j] <= edge) this.piece(f.fl, q, Infinity, front, v);
+      }
       this.strokeFlood(ctx, f, paths);
-      const front = new Path2D();
-      this.trace(f, inner, all, [front, front], v);
       ctx.globalCompositeOperation = this.theme.blend;
       ctx.globalAlpha = 0.55 * (1 - p);
       ctx.strokeStyle = f.front;
@@ -2803,45 +2888,39 @@ class FloodAnimation {
     const g = this.glow;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    const stroke = (p, color, width, alpha, dotted = false) => {
-      if (alpha <= 0) return;
-      ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = width;
-      // Dots: round ends of zero-length dashes, evenly spaced along each walk.
-      ctx.setLineDash(dotted ? [0.001, width * 2.5] : []);
-      ctx.lineDashOffset = 0;
-      ctx.stroke(p);
-    };
     const tips = [];
     for (const r of this.routes) {
       const upToT = Math.min(this.routeClock, r.duration);
-      // One unbroken line for the whole route (the glow), and one per stretch of
-      // riding or walking: joined pieces continue the same line, so dots stay
-      // evenly spaced across corners and nothing is drawn twice.
-      const all = new Path2D(), ride = new Path2D(), walk = new Path2D();
-      let tip = null, last = null, lastKind = null;
+      // One path per way of travelling; joined pieces continue the same line,
+      // so a pattern stays evenly spaced across corners and doesn't creep as
+      // the line grows.
+      const paths = {};
+      let tip = null, last = null, lastMode = null;
       for (const s of r.segs) {
         if (s.s0 > upToT) break;
         const x0 = v.X(s.ax), y0 = v.Y(s.ay);
         let x1 = v.X(s.bx), y1 = v.Y(s.by);
         if (s.s1 > upToT) { const f = s.s1 > s.s0 ? (upToT - s.s0) / (s.s1 - s.s0) : 1; x1 = x0 + (x1 - x0) * f; y1 = y0 + (y1 - y0) * f; }
-        const kind = s.walk ? walk : ride;
+        const path = (paths[s.mode] ||= new Path2D());
         const joined = last && Math.abs(last.x - x0) < 0.01 && Math.abs(last.y - y0) < 0.01;
-        if (!joined || lastKind !== kind) kind.moveTo(x0, y0);
-        kind.lineTo(x1, y1);
-        if (!joined) all.moveTo(x0, y0);
-        all.lineTo(x1, y1);
+        if (!joined || lastMode !== s.mode) path.moveTo(x0, y0);
+        path.lineTo(x1, y1);
         last = { x: x1, y: y1 };
-        lastKind = kind;
+        lastMode = s.mode;
         tip = last;
       }
-      // Glowing while the map is dark; a plain directions line once it is back
-      // to normal. Drawn over, never added: crossing routes don't brighten.
-      stroke(all, r.glow, ROUTE.halo, 0.26 * g);
-      stroke(ride, 'rgba(255,255,255,0.95)', ROUTE.line + ROUTE.casing, 1 - g);
-      const width = ROUTE.line + (ROUTE.core - ROUTE.line) * g;
-      stroke(ride, g > 0.5 ? r.glow : r.color, width, 1);
-      stroke(walk, g > 0.5 ? r.glow : r.color, width + 0.8, 1, true);
-      stroke(ride, '#fff', 1.8, 0.9 * g);
+      // A plain line in the person's colour: no glow, no highlight.
+      const color = g > 0.5 ? r.glow : r.color;
+      for (const [mode, path] of Object.entries(paths)) {
+        const st = LINE_STYLE[mode] || LINE_STYLE.drive;
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = ROUTE.width;
+        ctx.lineCap = st.cap;
+        ctx.setLineDash(st.dash.map((d) => d * ROUTE.width));
+        ctx.lineDashOffset = 0;
+        ctx.stroke(path);
+      }
       if (tip && g > 0) tips.push({ ...tip, r });
     }
     ctx.setLineDash([]);
@@ -2895,7 +2974,7 @@ function upTo(fl, c) {
 }
 
 /** Split a projected line into segments timed evenly by length between t0 and t1. */
-function addTimed(out, raw, t0, t1, walk) {
+function addTimed(out, raw, t0, t1, mode) {
   // Repeated points would make zero-length steps (and uneven dots).
   const pts = raw.filter((p, i) => i === 0 || p.x !== raw[i - 1].x || p.y !== raw[i - 1].y);
   if (pts.length < 2) return;
@@ -2907,11 +2986,11 @@ function addTimed(out, raw, t0, t1, walk) {
     const s0 = t0 + (total ? along / total : 0) * (t1 - t0);
     along += lens[i - 1];
     const s1 = t0 + (total ? along / total : 1) * (t1 - t0);
-    out.push({ ax: pts[i - 1].x, ay: pts[i - 1].y, bx: pts[i].x, by: pts[i].y, s0, s1, walk });
+    out.push({ ax: pts[i - 1].x, ay: pts[i - 1].y, bx: pts[i].x, by: pts[i].y, s0, s1, mode });
   }
 }
 
-__m["flood"] = { costTable, prepareNetwork, nearestNode, floodFrom, ownership, roadsBy, reachTime, FloodAnimation };
+__m["flood"] = { costTable, prepareNetwork, nearestNode, floodFrom, ownership, roadsBy, reachTime, LINE_STYLE, FloodAnimation };
 })();
 // ---- pois
 (() => {
@@ -4998,7 +5077,7 @@ __m["api"] = { api };
 const { api } = __m["api"];
 const { searchAddress, reverseGeocode, currentPosition } = __m["geocode"];
 const { findMeetingPoint, estimateSeconds, SPEEDS } = __m["meetpoint"];
-const { FloodAnimation } = __m["flood"];
+const { FloodAnimation, LINE_STYLE } = __m["flood"];
 const { loadRoads } = __m["roads"];
 const { TABS, findPois, groupPois } = __m["pois"];
 const { getConfig, ratingsSource, rateAll, thumbFor, detailsFor } = __m["rated"];
@@ -5744,7 +5823,7 @@ const tripSeconds = (route, estimate) => (route?.options ? route.options[0]?.dur
 function trackFor(person, route, meet, estimate) {
   const door = [person.lat, person.lon], end = [meet.lat, meet.lon];
   const base = { color: person.color, initial: initial(person.name) };
-  const straight = { ...base, duration: estimate, pieces: [{ pts: [door, end], t0: 0, t1: estimate, walk: true }] };
+  const straight = { ...base, duration: estimate, pieces: [{ pts: [door, end], t0: 0, t1: estimate, mode: person.mode === 'transit' ? 'walk' : person.mode }] };
   if (!route) return straight;
   if (route.options) {
     // Public transport: the journey shown in directions, each leg at its real times.
@@ -5755,13 +5834,13 @@ function trackFor(person, route, meet, estimate) {
       const a = Date.parse(l.from.time);
       const t0 = Number.isFinite(a) && Number.isFinite(t00) ? Math.max(t, (a - t00) / 1000) : t;
       t = t0 + l.duration;
-      return { pts: l.geometry, t0, t1: t, walk: isWalkLeg(l) };
+      return { pts: l.geometry, t0, t1: t, mode: isWalkLeg(l) ? 'walk' : 'transit' };
     });
     if (!pieces.length) return straight;
-    pieces.unshift({ pts: [door, pieces[0].pts[0]], t0: 0, t1: 0, walk: true });
+    pieces.unshift({ pts: [door, pieces[0].pts[0]], t0: 0, t1: 0, mode: 'walk' });
     return { ...base, pieces, duration: Math.max(t, o.duration || 0) };
   }
-  return { ...base, duration: route.duration, pieces: [{ pts: [door, ...route.geometry, end], t0: 0, t1: route.duration, walk: person.mode === 'walk' }] };
+  return { ...base, duration: route.duration, pieces: [{ pts: [door, ...route.geometry, end], t0: 0, t1: route.duration, mode: person.mode }] };
 }
 
 async function findPlaces({ replay = false } = {}) {
@@ -6578,16 +6657,17 @@ function drawDirections() {
       return;
     }
     const pieces = r.data.options
-      ? currentOption(r).legs.map((l) => ({ pts: l.geometry, walk: isWalkLeg(l) }))
-      : [{ pts: r.data.geometry, walk: r.data.mode === 'walk' }];
+      ? currentOption(r).legs.map((l) => ({ pts: l.geometry, mode: isWalkLeg(l) ? 'walk' : 'transit' }))
+      : [{ pts: r.data.geometry, mode: r.data.mode || person.mode }];
+    // The same line for each way of travelling as in the search animation:
+    // dots walking, short dashes cycling, long dashes on public transport, solid driving.
     for (const piece of pieces) {
       if (piece.pts.length < 2) continue;
-      if (piece.walk) {
-        L.polyline(piece.pts, { color: person.color, weight: 4, opacity: 0.9 * opacity, dashArray: '0.1 7', lineCap: 'round', interactive: false }).addTo(layer);
-      } else {
-        L.polyline(piece.pts, { color: '#fff', weight: 8, opacity: 0.9 * opacity, interactive: false }).addTo(layer);
-        L.polyline(piece.pts, { color: person.color, weight: 4.5, opacity, interactive: false }).addTo(layer);
-      }
+      const st = LINE_STYLE[piece.mode] || LINE_STYLE.drive;
+      L.polyline(piece.pts, {
+        color: person.color, weight: 4.2, opacity, lineCap: st.cap, lineJoin: 'round', interactive: false,
+        dashArray: st.dash.length ? st.dash.map((d) => Math.max(0.1, d * 4.2)).join(' ') : null,
+      }).addTo(layer);
     }
   });
 }
