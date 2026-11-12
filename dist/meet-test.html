@@ -925,6 +925,8 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
   font: 700 12.5px/1.25 var(--font); box-shadow: 0 0 12px color-mix(in srgb, var(--c) 45%, transparent); animation: hud-in 0.4s ease both;
 }
 
+.app-version { margin: 4px 20px 16px; text-align: center; }
+
 /* Google's name and map credits, when the map is Google's: top right, always in view. */
 .gmap-credit {
   position: absolute; z-index: 999; top: calc(64px + env(safe-area-inset-top, 0px)); right: max(14px, env(safe-area-inset-right, 0px));
@@ -1479,6 +1481,7 @@ img.broken { display: none; }
     <div class="drawer-section" id="drawer-account">
       <button class="btn btn-plain" id="btn-logout" style="color:var(--red)">Sign out</button>
     </div>
+    <p class="footnote app-version" id="app-version" hidden></p>
   </nav>
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
@@ -6416,6 +6419,7 @@ async function boot() {
   initDrawer();
   window.addEventListener('resize', () => map?.invalidateSize());
   ratingsSource().then((src) => { ratingsOn = !!src; ratingsName = src === 'tripadvisor' ? 'Tripadvisor' : src || ''; });
+  getConfig().then((c) => { if (c.version) { $('#app-version').hidden = false; $('#app-version').textContent = `Version ${c.version}`; } });
   onUser(await api.start());
 }
 

@@ -2014,6 +2014,7 @@ async function boot() {
   initDrawer();
   window.addEventListener('resize', () => map?.invalidateSize());
   ratingsSource().then((src) => { ratingsOn = !!src; ratingsName = src === 'tripadvisor' ? 'Tripadvisor' : src || ''; });
+  getConfig().then((c) => { if (c.version) { $('#app-version').hidden = false; $('#app-version').textContent = `Version ${c.version}`; } });
   onUser(await api.start());
 }
 

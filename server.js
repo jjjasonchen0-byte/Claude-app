@@ -523,6 +523,8 @@ route('GET', '/api/config', async (req, res) => {
     ratings: tripadvisor.enabled ? 'tripadvisor' : null,
     // Google's map (and with it Google directions) while today's map tiles last.
     google: google.available('tiles'),
+    // Which code is running (Render sets RENDER_GIT_COMMIT), shown in the menu.
+    version: String(process.env.RENDER_GIT_COMMIT || '').slice(0, 7),
   }, { 'Cache-Control': 'private, max-age=300' });
 });
 
