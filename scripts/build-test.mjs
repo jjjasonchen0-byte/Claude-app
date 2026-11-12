@@ -85,6 +85,7 @@ const modules = [
   ['meetpoint', 'public/js/meetpoint.js'],
   ['flood', 'public/js/flood.js'],
   ['pois', 'public/js/pois.js'],
+  ['anchor', 'public/js/anchor.js'],
   ['hours', 'public/js/hours.js'],
   ['rated', 'public/js/rated.js'],
   ['share', 'public/js/share.js'],

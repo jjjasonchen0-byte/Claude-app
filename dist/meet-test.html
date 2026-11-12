@@ -1758,6 +1758,11 @@ __m["graph"] = { rng, fromEdgeList, dijkstra };
 // more exact source of travel times (Google, when the server has a key), the
 // three best spots are checked against it for everyone.
 const { haversine, paddedBBox, centroid, smallestEnclosingCircle, span } = __m["geo"];
+// Spots are placed on the street network of the most walkable way of travelling
+// asked about (walking paths, then cycle routes, then roads): somewhere people
+// can stand, not a motorway or a railway line.
+const SNAP_ORDER = { walk: 0, bike: 1, drive: 2 };
+
 const SPEEDS = { walk: 1.35, bike: 4.2, transit: 6.5, drive: 9.5 }; // m/s, urban averages
 const DETOUR = 1.3; // roads are about this much longer than a straight line
 const TRANSIT_OVERHEAD = 360; // walking to the stop and waiting, seconds
@@ -1792,9 +1797,11 @@ const stats = (times) => {
 };
 
 // "Similar times" may make the longest trip a little longer than it has to
-// be (up to 30%, or 5 minutes) if that brings everyone's times closer together.
-const SIMILAR_SLACK = 1.3;
-const SIMILAR_MIN_SLACK_S = 300;
+// be (up to 12%, or 4 minutes) if that brings everyone's times closer
+// together; any more and everyone ends up travelling further (a far-off
+// hub where all trips are equally long is not a fair place to meet).
+const SIMILAR_SLACK = 1.12;
+const SIMILAR_MIN_SLACK_S = 240;
 
 /**
  * Scoring for a set of spots already measured (lower is better):
@@ -1803,9 +1810,9 @@ const SIMILAR_MIN_SLACK_S = 300;
  *    the shortest it could be, then the shorter trips.
  *  • 'total': everyone's trips add up to the least time.
  */
-function makeScore(rule, rows) {
+function makeScore(rule, rows, { bestMax: known = Infinity } = {}) {
   if (rule === 'total') return (times) => { const s = stats(times); return s ? s.sum + s.max * 0.01 : Infinity; };
-  let bestMax = Infinity;
+  let bestMax = known;
   for (const r of rows) { const s = stats(r.times); if (s) bestMax = Math.min(bestMax, s.max); }
   const cap = Math.max(bestMax * SIMILAR_SLACK, bestMax + SIMILAR_MIN_SLACK_S);
   return (times) => {
@@ -1825,7 +1832,7 @@ const timeout = (promise, ms) => Promise.race([promise, new Promise((_, rej) => 
 async function evaluate(people, cands, { travelTimes, signal }) {
   const times = people.map(() => cands.map(() => null));
   const dists = people.map(() => cands.map(() => null));
-  let snapped = null;
+  let snapped = null, snappedBy = null;
   let approx = false;
   // Walkers and public transport riders share one walking request.
   const groups = { walk: [], bike: [], drive: [] };
@@ -1834,7 +1841,7 @@ async function evaluate(people, cands, { travelTimes, signal }) {
     if (!idx.length) return;
     try {
       const t = await timeout(travelTimes(mode, idx.map((i) => people[i]), cands, { signal }), 12000);
-      if (t.destinations?.length === cands.length && (!snapped || mode === 'walk')) snapped = t.destinations;
+      if (t.destinations?.length === cands.length && (!snapped || SNAP_ORDER[mode] < SNAP_ORDER[snappedBy])) { snapped = t.destinations; snappedBy = mode; }
       idx.forEach((pi, k) => {
         cands.forEach((_, j) => {
           const d = t.distances?.[k]?.[j];
@@ -1878,7 +1885,103 @@ async function evaluate(people, cands, { travelTimes, signal }) {
   // The spot as snapped onto a street, when the service gave a usable one.
   const okPt = (s) => Array.isArray(s) && Number.isFinite(s[0]) && Number.isFinite(s[1]);
   const points = cands.map((c, j) => (okPt(snapped?.[j]) ? { lat: snapped[j][0], lon: snapped[j][1] } : { lat: c.lat, lon: c.lon }));
-  return points.map((pt, j) => ({ ...pt, times: times.map((row) => row[j]), dists: dists.map((row) => row[j]), approx }));
+  return points.map((pt, j) => ({ ...pt, times: times.map((row) => row[j]), dists: dists.map((row) => row[j]), approx, snappedBy }));
+}
+
+/** Move a spot onto the nearest street people can walk on (when no one walks, spots sit on roads). */
+async function onFoot(spot, from, { travelTimes, signal }) {
+  try {
+    const t = await timeout(travelTimes('walk', [from], [spot], { signal }), 8000);
+    const d = t.destinations?.[0];
+    if (Array.isArray(d) && Number.isFinite(d[0]) && Number.isFinite(d[1]) && haversine(spot.lat, spot.lon, d[0], d[1]) < 300) return { lat: d[0], lon: d[1] };
+  } catch (err) {
+    if (signal?.aborted) throw err;
+  }
+  return spot;
+}
+
+/**
+ * Public transport riders: real travel times from each rider to every stop in
+ * the area (one request each, leaving at `time`), so the meeting point is
+ * picked among stops everyone can reach, by real times. Others' times to the
+ * most promising stops come from the routing service. Null if it can't be done.
+ */
+async function viaStops(people, { rule, transitReach, travelTimes, directions, time, box, signal, onStatus }) {
+  const riders = people.map((p, i) => (p.mode === 'transit' ? i : -1)).filter((i) => i >= 0);
+  // Look comfortably further than the longest trip is likely to be.
+  const mid = centroid(people);
+  const longest = Math.max(...riders.map((i) => estimateSeconds('transit', haversine(people[i].lat, people[i].lon, mid.lat, mid.lon))));
+  const max = Math.max(40, Math.min(120, Math.ceil((longest * 2.2) / 60)));
+  onStatus('Checking public transport…');
+  const reach = await Promise.all(riders.map((i) => timeout(transitReach(people[i], { box, max, time, signal }), 15000)));
+  const key = (lat, lon) => `${Math.round(lat * 1000)},${Math.round(lon * 1000)}`;
+  const maps = reach.map((r) => new Map((r?.cells || []).map((c) => [key(c[0], c[1]), c])));
+  const common = [...maps[0].keys()].filter((k) => maps.every((m) => m.has(k)));
+  if (!common.length) return null;
+  let rows = common.map((k) => {
+    const [lat, lon] = maps[0].get(k);
+    const times = people.map((p, i) => {
+      const r = riders.indexOf(i);
+      return r >= 0 ? maps[r].get(k)[2] * 60 : estimateSeconds(p.mode, haversine(p.lat, p.lon, lat, lon));
+    });
+    const imp = Math.max(...maps.map((m) => m.get(k)[3] || 0));
+    return { lat, lon, times, imp, dists: people.map((p) => haversine(p.lat, p.lon, lat, lon) * DETOUR), approx: false };
+  });
+  const others = people.map((p, i) => (p.mode === 'transit' ? -1 : i)).filter((i) => i >= 0);
+  if (others.length) {
+    // Walkers, cyclists and drivers: real times to the 60 most promising stops.
+    const pre = makeScore(rule, rows);
+    rows = rows.map((r) => ({ ...r, score: pre(r.times) })).sort((a, b) => a.score - b.score).slice(0, 60);
+    const measured = await evaluate(others.map((i) => people[i]), rows.map((r) => ({ lat: r.lat, lon: r.lon })), { travelTimes, signal });
+    others.forEach((pi, k) => rows.forEach((r, j) => {
+      r.times[pi] = measured[j].times[k];
+      r.dists[pi] = measured[j].dists[k] ?? r.dists[pi];
+      r.approx ||= measured[j].approx;
+    }));
+  }
+  // Similar (or least total) times, and between spots about as good, the bigger station.
+  const topImp = Math.max(1, ...rows.map((r) => r.imp));
+  // The shortest longest trip anywhere: how long the longest trip has to be at least.
+  const floor = Math.min(...rows.map((r) => (r.times.every(Number.isFinite) ? Math.max(...r.times) : Infinity)));
+  const rank = (list) => {
+    const score = makeScore(rule, list, { bestMax: floor });
+    return list.map((r) => ({ r, sc: score(r.times) - 90 * (r.imp / topImp) })).sort((a, b) => a.sc - b.sc).map((x) => x.r);
+  };
+  const ranked = rank(rows.filter((r) => r.times.every(Number.isFinite)));
+  if (!ranked.length) return null;
+  let best = ranked[0];
+  // Those times count from leaving, waiting for the first bus or train
+  // included; the journeys people are shown start when they need to leave
+  // home. So the best few stops are checked against real journeys, and the
+  // choice is made on those.
+  if (directions) {
+    const top = [];
+    for (const r of ranked) {
+      if (top.every((t) => haversine(t.lat, t.lon, r.lat, r.lon) > 300)) top.push(r);
+      if (top.length === (riders.length > 4 ? 2 : 3)) break;
+    }
+    const checked = await Promise.all(top.map(async (cand) => {
+      const times = [...cand.times];
+      await Promise.all(riders.map(async (i) => {
+        try {
+          const d = await timeout(directions('transit', people[i], cand, { signal }), 9000);
+          if (Number.isFinite(d?.duration)) times[i] = d.duration;
+        } catch (err) {
+          if (signal?.aborted) throw err;
+        }
+      }));
+      return { ...cand, times };
+    }));
+    best = rank(checked)[0] || best;
+  }
+  return {
+    meet: { lat: best.lat, lon: best.lon },
+    times: best.times.map((t) => Math.round(t)),
+    dists: best.dists.map((d) => Math.round(d)),
+    real: people.map(() => !best.approx),
+    approx: !!best.approx,
+    tried: rows.length,
+  };
 }
 
 /**
@@ -1888,10 +1991,25 @@ async function evaluate(people, cands, { travelTimes, signal }) {
  * @param opts.directions optional (mode, from, to) → { duration }: used to check public transport
  * @param opts.checkTimes optional (people, spots) → { durations, distances } ([person][spot], null if unknown):
  *   exact travel times for the best few spots, used to make the final choice
+ * @param opts.transitReach optional (person, { box, max, time }) → { cells: [[lat, lon, minutes, importance]] }:
+ *   public transport times to every stop in an area, for groups with riders
+ * @param opts.time when everyone leaves (ISO), for public transport
  * @returns { meet: {lat, lon}, times: [s], dists: [m], real: [bool], approx }
  */
-async function findMeetingPoint(people, { rule = 'similar', travelTimes, directions, checkTimes, signal, onStatus = () => {} } = {}) {
+async function findMeetingPoint(people, { rule = 'similar', travelTimes, directions, checkTimes, transitReach, time, signal, onStatus = () => {} } = {}) {
   if (people.length < 2) throw new Error('Add at least two people');
+
+  // With public transport riders: pick among stops, by real timetables, when possible.
+  if (transitReach && people.some((p) => p.mode === 'transit')) {
+    try {
+      const box = paddedBBox(people, 0.2, Math.max(400, span(people) * 0.45));
+      const r = await viaStops(people, { rule, transitReach, travelTimes, directions, time, box, signal, onStatus });
+      if (r) return r;
+    } catch (err) {
+      if (signal?.aborted) throw err;
+      // Not available: fall back to estimates and timetable checks below.
+    }
+  }
   const all = [];
   // Scores depend on everything measured so far ("close to the shortest
   // possible longest trip"), so they are worked out again after each round.
@@ -1948,6 +2066,7 @@ async function findMeetingPoint(people, { rule = 'similar', travelTimes, directi
       });
       const pick = checked.reduce((a, b) => (b.score < a.score ? b : a));
       if (pick.known.some(Boolean)) {
+        if (pick.snappedBy && pick.snappedBy !== 'walk') Object.assign(pick, await onFoot(pick, people[0], { travelTimes, signal }));
         return {
           meet: { lat: pick.lat, lon: pick.lon },
           times: pick.times.map((s) => Math.round(s)),
@@ -1990,6 +2109,8 @@ async function findMeetingPoint(people, { rule = 'similar', travelTimes, directi
     riders.forEach((i, k) => { real[i] = chosen.checked[k]; });
   }
   if (chosen.approx) real.fill(false);
+  // Nobody walks: the spot sits on the road network; move it onto a walkable street.
+  if (chosen.snappedBy && chosen.snappedBy !== 'walk') Object.assign(chosen, await onFoot(chosen, people[0], { travelTimes, signal }));
   return {
     meet: { lat: chosen.lat, lon: chosen.lon },
     times: chosen.times.map((t) => Math.round(t)),
@@ -3023,6 +3144,38 @@ async function photonPois(center, radiusM, { signal } = {}) {
 
 __m["pois"] = { OVERPASS_ENDPOINTS, overpass, TABS, categorize, poiQuery, parsePois, groupPois, findPois, PHOTON_GROUPS, photonUrl, photonElements };
 })();
+// ---- anchor
+(() => {
+// The meeting point has to be somewhere a group can stand and wait for each
+// other: by a café, a restaurant, a pub, a park, a museum or the shops, not
+// the middle of a motorway, a railway line or a car park. The fairest spot
+// (by travel times) is moved to the liveliest such place close by: one with
+// other places around it beats a lone one a little nearer.
+const { haversine } = __m["geo"];
+// Kinds of place people meet at (the places tabs in pois.js).
+const MEETABLE = new Set(['food', 'drinks', 'fun', 'culture', 'outdoors', 'shopping']);
+
+/**
+ * The place to meet at near `spot`, or null if there is none within `maxM`.
+ * pois: [{ lat, lon, tab, name }].
+ */
+function pickAnchor(spot, pois, { maxM = 500, aroundM = 120 } = {}) {
+  const near = (pois || []).filter((p) => MEETABLE.has(p.tab) && Number.isFinite(p.lat) && Number.isFinite(p.lon)
+    && haversine(spot.lat, spot.lon, p.lat, p.lon) <= maxM + aroundM);
+  let best = null, bestScore = Infinity;
+  for (const p of near) {
+    const d = haversine(spot.lat, spot.lon, p.lat, p.lon);
+    if (d > maxM) continue;
+    // Each other place within a short walk counts as 40 m nearer (up to 8 of them).
+    const company = near.reduce((n, q) => n + (q !== p && haversine(p.lat, p.lon, q.lat, q.lon) <= aroundM ? 1 : 0), 0);
+    const score = d - 40 * Math.min(company, 8);
+    if (score < bestScore) { bestScore = score; best = p; }
+  }
+  return best;
+}
+
+__m["anchor"] = { pickAnchor };
+})();
 // ---- hours
 (() => {
 // Opening hours from OpenStreetMap's opening_hours tag, for the common
@@ -3414,6 +3567,7 @@ const MODES = [
 const OSRM = 'https://routing.openstreetmap.de';
 const OSRM_PROFILE = { walk: 'routed-foot', bike: 'routed-bike', drive: 'routed-car' };
 const TRANSITOUS = 'https://api.transitous.org/api/v5/plan';
+const TRANSITOUS_REACH = 'https://api.transitous.org/api/v1/one-to-all';
 
 const ATTRIBUTION = {
   routing: { text: 'Routes © OpenStreetMap contributors, via FOSSGIS OSRM', url: 'https://routing.openstreetmap.de/about.html' },
@@ -3450,6 +3604,34 @@ function transitUrl(from, to, { time, arriveBy = false } = {}) {
   });
   if (time) q.set('time', new Date(time).toISOString());
   return `${TRANSITOUS}?${q}`;
+}
+
+/** Every stop reachable from a place by public transport within `max` minutes. */
+function transitReachUrl(from, { time, max = 60 } = {}) {
+  const q = new URLSearchParams({ one: ll(from), maxTravelTime: String(max) });
+  if (time) q.set('time', new Date(time).toISOString());
+  return `${TRANSITOUS_REACH}?${q}`;
+}
+
+/**
+ * Transitous "one to all" → the stops inside an area as { cells: [[lat, lon,
+ * minutes, importance]] }: one per ~100 m (the quickest stop there), with
+ * importance ×1e6 (big stations are more important than bus stops).
+ */
+function reduceReach(json, box) {
+  const cells = new Map();
+  for (const a of json?.all || []) {
+    const p = a.place || {};
+    const { lat, lon } = p;
+    const min = Number(a.duration);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || !Number.isFinite(min)) continue;
+    if (box && (lat < box.s || lat > box.n || lon < box.w || lon > box.e)) continue;
+    const key = `${Math.round(lat * 1000)},${Math.round(lon * 1000)}`;
+    const imp = Math.round((Number(p.importance) || 0) * 1e6);
+    const old = cells.get(key);
+    if (!old || min < old[2] || (min === old[2] && imp > old[3])) cells.set(key, [Math.round(lat * 1e5) / 1e5, Math.round(lon * 1e5) / 1e5, min, Math.max(imp, old?.[3] || 0)]);
+  }
+  return { cells: [...cells.values()] };
 }
 
 /** Decode a Google-style encoded polyline into [[lat, lon], ...]. */
@@ -3614,6 +3796,22 @@ function getDirections(mode, from, to, { time, arriveBy = false, alternatives = 
   return promise;
 }
 
+/**
+ * Public transport times from one person to the stops in an area (box: { s, w, n, e }),
+ * within `max` minutes, leaving at `time` (or now): { cells: [[lat, lon, minutes, importance]] }.
+ * Needs the Meet server.
+ */
+function getTransitReach(from, { box, max = 60, time, signal } = {}) {
+  const q = new URLSearchParams({ from: ll(from), max: String(max), box: [box.s, box.w, box.n, box.e].map((v) => v.toFixed(4)).join(',') });
+  if (time) q.set('time', new Date(time).toISOString());
+  const key = `reach|${q}`;
+  if (cache.has(key)) return cache.get(key);
+  const promise = getJson(`/api/transit/reach?${q}`, { signal, credentials: 'same-origin' });
+  cache.set(key, promise);
+  promise.catch(() => cache.delete(key));
+  return promise;
+}
+
 /** Travel times from each source to each destination (walk, bike or drive only). */
 function getTravelTimes(mode, sources, destinations, { signal } = {}) {
   if (mode === 'transit') return Promise.reject(Object.assign(new Error('Not available for public transport'), { status: 400 }));
@@ -3659,7 +3857,7 @@ function navLinks(mode, from, to) {
   };
 }
 
-__m["directions"] = { MODES, ATTRIBUTION, useGoogle, usingGoogle, osrmRouteUrl, osrmTableUrl, transitUrl, decodePolyline, normalizeOsrm, normalizeOsrmTable, vehicleName, isWalkLeg, normalizeTransit, getDirections, getTravelTimes, getCheckTimes, navLinks };
+__m["directions"] = { MODES, ATTRIBUTION, useGoogle, usingGoogle, osrmRouteUrl, osrmTableUrl, transitUrl, transitReachUrl, reduceReach, decodePolyline, normalizeOsrm, normalizeOsrmTable, vehicleName, isWalkLeg, normalizeTransit, getDirections, getTransitReach, getTravelTimes, getCheckTimes, navLinks };
 })();
 // ---- sydney-data
 (() => {
@@ -4574,8 +4772,9 @@ const { TABS, findPois, groupPois } = __m["pois"];
 const { getConfig, ratingsSource, rateAll, thumbFor, detailsFor } = __m["rated"];
 const { openStatus, weekTable } = __m["hours"];
 const { haversine } = __m["geo"];
+const { pickAnchor } = __m["anchor"];
 const { mapLinks, shareText, messagingLinks, nativeShare, copyText, calendarInvite, download } = __m["share"];
-const { MODES, ATTRIBUTION, getDirections, getTravelTimes, getCheckTimes, useGoogle, usingGoogle, navLinks, vehicleName, isWalkLeg } = __m["directions"];
+const { MODES, ATTRIBUTION, getDirections, getTravelTimes, getCheckTimes, getTransitReach, useGoogle, usingGoogle, navLinks, vehicleName, isWalkLeg } = __m["directions"];
 // ---------------------------------------------------------------- constants
 
 const COLORS = ['#007aff', '#ff9500', '#34c759', '#af52de', '#ff3b30', '#30b0c7', '#5856d6', '#ff2d55', '#a2845e', '#8e8e93'];
@@ -5262,8 +5461,9 @@ function placeOf(address) {
 const whoOf = (p) => p.nickname || (p.isHome ? 'You' : '');
 const pillText = (p, extra) => (extra ? `${whoOf(p) || placeOf(p.address)} · ${extra}` : [whoOf(p), placeOf(p.address)].filter(Boolean).join(' · '));
 
-/** What the meeting point is near: a park or landmark right there, or the street. */
+/** What the meeting point is near: the place it moved to, a park or landmark right there, or the street. */
 function meetName(search) {
+  if (search.anchor) return search.anchor.name;
   const d = (p) => haversine(p.lat, p.lon, search.meet.lat, search.meet.lon);
   const near = (search.pois || []).filter((p) => ['outdoors', 'culture'].includes(p.tab) && d(p) < 250).sort((a, b) => d(a) - d(b))[0];
   if (near) return near.name;
@@ -5359,6 +5559,8 @@ async function findPlaces({ replay = false } = {}) {
       directions: (mode, a, b, o) => getDirections(mode, a, b, { ...o, ...at }),
       // With Google: the best few spots checked against Google's travel times for everyone.
       checkTimes: usingGoogle() ? (ps, spots, o) => getCheckTimes(ps, spots, { ...o, ...at }) : undefined,
+      // Public transport: real times from each rider to every stop around.
+      transitReach: getTransitReach, time: leaveAt,
     });
     meetingP.catch(() => {});
     const roadsP = withTimeout(loadRoads(streetsArea(), { signal: ctrl.signal }), 8000).catch(() => null);
@@ -5371,26 +5573,39 @@ async function findPlaces({ replay = false } = {}) {
 
     const meeting = await meetingP;
     if (!live()) return;
-    const meet = meeting.meet;
-    if (!Number.isFinite(meet?.lat) || !Number.isFinite(meet?.lon)) throw new Error('Couldn’t place a meeting point. Try again, or move someone’s pin.');
+    const spot = meeting.meet;
+    if (!Number.isFinite(spot?.lat) || !Number.isFinite(spot?.lon)) throw new Error('Couldn’t place a meeting point. Try again, or move someone’s pin.');
+    let meet = prev ? prev.meet : spot;
     // Keep the meeting point in view (it can lie a little outside the group).
     if (!map.getBounds().pad(-0.06).contains([meet.lat, meet.lon])) fitTo([...people.map((p) => [p.lat, p.lon]), [meet.lat, meet.lon]], { maxZoom: 16, animate: false });
     const search = state.search = {
-      people, meeting, meet, routes: prev?.routes || null, rule, leaveAt,
+      people, meeting, meet, anchor: prev?.anchor || null, routes: prev?.routes || null, rule, leaveAt,
       pois: prev?.pois || null, grouped: prev?.grouped || null, radius: prev?.radius || null, tab: prev?.tab || null,
       group: null, place: null, area: prev?.area || null, poiError: prev?.poiError || null, sort: prev?.sort, showRadius: prev?.showRadius,
     };
 
-    // Places, the area's name and everyone's route load while the floods meet.
+    // While the floods meet: the places nearby, then the meeting point moves
+    // to one a group can meet at (see anchor.js), then its name and
+    // everyone's route there.
     const poisPromise = prev?.pois ? Promise.resolve() : loadPois(search, ctrl.signal);
-    const areaP = search.area ? Promise.resolve() : reverseGeocode(meet.lat, meet.lon, { signal: ctrl.signal })
-      .then((r) => { search.area = r.address; if (state.view === 'results') render({ keepScroll: true }); })
+    const anchorP = prev ? Promise.resolve(meet) : withTimeout(poisPromise, 6000).catch(() => {}).then(() => {
+      const a = pickAnchor(spot, search.pois);
+      if (a) {
+        search.anchor = a;
+        meet = search.meet = { lat: a.lat, lon: a.lon };
+        for (const p of search.pois) p.fromCenter = haversine(meet.lat, meet.lon, p.lat, p.lon);
+      }
+      return meet;
+    });
+    const areaP = search.area ? Promise.resolve() : anchorP.then((m) => reverseGeocode(m.lat, m.lon, { signal: ctrl.signal }))
+      .then((r) => { if (r) search.area = r.address; if (state.view === 'results') render({ keepScroll: true }); })
       .catch(() => {});
     const routesP = search.routes ? Promise.resolve(search.routes)
-      : Promise.all(people.map((p) => withTimeout(getDirections(p.mode, p, meet, { signal: ctrl.signal, ...at }), 10000).catch(() => null)));
+      : anchorP.then((m) => Promise.all(people.map((p) => withTimeout(getDirections(p.mode, p, m, { signal: ctrl.signal, ...at }), 10000).catch(() => null))));
     status('Finding everyone’s routes…');
-    const ok2 = await fx.allAtOnce(meet);
+    const ok2 = await fx.allAtOnce(spot);
     if (!ok2 || !live()) return;
+    await anchorP;
     search.routes = await routesP;
     // The meeting point's name, if it comes soon.
     await Promise.race([areaP, new Promise((r) => setTimeout(r, 1200))]);
@@ -5580,7 +5795,8 @@ function renderResults() {
       <span class="meet-badge"><i></i></span>
       <div style="min-width:0">
         <div class="eyebrow">${s.rule === 'total' ? 'Least total travel' : 'Similar travel times'}${tripRange(s)}</div>
-        <h2>${esc(s.area ? shortAddr(s.area) : 'Your meeting point')}</h2>
+        <h2>${esc(s.anchor ? s.anchor.name : s.area ? shortAddr(s.area) : 'Your meeting point')}</h2>
+        ${s.anchor && s.area ? `<div class="footnote">${esc(shortAddr(s.area))}</div>` : ''}
       </div>
     </div>
     <ul class="group icons">${s.people.map((p, i) => tripRow(p, s.routes?.[i]?.distance ?? s.meeting.dists[i], s.meetTimes?.values[i])).join('')}
@@ -6267,7 +6483,7 @@ function initPanel() {
       case 'replay': findPlaces({ replay: true }); break;
       case 'meet-place': {
         const m = s.meet;
-        s.place = { id: 'meet', name: s.area ? shortAddr(s.area) : 'Meeting point', lat: m.lat, lon: m.lon, tab: 'meet', group: 'Meeting point', address: s.area || '', fromCenter: 0 };
+        s.place = { id: 'meet', name: s.anchor ? s.anchor.name : s.area ? shortAddr(s.area) : 'Meeting point', lat: m.lat, lon: m.lon, tab: 'meet', group: 'Meeting point', address: s.area || '', fromCenter: 0 };
         s.placeDrawn = null;
         state.placeTab = 'overview';
         setView('place');

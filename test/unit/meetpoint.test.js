@@ -53,18 +53,20 @@ test('three walkers get similar walks, none much longer than it has to be', asyn
   assert.ok(calls.every((c) => c.m <= 80));
 });
 
-test('similar times: two far apart and one in between all travel about as long', async () => {
+test('similar times: two far apart and one in between; times come closer, but no one travels much further', async () => {
   // The "shortest longest trip" spot is halfway between the two far apart,
-  // where the third has a much shorter trip. Similar times moves the spot so
-  // the third travels about as long as the others.
+  // where the third has a much shorter trip. Similar times moves the spot
+  // towards making the third travel about as long, as far as the longest
+  // trip can grow by about 12% (beyond that everyone just travels further).
   const people = [{ lat: 51.50, lon: -0.18, mode: 'walk' }, { lat: 51.50, lon: -0.10, mode: 'walk' }, { lat: 51.509, lon: -0.14, mode: 'walk' }];
   const { travelTimes } = fakeRouter();
   const r = await findMeetingPoint(people, { travelTimes });
   const total = await findMeetingPoint(people, { travelTimes, rule: 'total' });
   const opt = bruteForce(people);
-  assert.ok(spread(r.times) < 0.2 * Math.max(...r.times), `times ${r.times.map((t) => Math.round(t / 60))} min`);
-  assert.ok(Math.max(...r.times) <= opt * 1.31, 'the longest trip grows by at most about 30%');
-  assert.ok(spread(total.times) > 2 * spread(r.times), '"least travel" leaves times much less even');
+  const half = people.map((p) => secs(p, { lat: 51.50, lon: -0.14 }, 'walk')); // the halfway spot
+  assert.ok(spread(r.times) < 0.6 * spread(half), `times ${r.times.map((t) => Math.round(t / 60))} min, halfway ${half.map((t) => Math.round(t / 60))}`);
+  assert.ok(Math.max(...r.times) <= opt * 1.14, 'the longest trip grows by at most about 12%');
+  assert.ok(spread(total.times) > 1.5 * spread(r.times), '"least travel" leaves times much less even');
 });
 
 test('a driver goes further so a walker does not have to', async () => {
@@ -192,4 +194,38 @@ test('with exact travel times for the best spots, the final choice uses them', a
   // When the exact source fails, the free estimates are used as before.
   const failing = await findMeetingPoint(london, { travelTimes, checkTimes: async () => { throw new Error('down'); } });
   assert.deepEqual(failing.meet, plain.meet);
+});
+
+test('public transport riders: the spot is picked among stops, by real times (a fast train line included)', async () => {
+  // Three riders. Stops every ~250 m; buses at 4 m/s, except a fast train line
+  // along latitude 51.50 that gets the first rider east at 15 m/s.
+  const riders = [{ lat: 51.50, lon: -0.20, mode: 'transit' }, { lat: 51.53, lon: -0.10, mode: 'transit' }, { lat: 51.47, lon: -0.10, mode: 'transit' }];
+  const asked = [], stopsGiven = [];
+  const transitReach = async (p, { box, max, time }) => {
+    asked.push({ max, time });
+    const cells = [];
+    for (let lat = box.s; lat <= box.n; lat += 0.00225) {
+      for (let lon = box.w; lon <= box.e; lon += 0.0036) {
+        const onLine = Math.abs(lat - 51.50) < 0.0012 && p === riders[0];
+        const sec = onLine ? 300 + haversine(p.lat, p.lon, lat, lon) / 15 : 300 + (haversine(p.lat, p.lon, lat, lon) * 1.3) / 4;
+        if (sec / 60 <= max) cells.push([lat, lon, Math.round(sec / 60), onLine ? 900 : 5]);
+      }
+    }
+    stopsGiven.push(...cells);
+    return { cells };
+  };
+  const { travelTimes } = fakeRouter();
+  const r = await findMeetingPoint(riders, { travelTimes, transitReach, time: '2026-11-14T09:00:00Z' });
+  assert.equal(asked.length, 3, 'one request per rider');
+  assert.ok(asked.every((a) => a.time === '2026-11-14T09:00:00Z'));
+  assert.deepEqual(r.real, [true, true, true]);
+  // The two riders by bus need 23 min at best; nobody's trip is much longer than that.
+  assert.ok(Math.max(...r.times) <= 26 * 60, `longest trip ${Math.round(Math.max(...r.times) / 60)} min: ${r.times.map((t) => Math.round(t / 60))}`);
+  assert.ok(stopsGiven.some(([lat, lon]) => lat === r.meet.lat && lon === r.meet.lon), 'the meeting point is one of the stops');
+  // A walker in the group: real walking times to the most promising stops.
+  const mixed = await findMeetingPoint([...riders.slice(0, 2), { lat: 51.47, lon: -0.10, mode: 'walk' }], { travelTimes, transitReach });
+  assert.ok(Number.isFinite(mixed.times[2]) && mixed.times[2] > 0);
+  // No public transport data: the old way (estimates and timetable checks).
+  const fallback = await findMeetingPoint(riders, { travelTimes, transitReach: async () => { throw new Error('down'); } });
+  assert.ok(Number.isFinite(fallback.meet.lat));
 });

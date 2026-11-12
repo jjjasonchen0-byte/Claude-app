@@ -19,6 +19,7 @@ export const MODES = [
 const OSRM = 'https://routing.openstreetmap.de';
 const OSRM_PROFILE = { walk: 'routed-foot', bike: 'routed-bike', drive: 'routed-car' };
 const TRANSITOUS = 'https://api.transitous.org/api/v5/plan';
+const TRANSITOUS_REACH = 'https://api.transitous.org/api/v1/one-to-all';
 
 export const ATTRIBUTION = {
   routing: { text: 'Routes © OpenStreetMap contributors, via FOSSGIS OSRM', url: 'https://routing.openstreetmap.de/about.html' },
@@ -55,6 +56,34 @@ export function transitUrl(from, to, { time, arriveBy = false } = {}) {
   });
   if (time) q.set('time', new Date(time).toISOString());
   return `${TRANSITOUS}?${q}`;
+}
+
+/** Every stop reachable from a place by public transport within `max` minutes. */
+export function transitReachUrl(from, { time, max = 60 } = {}) {
+  const q = new URLSearchParams({ one: ll(from), maxTravelTime: String(max) });
+  if (time) q.set('time', new Date(time).toISOString());
+  return `${TRANSITOUS_REACH}?${q}`;
+}
+
+/**
+ * Transitous "one to all" → the stops inside an area as { cells: [[lat, lon,
+ * minutes, importance]] }: one per ~100 m (the quickest stop there), with
+ * importance ×1e6 (big stations are more important than bus stops).
+ */
+export function reduceReach(json, box) {
+  const cells = new Map();
+  for (const a of json?.all || []) {
+    const p = a.place || {};
+    const { lat, lon } = p;
+    const min = Number(a.duration);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || !Number.isFinite(min)) continue;
+    if (box && (lat < box.s || lat > box.n || lon < box.w || lon > box.e)) continue;
+    const key = `${Math.round(lat * 1000)},${Math.round(lon * 1000)}`;
+    const imp = Math.round((Number(p.importance) || 0) * 1e6);
+    const old = cells.get(key);
+    if (!old || min < old[2] || (min === old[2] && imp > old[3])) cells.set(key, [Math.round(lat * 1e5) / 1e5, Math.round(lon * 1e5) / 1e5, min, Math.max(imp, old?.[3] || 0)]);
+  }
+  return { cells: [...cells.values()] };
 }
 
 /** Decode a Google-style encoded polyline into [[lat, lon], ...]. */
@@ -214,6 +243,22 @@ export function getDirections(mode, from, to, { time, arriveBy = false, alternat
     if (mode === 'transit') return normalizeTransit(await getJson(transitUrl(from, to, { time, arriveBy }), { signal }), { arriveBy });
     return normalizeOsrm(await getJson(osrmRouteUrl(mode, from, to, { alternatives: alt, via: viaPt }), { signal }), mode);
   }, signal);
+  cache.set(key, promise);
+  promise.catch(() => cache.delete(key));
+  return promise;
+}
+
+/**
+ * Public transport times from one person to the stops in an area (box: { s, w, n, e }),
+ * within `max` minutes, leaving at `time` (or now): { cells: [[lat, lon, minutes, importance]] }.
+ * Needs the Meet server.
+ */
+export function getTransitReach(from, { box, max = 60, time, signal } = {}) {
+  const q = new URLSearchParams({ from: ll(from), max: String(max), box: [box.s, box.w, box.n, box.e].map((v) => v.toFixed(4)).join(',') });
+  if (time) q.set('time', new Date(time).toISOString());
+  const key = `reach|${q}`;
+  if (cache.has(key)) return cache.get(key);
+  const promise = getJson(`/api/transit/reach?${q}`, { signal, credentials: 'same-origin' });
   cache.set(key, promise);
   promise.catch(() => cache.delete(key));
   return promise;

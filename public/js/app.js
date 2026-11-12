@@ -9,8 +9,9 @@ import { TABS, findPois, groupPois } from './pois.js';
 import { getConfig, ratingsSource, rateAll, thumbFor, detailsFor } from './rated.js';
 import { openStatus, weekTable } from './hours.js';
 import { haversine } from './geo.js';
+import { pickAnchor } from './anchor.js';
 import { mapLinks, shareText, messagingLinks, nativeShare, copyText, calendarInvite, download } from './share.js';
-import { MODES, ATTRIBUTION, getDirections, getTravelTimes, getCheckTimes, useGoogle, usingGoogle, navLinks, vehicleName, isWalkLeg } from './directions.js';
+import { MODES, ATTRIBUTION, getDirections, getTravelTimes, getCheckTimes, getTransitReach, useGoogle, usingGoogle, navLinks, vehicleName, isWalkLeg } from './directions.js';
 
 // ---------------------------------------------------------------- constants
 
@@ -844,8 +845,9 @@ function placeOf(address) {
 const whoOf = (p) => p.nickname || (p.isHome ? 'You' : '');
 const pillText = (p, extra) => (extra ? `${whoOf(p) || placeOf(p.address)} · ${extra}` : [whoOf(p), placeOf(p.address)].filter(Boolean).join(' · '));
 
-/** What the meeting point is near: a park or landmark right there, or the street. */
+/** What the meeting point is near: the place it moved to, a park or landmark right there, or the street. */
 function meetName(search) {
+  if (search.anchor) return search.anchor.name;
   const d = (p) => haversine(p.lat, p.lon, search.meet.lat, search.meet.lon);
   const near = (search.pois || []).filter((p) => ['outdoors', 'culture'].includes(p.tab) && d(p) < 250).sort((a, b) => d(a) - d(b))[0];
   if (near) return near.name;
@@ -941,6 +943,8 @@ async function findPlaces({ replay = false } = {}) {
       directions: (mode, a, b, o) => getDirections(mode, a, b, { ...o, ...at }),
       // With Google: the best few spots checked against Google's travel times for everyone.
       checkTimes: usingGoogle() ? (ps, spots, o) => getCheckTimes(ps, spots, { ...o, ...at }) : undefined,
+      // Public transport: real times from each rider to every stop around.
+      transitReach: getTransitReach, time: leaveAt,
     });
     meetingP.catch(() => {});
     const roadsP = withTimeout(loadRoads(streetsArea(), { signal: ctrl.signal }), 8000).catch(() => null);
@@ -953,26 +957,39 @@ async function findPlaces({ replay = false } = {}) {
 
     const meeting = await meetingP;
     if (!live()) return;
-    const meet = meeting.meet;
-    if (!Number.isFinite(meet?.lat) || !Number.isFinite(meet?.lon)) throw new Error('Couldn’t place a meeting point. Try again, or move someone’s pin.');
+    const spot = meeting.meet;
+    if (!Number.isFinite(spot?.lat) || !Number.isFinite(spot?.lon)) throw new Error('Couldn’t place a meeting point. Try again, or move someone’s pin.');
+    let meet = prev ? prev.meet : spot;
     // Keep the meeting point in view (it can lie a little outside the group).
     if (!map.getBounds().pad(-0.06).contains([meet.lat, meet.lon])) fitTo([...people.map((p) => [p.lat, p.lon]), [meet.lat, meet.lon]], { maxZoom: 16, animate: false });
     const search = state.search = {
-      people, meeting, meet, routes: prev?.routes || null, rule, leaveAt,
+      people, meeting, meet, anchor: prev?.anchor || null, routes: prev?.routes || null, rule, leaveAt,
       pois: prev?.pois || null, grouped: prev?.grouped || null, radius: prev?.radius || null, tab: prev?.tab || null,
       group: null, place: null, area: prev?.area || null, poiError: prev?.poiError || null, sort: prev?.sort, showRadius: prev?.showRadius,
     };
 
-    // Places, the area's name and everyone's route load while the floods meet.
+    // While the floods meet: the places nearby, then the meeting point moves
+    // to one a group can meet at (see anchor.js), then its name and
+    // everyone's route there.
     const poisPromise = prev?.pois ? Promise.resolve() : loadPois(search, ctrl.signal);
-    const areaP = search.area ? Promise.resolve() : reverseGeocode(meet.lat, meet.lon, { signal: ctrl.signal })
-      .then((r) => { search.area = r.address; if (state.view === 'results') render({ keepScroll: true }); })
+    const anchorP = prev ? Promise.resolve(meet) : withTimeout(poisPromise, 6000).catch(() => {}).then(() => {
+      const a = pickAnchor(spot, search.pois);
+      if (a) {
+        search.anchor = a;
+        meet = search.meet = { lat: a.lat, lon: a.lon };
+        for (const p of search.pois) p.fromCenter = haversine(meet.lat, meet.lon, p.lat, p.lon);
+      }
+      return meet;
+    });
+    const areaP = search.area ? Promise.resolve() : anchorP.then((m) => reverseGeocode(m.lat, m.lon, { signal: ctrl.signal }))
+      .then((r) => { if (r) search.area = r.address; if (state.view === 'results') render({ keepScroll: true }); })
       .catch(() => {});
     const routesP = search.routes ? Promise.resolve(search.routes)
-      : Promise.all(people.map((p) => withTimeout(getDirections(p.mode, p, meet, { signal: ctrl.signal, ...at }), 10000).catch(() => null)));
+      : anchorP.then((m) => Promise.all(people.map((p) => withTimeout(getDirections(p.mode, p, m, { signal: ctrl.signal, ...at }), 10000).catch(() => null))));
     status('Finding everyone’s routes…');
-    const ok2 = await fx.allAtOnce(meet);
+    const ok2 = await fx.allAtOnce(spot);
     if (!ok2 || !live()) return;
+    await anchorP;
     search.routes = await routesP;
     // The meeting point's name, if it comes soon.
     await Promise.race([areaP, new Promise((r) => setTimeout(r, 1200))]);
@@ -1162,7 +1179,8 @@ function renderResults() {
       <span class="meet-badge"><i></i></span>
       <div style="min-width:0">
         <div class="eyebrow">${s.rule === 'total' ? 'Least total travel' : 'Similar travel times'}${tripRange(s)}</div>
-        <h2>${esc(s.area ? shortAddr(s.area) : 'Your meeting point')}</h2>
+        <h2>${esc(s.anchor ? s.anchor.name : s.area ? shortAddr(s.area) : 'Your meeting point')}</h2>
+        ${s.anchor && s.area ? `<div class="footnote">${esc(shortAddr(s.area))}</div>` : ''}
       </div>
     </div>
     <ul class="group icons">${s.people.map((p, i) => tripRow(p, s.routes?.[i]?.distance ?? s.meeting.dists[i], s.meetTimes?.values[i])).join('')}
@@ -1850,7 +1868,7 @@ function initPanel() {
       case 'replay': findPlaces({ replay: true }); break;
       case 'meet-place': {
         const m = s.meet;
-        s.place = { id: 'meet', name: s.area ? shortAddr(s.area) : 'Meeting point', lat: m.lat, lon: m.lon, tab: 'meet', group: 'Meeting point', address: s.area || '', fromCenter: 0 };
+        s.place = { id: 'meet', name: s.anchor ? s.anchor.name : s.area ? shortAddr(s.area) : 'Meeting point', lat: m.lat, lon: m.lon, tab: 'meet', group: 'Meeting point', address: s.area || '', fromCenter: 0 };
         s.placeDrawn = null;
         state.placeTab = 'overview';
         setView('place');

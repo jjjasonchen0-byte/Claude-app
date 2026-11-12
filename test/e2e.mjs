@@ -100,6 +100,21 @@ await ctx.route('**/api/directions?**', (r) => {
   if (mode === 'transit') { transitCalls++; transitTimes.add(new URL(r.request().url()).searchParams.get('time')); }
   return r.fulfill({ json: mode === 'transit' ? normalizeTransit(fx('transitous-plan.json')) : normalizeOsrm(fx('osrm-route.json'), mode) });
 });
+// Public transport times from one person to every stop around: a grid of stops, slower further away.
+const reachAsked = [];
+await ctx.route('**/api/transit/reach?**', (r) => {
+  const q = new URL(r.request().url()).searchParams;
+  reachAsked.push(q.get('time'));
+  const [lat, lon] = q.get('from').split(',').map(Number);
+  const [s0, w0, n0, e0] = q.get('box').split(',').map(Number);
+  const cells = [];
+  for (let i = 0; i <= 24; i++) for (let j = 0; j <= 24; j++) {
+    const a = s0 + ((n0 - s0) * i) / 24, b = w0 + ((e0 - w0) * j) / 24;
+    const km = Math.hypot((a - lat) * 111, (b - lon) * 69);
+    cells.push([a, b, Math.round(8 + km * 3.2), i % 6 === 0 && j % 6 === 0 ? 900 : 10]);
+  }
+  return r.fulfill({ json: { cells } });
+});
 await ctx.route('**/api/traveltimes?**', (r) => {
   const q = new URL(r.request().url()).searchParams;
   const n = q.get('from').split(';').length, m = q.get('to').split(';').length;
@@ -172,6 +187,10 @@ try {
   assert.equal(await page.locator('.flood-base').count(), 0, 'the dark map is gone');
   assert.equal(await page.locator('#screen-main.flooding').count(), 0);
   assert.deepEqual([...transitTimes], [later.toISOString()], 'public transport planned for the chosen time');
+  assert.deepEqual(reachAsked, Array(3).fill(later.toISOString()), 'stops reached by each rider, leaving at the chosen time');
+  // The meeting point moved to a place to meet at, named in the results.
+  const heading = await page.textContent('.result-head h2');
+  assert.ok(['Luigi\'s', 'Trattoria Roma', 'Pasta Bella', 'Nonna\'s Kitchen', 'Sakura Sushi', 'Tokyo Bites', 'Spice Route', 'Burger Barn', 'Bean There', 'Daily Grind', 'The Crown', 'Tea Time', 'Odeon Central', 'Strike Bowl', 'City Museum', 'Riverside Park', 'Rose Garden', 'Page Turners'].includes(heading.trim()), `meeting at a place: ${heading}`);
   assert.match(await page.textContent('.panel'), /Times for leaving at 9:00/);
   await page.waitForTimeout(700);
   await shot('05-results');

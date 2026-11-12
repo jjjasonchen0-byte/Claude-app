@@ -8,7 +8,7 @@ import crypto from 'node:crypto';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { Store } from './lib/store.js';
-import { osrmRouteUrl, osrmTableUrl, transitUrl, normalizeOsrm, normalizeOsrmTable, normalizeTransit } from './public/js/directions.js';
+import { osrmRouteUrl, osrmTableUrl, transitUrl, transitReachUrl, normalizeOsrm, normalizeOsrmTable, normalizeTransit, reduceReach } from './public/js/directions.js';
 import { simplify } from './public/js/geo.js';
 import { createTripadvisor } from './lib/tripadvisor.js';
 import { createGoogle, TILE_STYLES } from './lib/google.js';
@@ -364,15 +364,18 @@ async function fetchJson(url, { hedgeAfterMs = [] } = {}) {
   }
 }
 
+/** One public transport request from today's budget (Transitous is a volunteer service). */
+function spendTransit() {
+  const today = new Date().toISOString().slice(0, 10);
+  if (today !== transitDay) { transitDay = today; transitCount = 0; }
+  if (transitCount >= TRANSIT_DAILY_LIMIT) throw new HttpError(429, 'Public transport directions are paused until tomorrow (daily limit reached)');
+  transitCount++;
+}
+
 async function upstream(url, ttlMs, { transit = false } = {}) {
   const hit = upstreamCache.get(url);
   if (hit && Date.now() - hit.at < hit.ttl) return hit.data;
-  if (transit) {
-    const today = new Date().toISOString().slice(0, 10);
-    if (today !== transitDay) { transitDay = today; transitCount = 0; }
-    if (transitCount >= TRANSIT_DAILY_LIMIT) throw new HttpError(429, 'Public transport directions are paused until tomorrow (daily limit reached)');
-    transitCount++;
-  }
+  if (transit) spendTransit();
   let res, data;
   try {
     // Transitous is a volunteer service with a daily budget: never sent twice.
@@ -463,6 +466,41 @@ route('GET', '/api/traveltimes', async (req, res) => {
   const data = await upstream(osrmTableUrl(mode, sources, destinations), 24 * 3600 * 1000);
   try { send(res, 200, normalizeOsrmTable(data), { 'Cache-Control': 'private, max-age=300' }); }
   catch (err) { throw new HttpError(err.status || 502, err.message); }
+});
+
+// Public transport: real travel times from one person to every stop in an
+// area (Transitous "one to all"), for picking the meeting point. The answer
+// is large (every stop within reach, about 1 MB), so only the stops in the
+// group's area are kept, about 100 m apart, and only that is cached.
+const reachCache = new Map();
+route('GET', '/api/transit/reach', async (req, res) => {
+  rateLimit(req);
+  const q = new URL(req.url, 'http://x').searchParams;
+  const from = parsePoint(q.get('from'));
+  const max = Math.round(Number(q.get('max')) || 60);
+  if (max < 10 || max > 120) throw new HttpError(400, 'max must be 10 to 120 minutes');
+  const [s0, w0, n0, e0] = String(q.get('box') || '').split(',').map(Number);
+  const box = { s: s0, w: w0, n: n0, e: e0 };
+  if (![s0, w0, n0, e0].every(Number.isFinite) || n0 - s0 > 1.5 || e0 - w0 > 1.5 || n0 <= s0 || e0 <= w0) throw new HttpError(400, 'Invalid area');
+  const time = q.get('time') ? new Date(q.get('time')) : new Date();
+  if (Number.isNaN(time.getTime())) throw new HttpError(400, 'Invalid time');
+  time.setSeconds(0, 0);
+  const url = transitReachUrl(from, { time, max });
+  const key = `${url}|${[s0, w0, n0, e0].map((v) => v.toFixed(3)).join(',')}`;
+  const hit = reachCache.get(key);
+  if (hit && Date.now() - hit.at < 5 * 60 * 1000) return send(res, 200, hit.data, { 'Cache-Control': 'private, max-age=300' });
+  spendTransit();
+  let data;
+  try {
+    const { res: r, data: json } = await fetchJson(url);
+    if (!r.ok || !json) throw new Error(`status ${r.status}`);
+    data = reduceReach(json, box);
+  } catch {
+    throw new HttpError(502, 'Public transport times could not be loaded');
+  }
+  if (reachCache.size > 100) reachCache.delete(reachCache.keys().next().value);
+  reachCache.set(key, { at: Date.now(), data });
+  send(res, 200, data, { 'Cache-Control': 'private, max-age=300' });
 });
 
 // Real travel times from Google for a few spots (the best candidates for a
