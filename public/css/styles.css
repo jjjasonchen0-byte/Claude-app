@@ -422,6 +422,56 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
 }
 .avatar-pin::after { content: ""; position: absolute; left: 50%; bottom: -9px; transform: translateX(-50%); border: 6px solid transparent; border-top: 7px solid #fff; border-bottom: 0; }
+/* The meeting point: drops in with a bounce, then hops for joy when everyone gets there. */
+.meet-shadow {
+  position: absolute; left: 1px; top: 17px; width: 20px; height: 7px; border-radius: 50%; background: rgba(0, 0, 0, 0.32);
+  filter: blur(1.5px); opacity: 0.3; animation: meet-shadow-drop 0.8s both;
+}
+.meet-jump { position: absolute; inset: 0; transform-origin: 50% 100%; animation: meet-drop 0.8s both; }
+.meet-pin.hop .meet-jump { animation: meet-hop 1s both; }
+.meet-pin.hop .meet-shadow { animation: meet-shadow-hop 1s both; }
+/* Falling speeds up, rising slows down; squashed on landing, stretched on take-off. */
+@keyframes meet-drop {
+  0% { transform: translateY(-56px) scale(0.86, 1.16); opacity: 0; animation-timing-function: cubic-bezier(0.55, 0, 1, 0.6); }
+  34% { transform: translateY(0) scale(0.9, 1.12); opacity: 1; animation-timing-function: ease-out; }
+  42% { transform: translateY(0) scale(1.3, 0.72); opacity: 1; animation-timing-function: cubic-bezier(0, 0.5, 0.4, 1); }
+  60% { transform: translateY(-13px) scale(0.95, 1.06); opacity: 1; animation-timing-function: cubic-bezier(0.6, 0, 1, 0.5); }
+  74% { transform: translateY(0) scale(1.14, 0.87); opacity: 1; animation-timing-function: cubic-bezier(0, 0.5, 0.4, 1); }
+  86% { transform: translateY(-3px) scale(0.98, 1.02); opacity: 1; animation-timing-function: cubic-bezier(0.6, 0, 1, 0.5); }
+  100% { transform: none; opacity: 1; }
+}
+@keyframes meet-shadow-drop {
+  0% { transform: scale(0.3); opacity: 0; animation-timing-function: cubic-bezier(0.55, 0, 1, 0.6); }
+  34% { transform: scale(1); opacity: 0.3; }
+  42% { transform: scale(1.25); opacity: 0.36; animation-timing-function: cubic-bezier(0, 0.5, 0.4, 1); }
+  60% { transform: scale(0.7); opacity: 0.18; animation-timing-function: cubic-bezier(0.6, 0, 1, 0.5); }
+  74% { transform: scale(1.1); opacity: 0.32; }
+  86% { transform: scale(0.95); opacity: 0.28; }
+  100% { transform: none; opacity: 0.3; }
+}
+@keyframes meet-hop {
+  0% { transform: none; animation-timing-function: ease-in; }
+  12% { transform: scale(1.22, 0.8); animation-timing-function: ease-out; }
+  20% { transform: translateY(-6px) scale(0.84, 1.2); animation-timing-function: cubic-bezier(0, 0.5, 0.4, 1); }
+  38% { transform: translateY(-15px) scale(1, 1); animation-timing-function: cubic-bezier(0.6, 0, 1, 0.5); }
+  50% { transform: translateY(0) scale(0.92, 1.08); animation-timing-function: ease-out; }
+  56% { transform: translateY(0) scale(1.28, 0.74); animation-timing-function: cubic-bezier(0, 0.5, 0.4, 1); }
+  69% { transform: translateY(-7px) scale(0.95, 1.06); animation-timing-function: cubic-bezier(0.6, 0, 1, 0.5); }
+  80% { transform: translateY(0) scale(1.12, 0.89); animation-timing-function: ease-out; }
+  90% { transform: scale(0.98, 1.02); }
+  100% { transform: none; }
+}
+@keyframes meet-shadow-hop {
+  0% { transform: none; opacity: 0.3; }
+  12% { transform: scale(1.15); opacity: 0.34; }
+  20% { transform: scale(0.85); opacity: 0.24; }
+  38% { transform: scale(0.62); opacity: 0.14; }
+  50% { transform: scale(1); opacity: 0.3; }
+  56% { transform: scale(1.22); opacity: 0.36; }
+  69% { transform: scale(0.8); opacity: 0.22; }
+  80% { transform: scale(1.06); opacity: 0.31; }
+  100% { transform: none; opacity: 0.3; }
+}
 .meet-dot {
   width: 22px; height: 22px; border-radius: 50%; background: var(--accent); border: 4px solid #fff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 0 rgba(0, 122, 255, 0.45); animation: halo 2s ease-out infinite;

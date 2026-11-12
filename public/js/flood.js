@@ -800,7 +800,7 @@ export class FloodAnimation {
     // Travellers: at the front of their route, then gathered in a row above the pin.
     const mx = v.X(this.meetPt.x), my = v.Y(this.meetPt.y);
     tips.forEach((h, k) => {
-      const slotX = mx + (k - (tips.length - 1) / 2) * 23, slotY = my - 34;
+      const slotX = mx + (k - (tips.length - 1) / 2) * 23, slotY = my - 40; // clear of the pin's hop
       const x = h.x + (slotX - h.x) * this.gather, y = h.y + (slotY - h.y) * this.gather;
       ctx.globalAlpha = g;
       ctx.shadowColor = h.r.glow; ctx.shadowBlur = 14;

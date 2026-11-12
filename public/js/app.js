@@ -999,7 +999,7 @@ async function findPlaces({ replay = false } = {}) {
     // The meeting point, then everyone travels there along their route.
     const name = meetName(search);
     const pin = L.marker([meet.lat, meet.lon], {
-      icon: L.divIcon({ className: '', html: '<div class="meet-dot"></div>', iconSize: [22, 22], iconAnchor: [11, 11] }),
+      icon: L.divIcon({ className: 'meet-pin', html: '<i class="meet-shadow"></i><div class="meet-jump"><div class="meet-dot"></div></div>', iconSize: [22, 22], iconAnchor: [11, 11] }),
       zIndexOffset: 1000,
     }).bindTooltip(esc(name === 'the middle' ? 'Meeting point' : name), { permanent: true, direction: 'bottom', className: 'label meet-label', offset: [0, 14] }).addTo(resultLayer);
     const times = people.map((p, i) => tripSeconds(search.routes[i], meeting.times[i]));
@@ -1008,6 +1008,7 @@ async function findPlaces({ replay = false } = {}) {
     const tracks = people.map((p, i) => trackFor(p, search.routes[i], meet, meeting.times[i]));
     const ok3 = await fx.reveal(meet, tracks, {
       onArrive: () => {
+        pin.getElement()?.classList.add('hop'); // a little hop for joy
         setHud(`Meet near ${name}`);
         people.forEach((p, i) => setPill(i, pillText(p, mins(times[i]))));
       },
