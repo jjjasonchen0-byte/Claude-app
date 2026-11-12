@@ -262,6 +262,10 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 
 .app-version { margin: 4px 20px 16px; text-align: center; }
 
+/* Google's place card (Places UI Kit) in a place's page. */
+.gcard-slot { margin: 0 0 14px; }
+.gcard-slot gmp-place-details { display: block; width: 100%; border-radius: 16px; overflow: hidden; box-shadow: var(--shadow-1); }
+
 /* Google's name and map credits, when the map is Google's: top right, always in view. */
 .gmap-credit {
   position: absolute; z-index: 999; top: calc(64px + env(safe-area-inset-top, 0px)); right: max(14px, env(safe-area-inset-right, 0px));

@@ -86,16 +86,27 @@ const modules = [
   ['flood', 'public/js/flood.js'],
   ['pois', 'public/js/pois.js'],
   ['anchor', 'public/js/anchor.js'],
+  ['match', 'public/js/match.js'],
+  ['placeskit', 'public/js/placeskit.js'],
   ['hours', 'public/js/hours.js'],
+  ['directions', 'public/js/directions.js'],
   ['rated', 'public/js/rated.js'],
   ['share', 'public/js/share.js'],
-  ['directions', 'public/js/directions.js'],
   ['sydney-data', 'scripts/sydney/sydney-data.js'],
   ['demo', 'public/js/demo.js'],
   ['guest', 'public/js/guest.js'],
 ];
 let js = 'const __m = {};\n';
-for (const [name, file] of modules) js += wrapModule(name, read(file));
+const defined = new Set();
+for (const [name, file] of modules) {
+  const src = read(file);
+  // A module can only use modules set up before it.
+  for (const [, dep] of src.matchAll(/^import\s*\{[^}]*\}\s*from\s*'\.\/([\w-]+)\.js';/gm)) {
+    if (!defined.has(dep)) throw new Error(`build-test: ${name} uses ${dep}, which comes later in the list (or is missing)`);
+  }
+  js += wrapModule(name, src);
+  defined.add(name);
+}
 js += `// ---- test-mode wiring: local stand-ins for the server and map services
 (() => {
   const d = __m.demo;

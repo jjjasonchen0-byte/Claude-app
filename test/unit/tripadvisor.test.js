@@ -114,7 +114,7 @@ test('server: ratings (and Google) are off without a key', async () => {
   await new Promise((r) => server.listen(0, r));
   const base = `http://localhost:${server.address().port}`;
   try {
-    assert.deepEqual(await (await fetch(`${base}/api/config`)).json(), { ratings: null, google: false, version: '' });
+    assert.deepEqual(await (await fetch(`${base}/api/config`)).json(), { ratings: null, google: false, version: '', placesKit: null });
     assert.equal((await fetch(`${base}/api/checktimes?g=1&mode=walk&from=51.5,-0.1&to=51.51,-0.1`)).status, 404);
     assert.equal((await fetch(`${base}/api/gmap/light/12/2047/1361`)).status, 404);
     const r = await fetch(`${base}/api/places/ratings`, { method: 'POST', body: JSON.stringify({ items: [roma] }) });

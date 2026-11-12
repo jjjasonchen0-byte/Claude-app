@@ -10,6 +10,7 @@ import { getConfig, ratingsSource, rateAll, thumbFor, detailsFor } from './rated
 import { openStatus, weekTable } from './hours.js';
 import { haversine } from './geo.js';
 import { pickAnchor } from './anchor.js';
+import { loadPlacesKit, findPlaceId, placeCard, samePlace } from './placeskit.js';
 import { mapLinks, shareText, messagingLinks, nativeShare, copyText, calendarInvite, download } from './share.js';
 import { MODES, ATTRIBUTION, getDirections, getTravelTimes, getCheckTimes, getTransitReach, useGoogle, usingGoogle, navLinks, vehicleName, isWalkLeg } from './directions.js';
 
@@ -1200,6 +1201,7 @@ function renderResults() {
 
 let ratingsOn = false; // the server has ratings (checked at start)
 let ratingsName = ''; // who they come from, for the credit line
+let placesKitKey = null; // a browser key for Google's place card, when the server offers one
 
 const thumbArt = (p) => `<span class="thumb-art" style="--c:${TAB_COLOR[p.tab] || '#8e8e93'}">${glyph(p.tab === 'meet' ? 'pin' : p.tab, 22, 1.9)}</span>`;
 const stars = (x) => `<span class="stars" style="--r:${Math.max(0, Math.min(100, (x / 5) * 100))}%" aria-hidden="true">★★★★★</span>`;
@@ -1400,9 +1402,36 @@ function openPlace(id) {
   setView('place');
 }
 
-/** Photos, reviews and more for a place (Tripadvisor and/or Wikimedia), loaded once. */
+/**
+ * Photos, reviews and more for a place, loaded once: Google's place card when
+ * the server offers a browser key for it, otherwise Google's Places API
+ * (on Google's map), Tripadvisor and free Wikimedia photos.
+ */
 function loadDetails(p) {
-  if (p.id === 'meet' || p.details) return;
+  if (p.id === 'meet' || p.details || p.kit) return;
+  if (placesKitKey) {
+    const again = () => { if (state.view === 'place' && state.search?.place === p) render({ keepScroll: true }); };
+    const fallback = () => { p.kit?.el?.remove(); p.kit = { status: 'none' }; loadOtherDetails(p); again(); };
+    p.kit = { status: 'loading' };
+    loadPlacesKit(placesKitKey)
+      .then(() => findPlaceId(p))
+      .then((id) => {
+        if (!id) return fallback();
+        p.kit = {
+          status: 'ok', id,
+          // Checked once loaded: another place with a similar name nearby is not this one.
+          el: placeCard(id, { dark: isDark(), onLoad: (place) => { if (!samePlace(p, place)) fallback(); }, onError: fallback }),
+        };
+        again();
+      })
+      .catch(fallback);
+    return;
+  }
+  loadOtherDetails(p);
+}
+
+function loadOtherDetails(p) {
+  if (p.details) return;
   p.details = { status: 'loading', photos: [], reviews: [] };
   (async () => {
     if (ratingsOn && p.rating === undefined) await rateAll([p]).catch(() => {});
@@ -1446,7 +1475,11 @@ function renderPlace() {
   const tabs = ['overview', (d.reviews?.length || r?.count) && 'reviews', photos.length > 1 && 'photos', p.id !== 'meet' && 'about'].filter(Boolean);
   const tab = tabs.includes(state.placeTab) ? state.placeTab : 'overview';
 
-  const gallery = photos.length
+  // Google's place card (photos, rating, reviews, hours…) takes the gallery's place; it's put in after rendering.
+  const kit = p.kit?.status === 'ok' ? p.kit : null;
+  const gallery = kit ? '<div class="gcard-slot" id="gcard-slot"></div>'
+    : p.kit?.status === 'loading' ? '<div class="gallery"><span class="g-item skel"></span><span class="g-item skel"></span></div>'
+    : photos.length
     ? `<div class="gallery${photos.length === 1 ? ' single' : ''}">${photos.slice(0, 8).map((ph, k) => `<button class="g-item" data-action="photo" data-i="${k}" aria-label="Photo ${k + 1} of ${photos.length}"><img src="${esc(ph.url)}" alt="${esc(ph.caption || '')}" ${k > 1 ? 'loading="lazy"' : ''} decoding="async"></button>`).join('')}</div>`
     : loading ? '<div class="gallery"><span class="g-item skel"></span><span class="g-item skel"></span></div>'
       : `<div class="hero-art" style="--c:${TAB_COLOR[p.tab] || '#007aff'}">${glyph(p.tab === 'meet' ? 'pin' : p.tab, 40, 1.6)}</div>`;
@@ -1464,7 +1497,7 @@ function renderPlace() {
     ${gallery}
     <div class="place-title">
       <h2>${esc(p.name)}</h2>
-      ${r?.rating != null ? `<div class="place-rating">${ratingHtml(r, { big: true })}${r.count ? `<button class="btn btn-plain" data-action="place-tab" data-tab="reviews">${Number(r.count).toLocaleString()} reviews</button>` : ''}</div>` : loading && ratingsOn ? '<span class="skel" style="width:150px;height:16px"></span>' : ''}
+      ${!kit && r?.rating != null ? `<div class="place-rating">${ratingHtml(r, { big: true })}${r.count ? `<button class="btn btn-plain" data-action="place-tab" data-tab="reviews">${Number(r.count).toLocaleString()} reviews</button>` : ''}</div>` : loading && ratingsOn ? '<span class="skel" style="width:150px;height:16px"></span>' : ''}
       <div class="footnote">${esc(meta.join(' · '))}</div>
       ${st ? `<div class="place-status">${statusHtml(st)}</div>` : ''}
     </div>
@@ -1571,6 +1604,10 @@ function placeAbout(p, d) {
 }
 
 afterRender.place = () => {
+  // The same card each time the page is drawn, so Google loads (and bills) it once.
+  const card = state.search?.place?.kit?.el;
+  const slot = $('#gcard-slot');
+  if (card && slot) { card.style.colorScheme = isDark() ? 'dark' : 'light'; slot.append(card); }
   $('#dir-when-type')?.addEventListener('change', (e) => {
     if (e.target.value === 'arrive') {
       const d = nextHalfHour();
@@ -2090,7 +2127,10 @@ async function boot() {
   initDrawer();
   window.addEventListener('resize', () => map?.invalidateSize());
   ratingsSource().then((src) => { ratingsOn = !!src; ratingsName = src === 'tripadvisor' ? 'Tripadvisor' : src || ''; });
-  getConfig().then((c) => { if (c.version) { $('#app-version').hidden = false; $('#app-version').textContent = `Version ${c.version}`; } });
+  getConfig().then((c) => {
+    if (c.version) { $('#app-version').hidden = false; $('#app-version').textContent = `Version ${c.version}`; }
+    placesKitKey = c.placesKit || null;
+  });
   onUser(await api.start());
 }
 

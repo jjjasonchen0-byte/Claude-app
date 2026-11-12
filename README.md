@@ -42,6 +42,7 @@ Requires Node 20.3+. Dependencies are Leaflet and MapLibre (for the map), served
 | `TRANSIT_DAILY_LIMIT` | Most public-transport searches per day (default 600) |
 | `GOOGLE_MAPS_API_KEY` | Optional. Google's map and directions (see below) |
 | `GOOGLE_DAILY_ROUTES`, `GOOGLE_DAILY_ELEMENTS`, `GOOGLE_DAILY_TILES` | Most Google route requests, travel-time checks and map tiles per day (defaults 320, 320 and 3,200: inside Google's free monthly allowance) |
+| `GOOGLE_MAPS_BROWSER_KEY` | Optional. Google's place card (photos, rating, reviews, hours) on a place's page, drawn by Google in the browser (see below). A separate key, restricted to your site |
 | `GOOGLE_DAILY_PLACES`, `GOOGLE_DAILY_PHOTOS` | Most Google place pages (rating and reviews) and place photos per day (defaults 32 and 32: inside Google's free 1,000 a month each) |
 | `GOOGLE_TRAFFIC` | `1` for driving times with live traffic (a pricier Google tier) |
 | `GOOGLE_MAP_REGION` | Two-letter country code for Google's map (borders and names as seen there; default `US`) |
@@ -104,6 +105,24 @@ To turn it on:
 
 The integration was written against Google's published API reference and tested with stand-in responses, since no key was available; check a few routes after you add yours.
 
+### Google's place card (Places UI Kit, optional)
+
+The cheapest way to show a place's **real photos, rating and reviews**: Google's own place card ([Places UI Kit](https://developers.google.com/maps/documentation/javascript/places-ui-kit/overview)), drawn by Google in the place's page. It works beside any map, so it needs neither of the other Google features, and when it's set up it takes over from the Places API photos and reviews above.
+
+- **Cost:** each card is one "Places UI Kit Query": 10,000 a month free, then $1 per 1,000 (photos and reviews included). Finding the place on Google is free (a search for its ID only).
+- **How it finds the place:** by name within about 200 m of where OpenStreetMap has it. Once the card has loaded, Meet checks Google's place has a similar name and is within 250 m; if not, the card is dropped and the free photos are shown instead.
+- The card is made once per place and kept while you look at it, so it loads (and is billed) once, not each time the page updates.
+- The look is Google's (it follows light and dark mode); its "Google Maps" credit is part of the card.
+
+To turn it on:
+
+1. In the [Google Cloud console](https://console.cloud.google.com) (the same project is fine), enable **Maps JavaScript API** and **Places API (New)**.
+2. Under **APIs & Services → Credentials**, create **another** API key. This one is seen by browsers, so restrict it: under **Application restrictions** choose **Websites** and add your site, for example `https://meet-xxxx.onrender.com/*`; under **API restrictions** choose **Maps JavaScript API** and **Places API (New)**.
+3. Add it as `GOOGLE_MAPS_BROWSER_KEY` on Render and redeploy.
+4. Optionally, set a budget alert in the Cloud console (the app has no daily cap for the card, since Google bills it in the browser).
+
+Tested with stand-ins only, since no key was available: open a few places after you add yours.
+
 ### Real-world data and the rules that come with it
 
 Everything else comes from free, open services. Each asks for light, fair use:
@@ -147,6 +166,7 @@ The Sydney data comes from OpenStreetMap via [OpenFreeMap](https://openfreemap.o
 | --- | --- |
 | `server.js` | Static hosting (compressed), a JSON API for optional profiles (scrypt-hashed passwords, httpOnly session cookie), saved addresses, settings and history, and relays for directions, ratings and Google's map tiles |
 | `lib/tripadvisor.js` | Tripadvisor Terra client: matches places by name and distance, keeps the allowlist up to date, batches rating lookups, and enforces the daily limit |
+| `public/js/placeskit.js` | Google's place card (Places UI Kit): loads Google's library, finds the place's ID for free and checks the loaded place is the same one |
 | `lib/google.js` | Google client (optional): Routes API directions and travel-time checks turned into the app's route format, Map Tiles API sessions and tiles in quiet light and dark styles, Places API photos, ratings and reviews for a place page, and the daily caps |
 | `public/js/api.js` | One data API for the app: guest storage (`guest.js`) until someone signs in, then the server (`remote.js`), moving guest data across |
 | `public/js/meetpoint.js` | Finds the meeting point: for groups with public transport riders, among the stops everyone reaches (real times to every stop, then the best three checked against real journeys); otherwise from travel-time tables over a 7 × 7 grid and finer grids around the best spot. Spots are kept on walkable streets |
@@ -174,4 +194,5 @@ MIT, see [LICENSE](LICENSE).
 ```bash
 npm test                                   # unit tests: meeting point, places, opening hours, matching, photos, Tripadvisor, directions
 NODE_PATH=$(npm root -g) npm run test:e2e  # full browser walkthrough (Playwright; map services mocked)
+NODE_PATH=$(npm root -g) npm run test:build  # builds the test version and checks it starts and finds a place
 ```

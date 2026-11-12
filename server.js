@@ -621,6 +621,9 @@ route('GET', '/api/config', async (req, res) => {
     google: google.available('tiles'),
     // Which code is running (Render sets RENDER_GIT_COMMIT), shown in the menu.
     version: String(process.env.RENDER_GIT_COMMIT || '').slice(0, 7),
+    // A browser key for Google's place card (Places UI Kit). It is public by
+    // nature: restrict it to this site and to the Maps JavaScript and Places APIs.
+    placesKit: (process.env.GOOGLE_MAPS_BROWSER_KEY || '').trim() || null,
   }, { 'Cache-Control': 'private, max-age=300' });
 });
 

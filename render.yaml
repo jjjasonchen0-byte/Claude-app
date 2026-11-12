@@ -24,3 +24,7 @@ services:
       # the free map and routing. Render asks for it on setup.
       - key: GOOGLE_MAPS_API_KEY
         sync: false
+      # Optional: Google's place card (photos and reviews) on a place's page.
+      # A second key, restricted to this site (see README).
+      - key: GOOGLE_MAPS_BROWSER_KEY
+        sync: false
