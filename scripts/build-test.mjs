@@ -38,10 +38,10 @@ app = replaceOnce(app, '      <button class="btn btn-tinted" data-action="calend
 // The test version has no timetables, so start on walking directions.
 app = replaceOnce(app, "const DEFAULT_SETTINGS = { mode: 'similar', travel: 'transit',", "const DEFAULT_SETTINGS = { mode: 'similar', travel: 'walk',", 'default travel mode');
 // Directions come from the streets built into the page, not the real routing services.
-app = app.replace(/ {2}map\.attributionControl\.addAttribution\(`Routes[^\n]*\n/, '');
+app = replaceOnce(app, '  map.attributionControl.addAttribution(ROUTES_CREDIT);\n', '', 'routing attribution');
 app = replaceOnce(app, '    <p class="footnote attrib">${credits}</p>',
   '    <p class="footnote attrib">Test version: routes follow Sydney\'s streets, built into this page. The real app uses live routing and public transport.</p>', 'routing attribution');
-if (app.includes('addAttribution(`Routes')) throw new Error('build-test: routing attribution left in test build');
+if (app.includes('addAttribution(ROUTES_CREDIT)')) throw new Error('build-test: routing attribution left in test build');
 
 // ---- page markup
 const html = read('public/index.html');

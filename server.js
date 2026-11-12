@@ -11,6 +11,7 @@ import { Store } from './lib/store.js';
 import { osrmRouteUrl, osrmTableUrl, transitUrl, normalizeOsrm, normalizeOsrmTable, normalizeTransit } from './public/js/directions.js';
 import { simplify } from './public/js/geo.js';
 import { createTripadvisor } from './lib/tripadvisor.js';
+import { createGoogle, TILE_STYLES } from './lib/google.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
@@ -45,6 +46,19 @@ const tripadvisor = createTripadvisor({
     },
   },
   onIdsChanged: () => store.save(),
+});
+
+// Optional: Google directions and map (see README). Daily caps keep it inside
+// Google's free monthly allowance unless raised.
+const positive = (v) => (Number(v) > 0 ? Number(v) : undefined);
+const googleLimits = Object.fromEntries(Object.entries({
+  routes: positive(process.env.GOOGLE_DAILY_ROUTES), elements: positive(process.env.GOOGLE_DAILY_ELEMENTS), tiles: positive(process.env.GOOGLE_DAILY_TILES),
+}).filter(([, v]) => v));
+const google = createGoogle({
+  apiKey: process.env.GOOGLE_MAPS_API_KEY,
+  limits: googleLimits,
+  traffic: process.env.GOOGLE_TRAFFIC === '1',
+  region: (process.env.GOOGLE_MAP_REGION || 'US').toUpperCase(),
 });
 
 const STATIC_ROOTS = [
@@ -381,14 +395,41 @@ function parsePoint(s) {
 const roundGeom = (pts) => simplify(pts, 2).map(([a, b]) => [Math.round(a * 1e5) / 1e5, Math.round(b * 1e5) / 1e5]);
 const ROAD_MODES = ['walk', 'bike', 'drive'];
 
+/**
+ * Google directions, when the page is showing Google's map (g=1; Google's
+ * terms allow its routes only on its own map) and today's cap allows.
+ * Null when Google isn't used, so the free services answer instead.
+ */
+async function googleDirections(q, mode, from, to) {
+  if (q.get('g') !== '1' || !google.available('routes') || ![...ROAD_MODES, 'transit'].includes(mode)) return null;
+  const arriveBy = q.get('arriveBy') === '1';
+  const time = q.get('time') || null;
+  const key = `google|${mode}|${from.lat},${from.lon}|${to.lat},${to.lon}|${time ? String(time).slice(0, 16) : ''}|${arriveBy}`;
+  const hit = upstreamCache.get(key);
+  if (hit && Date.now() - hit.at < hit.ttl) return hit.data;
+  try {
+    const out = await google.route(mode, from, to, { time, arriveBy });
+    if (out.options) for (const o of out.options) for (const l of o.legs) l.geometry = roundGeom(l.geometry);
+    out.geometry = roundGeom(out.geometry);
+    if (upstreamCache.size > 800) upstreamCache.delete(upstreamCache.keys().next().value);
+    upstreamCache.set(key, { at: Date.now(), ttl: 10 * 60 * 1000, data: out });
+    return out;
+  } catch (err) {
+    if (err.status !== 404 && !err.limit) console.warn('Google directions:', err.message);
+    return null; // no route, over the cap or unreachable: try the free services
+  }
+}
+
 route('GET', '/api/directions', async (req, res) => {
   rateLimit(req);
   const q = new URL(req.url, 'http://x').searchParams;
   const mode = q.get('mode');
   const from = parsePoint(q.get('from'));
   const to = parsePoint(q.get('to'));
-  let out;
-  if (mode === 'transit') {
+  let out = await googleDirections(q, mode, from, to);
+  if (out) {
+    // Google's answer.
+  } else if (mode === 'transit') {
     const arriveBy = q.get('arriveBy') === '1';
     const time = q.get('time') ? new Date(q.get('time')) : new Date();
     if (Number.isNaN(time.getTime())) throw new HttpError(400, 'Invalid time');
@@ -424,10 +465,65 @@ route('GET', '/api/traveltimes', async (req, res) => {
   catch (err) { throw new HttpError(err.status || 502, err.message); }
 });
 
+// Real travel times from Google for a few spots (the best candidates for a
+// meeting point), for everyone travelling one way: sources × destinations.
+route('GET', '/api/checktimes', async (req, res) => {
+  rateLimit(req);
+  const q = new URL(req.url, 'http://x').searchParams;
+  if (q.get('g') !== '1' || !google.enabled) throw new HttpError(404, 'Travel time checks are not set up on this server');
+  const mode = q.get('mode');
+  if (![...ROAD_MODES, 'transit'].includes(mode)) throw new HttpError(400, 'mode must be transit, walk, bike or drive');
+  const sources = String(q.get('from') || '').split(';').filter(Boolean).map(parsePoint);
+  const destinations = String(q.get('to') || '').split(';').filter(Boolean).map(parsePoint);
+  if (!sources.length || !destinations.length) throw new HttpError(400, 'from and to are required');
+  if (sources.length > 12 || destinations.length > 4) throw new HttpError(400, 'Too many points');
+  try {
+    send(res, 200, await google.matrix(mode, sources, destinations, { time: q.get('time') }), { 'Cache-Control': 'private, max-age=300' });
+  } catch (err) {
+    throw new HttpError(err.limit ? 429 : err.status || 502, err.limit ? 'Travel time checks are paused until tomorrow' : 'Travel times unavailable');
+  }
+});
+
+// ---------------------------------------------------------------- Google's map (tiles and their credits)
+
+const TILE_STYLE = new Set(TILE_STYLES);
+route('GET', '/api/gmap/:style/:z/:x/:y', async (req, res, { style, z, x, y }) => {
+  if (!google.enabled) throw new HttpError(404, 'Not found');
+  const [Z, X, Y] = [z, x, y].map(Number);
+  if (!TILE_STYLE.has(style) || ![Z, X, Y].every(Number.isInteger) || Z < 0 || Z > 22 || X < 0 || Y < 0 || X >= 2 ** Z || Y >= 2 ** Z) throw new HttpError(400, 'Invalid tile');
+  let t;
+  try { t = await google.tile(style, Z, X, Y); } catch (err) { throw new HttpError(err.limit ? 429 : 502, 'Map tile unavailable'); }
+  res.writeHead(t.status, {
+    'Content-Type': t.type, 'Content-Length': t.body.length,
+    // As Google sends them (it asks apps to respect its caching headers, and to store nothing else).
+    ...(t.cacheControl ? { 'Cache-Control': t.cacheControl } : {}),
+    ...(t.etag ? { ETag: t.etag } : {}),
+  });
+  res.end(t.body);
+});
+
+route('GET', '/api/gmap/:style/viewport', async (req, res, { style }) => {
+  if (!google.enabled) throw new HttpError(404, 'Not found');
+  if (!TILE_STYLE.has(style)) throw new HttpError(400, 'Invalid style');
+  const q = new URL(req.url, 'http://x').searchParams;
+  const area = {};
+  for (const k of ['zoom', 'north', 'south', 'east', 'west']) {
+    const v = Number(q.get(k));
+    if (!Number.isFinite(v)) throw new HttpError(400, `Invalid ${k}`);
+    area[k] = k === 'zoom' ? Math.max(0, Math.min(22, Math.round(v))) : Math.round(v * 1e4) / 1e4;
+  }
+  try { send(res, 200, await google.viewport(style, area), { 'Cache-Control': 'private, max-age=600' }); }
+  catch { throw new HttpError(502, 'Map credits unavailable'); }
+});
+
 // ---------------------------------------------------------------- places: ratings, photos, reviews
 
 route('GET', '/api/config', async (req, res) => {
-  send(res, 200, { ratings: tripadvisor.enabled ? 'tripadvisor' : null }, { 'Cache-Control': 'private, max-age=300' });
+  send(res, 200, {
+    ratings: tripadvisor.enabled ? 'tripadvisor' : null,
+    // Google's map (and with it Google directions) while today's map tiles last.
+    google: google.available('tiles'),
+  }, { 'Cache-Control': 'private, max-age=300' });
 });
 
 function requireRatings() {
@@ -557,6 +653,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     console.log(`Meet running at http://localhost:${PORT}`);
     if (!CONTACT) console.warn('Tip: set MEET_CONTACT to a website or email so the directions services can reach you (Transitous asks every app for this).');
     console.log(tripadvisor.enabled ? 'Ratings, photos and reviews: Tripadvisor' : 'Ratings: off (set TRIPADVISOR_API_KEY to show Tripadvisor ratings, photos and reviews)');
+    console.log(google.enabled ? `Map and directions: Google (daily caps: ${JSON.stringify(google.usage().caps)})` : 'Map and directions: OpenFreeMap, OSRM and Transitous (set GOOGLE_MAPS_API_KEY for Google)');
   });
   const shutdown = () => { store.flush(); process.exit(0); };
   process.on('SIGINT', shutdown);

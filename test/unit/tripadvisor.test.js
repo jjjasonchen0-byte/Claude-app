@@ -106,14 +106,17 @@ test('the daily limit stops spending', async () => {
   assert.equal(ta.usage().used, 3);
 });
 
-test('server: ratings are off without a key', async () => {
+test('server: ratings (and Google) are off without a key', async () => {
   process.env.DATA_FILE = path.join(os.tmpdir(), `meet-ta-test-${Date.now()}.json`);
   delete process.env.TRIPADVISOR_API_KEY;
+  delete process.env.GOOGLE_MAPS_API_KEY;
   const { server } = await import(`../../server.js?ta-off-${Date.now()}`);
   await new Promise((r) => server.listen(0, r));
   const base = `http://localhost:${server.address().port}`;
   try {
-    assert.deepEqual(await (await fetch(`${base}/api/config`)).json(), { ratings: null });
+    assert.deepEqual(await (await fetch(`${base}/api/config`)).json(), { ratings: null, google: false });
+    assert.equal((await fetch(`${base}/api/checktimes?g=1&mode=walk&from=51.5,-0.1&to=51.51,-0.1`)).status, 404);
+    assert.equal((await fetch(`${base}/api/gmap/light/12/2047/1361`)).status, 404);
     const r = await fetch(`${base}/api/places/ratings`, { method: 'POST', body: JSON.stringify({ items: [roma] }) });
     assert.equal(r.status, 404);
   } finally {

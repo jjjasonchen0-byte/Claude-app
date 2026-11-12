@@ -6,11 +6,11 @@ import { findMeetingPoint, estimateSeconds, SPEEDS } from './meetpoint.js';
 import { FloodAnimation } from './flood.js';
 import { loadRoads } from './roads.js';
 import { TABS, findPois, groupPois } from './pois.js';
-import { ratingsSource, rateAll, thumbFor, detailsFor } from './rated.js';
+import { getConfig, ratingsSource, rateAll, thumbFor, detailsFor } from './rated.js';
 import { openStatus, weekTable } from './hours.js';
 import { haversine } from './geo.js';
 import { mapLinks, shareText, messagingLinks, nativeShare, copyText, calendarInvite, download } from './share.js';
-import { MODES, ATTRIBUTION, getDirections, getTravelTimes, navLinks, vehicleName, isWalkLeg } from './directions.js';
+import { MODES, ATTRIBUTION, getDirections, getTravelTimes, getCheckTimes, useGoogle, usingGoogle, navLinks, vehicleName, isWalkLeg } from './directions.js';
 
 // ---------------------------------------------------------------- constants
 
@@ -371,8 +371,53 @@ function loadMapLibre() {
   })();
   return mapLibre;
 }
+// With a Google key on the server: Google's map, quietly styled (Google's
+// terms allow its directions only on its own map). Tiles come through the
+// server, which keeps the key. Google's name and its map credits for the
+// area in view sit top right, apart from the other credits.
+let googleCredit = null;
+function addGoogleBasemap(want) {
+  const style = `${want}${(window.devicePixelRatio || 1) > 1.3 ? '2x' : ''}`;
+  const id = `google|${style}`;
+  if (baseLayer?.meetId === id) return;
+  baseLayer?.remove();
+  baseLayer = L.tileLayer(`/api/gmap/${style}/{z}/{x}/{y}`, { maxZoom: 21 });
+  baseLayer.meetId = id;
+  baseLayer.addTo(map).bringToBack();
+  if (!usingGoogle()) {
+    useGoogle(true);
+    map.attributionControl.removeAttribution(ROUTES_CREDIT);
+    map.attributionControl.addAttribution(`Places, addresses and the search animation's streets ${OSM_ATTR} contributors`);
+  }
+  if (!googleCredit) {
+    googleCredit = Object.assign(document.createElement('div'), { className: 'gmap-credit', innerHTML: '<b>Google Maps</b><span></span>' });
+    $('#screen-main').append(googleCredit);
+    let timer = 0, last = '';
+    const update = () => {
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        const b = map.getBounds();
+        const q = new URLSearchParams({ zoom: Math.round(map.getZoom()), north: b.getNorth().toFixed(3), south: b.getSouth().toFixed(3), east: b.getEast().toFixed(3), west: b.getWest().toFixed(3) });
+        const url = `/api/gmap/${baseLayer.meetId.split('|')[1]}/viewport?${q}`;
+        if (url === last) return;
+        last = url;
+        try {
+          const r = await fetch(url);
+          if (r.ok) $('span', googleCredit).textContent = (await r.json()).copyright || '';
+        } catch { /* keep the last credits */ }
+      }, 400);
+    };
+    map.on('moveend', update);
+    update();
+  }
+}
+
 function addBasemap() {
   const want = isDark() ? 'dark' : 'light';
+  getConfig().then((c) => (c.google ? addGoogleBasemap(want) : addFreeBasemap(want)));
+}
+
+function addFreeBasemap(want) {
   if (baseLayer?.meetId === want) return;
   loadMapLibre().then(() => {
     if (baseLayer?.meetId === want) return;
@@ -394,12 +439,14 @@ function addBasemap() {
 }
 // basemap:end
 
+const ROUTES_CREDIT = `Routes <a href="${ATTRIBUTION.routing.url}" target="_blank" rel="noopener">FOSSGIS OSRM</a> · Public transport <a href="${ATTRIBUTION.transit.url}" target="_blank" rel="noopener">Transitous</a>`;
+
 function initMap() {
   map = L.map('map', { zoomControl: false, worldCopyJump: true });
   L.control.zoom({ position: 'bottomright' }).addTo(map);
   addBasemap();
   map.attributionControl.setPrefix(false);
-  map.attributionControl.addAttribution(`Routes <a href="${ATTRIBUTION.routing.url}" target="_blank" rel="noopener">FOSSGIS OSRM</a> · Public transport <a href="${ATTRIBUTION.transit.url}" target="_blank" rel="noopener">Transitous</a>`);
+  map.attributionControl.addAttribution(ROUTES_CREDIT);
   peopleLayer = L.layerGroup().addTo(map);
   resultLayer = L.layerGroup().addTo(map);
   poiLayer = L.layerGroup().addTo(map);
@@ -855,6 +902,8 @@ async function findPlaces({ replay = false } = {}) {
     // service) and the streets for the animation.
     const meetingP = prev ? Promise.resolve(prev.meeting) : findMeetingPoint(people, {
       rule, travelTimes: getTravelTimes, directions: getDirections, signal: ctrl.signal, onStatus: status,
+      // With Google: the best few spots checked against Google's travel times for everyone.
+      checkTimes: usingGoogle() ? getCheckTimes : undefined,
     });
     meetingP.catch(() => {});
     const roadsP = withTimeout(loadRoads(streetsArea(), { signal: ctrl.signal }), 8000).catch(() => null);
@@ -1373,7 +1422,8 @@ function placeOverview(p, d, r, ds) {
   const when = state.when || { type: 'now' };
   const anyTransit = s.people.some((x) => x.mode === 'transit');
   const anyRoad = s.people.some((x) => x.mode !== 'transit');
-  const credits = [anyTransit && ATTRIBUTION.transit, anyRoad && ATTRIBUTION.routing].filter(Boolean)
+  const fromGoogle = ds.some((d) => d?.provider === 'google');
+  const credits = [fromGoogle && ATTRIBUTION.google, !fromGoogle && anyTransit && ATTRIBUTION.transit, !fromGoogle && anyRoad && ATTRIBUTION.routing].filter(Boolean)
     .map((a) => `<a href="${a.url}" target="_blank" rel="noopener">${esc(a.text)}</a>`).join(' · ');
   const site = hrefOf(d.website || p.website);
   const phone = d.phone || p.phone;

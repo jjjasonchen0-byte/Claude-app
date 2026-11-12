@@ -20,3 +20,7 @@ services:
       # Leave empty to run without them. Render asks for it on setup.
       - key: TRIPADVISOR_API_KEY
         sync: false
+      # Optional: Google's map and directions (see README). Leave empty to use
+      # the free map and routing. Render asks for it on setup.
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false

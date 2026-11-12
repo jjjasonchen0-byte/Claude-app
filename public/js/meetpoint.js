@@ -7,7 +7,9 @@
 // as long (without making the longest much longer than it has to be); "least
 // total" means everyone's trips add up to the least time.
 // People on public transport are first estimated from walking distance, then
-// the two best spots are checked against real timetables.
+// the two best spots are checked against real timetables. With a second,
+// more exact source of travel times (Google, when the server has a key), the
+// three best spots are checked against it for everyone.
 import { haversine, paddedBBox, centroid, smallestEnclosingCircle, span } from './geo.js';
 
 export const SPEEDS = { walk: 1.35, bike: 4.2, transit: 6.5, drive: 9.5 }; // m/s, urban averages
@@ -138,9 +140,11 @@ async function evaluate(people, cands, { travelTimes, signal }) {
  * @param opts.rule 'similar' | 'total'
  * @param opts.travelTimes (mode, sources, destinations, {signal}) → { durations, distances, destinations? }
  * @param opts.directions optional (mode, from, to) → { duration }: used to check public transport
+ * @param opts.checkTimes optional (people, spots) → { durations, distances } ([person][spot], null if unknown):
+ *   exact travel times for the best few spots, used to make the final choice
  * @returns { meet: {lat, lon}, times: [s], dists: [m], real: [bool], approx }
  */
-export async function findMeetingPoint(people, { rule = 'similar', travelTimes, directions, signal, onStatus = () => {} } = {}) {
+export async function findMeetingPoint(people, { rule = 'similar', travelTimes, directions, checkTimes, signal, onStatus = () => {} } = {}) {
   if (people.length < 2) throw new Error('Add at least two people');
   const all = [];
   // Scores depend on everything measured so far ("close to the shortest
@@ -173,17 +177,52 @@ export async function findMeetingPoint(people, { rule = 'similar', travelTimes, 
   }
   if (!all.some((r) => Number.isFinite(r.score))) throw new Error('No spot can be reached by everyone');
 
+  // The best few spots, at least 250 m apart.
+  const ranked = all.filter((r) => Number.isFinite(r.score)).sort((a, b) => a.score - b.score);
+  const topSpots = (n) => {
+    const top = [];
+    for (const r of ranked) {
+      if (top.every((t) => haversine(t.lat, t.lon, r.lat, r.lon) > 250)) top.push(r);
+      if (top.length === n) break;
+    }
+    return top;
+  };
+
+  // Exact travel times for everyone to the three best spots, when there is a source for them.
+  if (checkTimes) {
+    const top = topSpots(3);
+    onStatus('Checking travel times…');
+    try {
+      const t = await timeout(checkTimes(people, top.map((r) => ({ lat: r.lat, lon: r.lon })), { signal }), 10000);
+      const score = makeScore(rule, all);
+      const checked = top.map((cand, j) => {
+        const times = cand.times.map((s, i) => t.durations?.[i]?.[j] ?? s);
+        const dists = cand.dists.map((d, i) => t.distances?.[i]?.[j] ?? d);
+        return { ...cand, times, dists, score: score(times), known: people.map((_, i) => t.durations?.[i]?.[j] != null) };
+      });
+      const pick = checked.reduce((a, b) => (b.score < a.score ? b : a));
+      if (pick.known.some(Boolean)) {
+        return {
+          meet: { lat: pick.lat, lon: pick.lon },
+          times: pick.times.map((s) => Math.round(s)),
+          dists: pick.dists.map((d, i) => Math.round(d ?? haversine(people[i].lat, people[i].lon, pick.lat, pick.lon) * DETOUR)),
+          real: pick.known,
+          approx: !pick.known.every(Boolean),
+          tried: all.length,
+        };
+      }
+    } catch (err) {
+      if (signal?.aborted) throw err;
+      // Not available or not answering: carry on with the free estimates.
+    }
+  }
+
   // Public transport: check the two best (distinct) spots against real timetables.
   const riders = people.map((p, i) => (p.mode === 'transit' ? i : -1)).filter((i) => i >= 0);
   const real = people.map((p) => p.mode !== 'transit');
   let chosen = best();
   if (riders.length && directions) {
-    const ranked = all.filter((r) => Number.isFinite(r.score)).sort((a, b) => a.score - b.score);
-    const top = [];
-    for (const r of ranked) {
-      if (top.every((t) => haversine(t.lat, t.lon, r.lat, r.lon) > 250)) top.push(r);
-      if (top.length === 2) break;
-    }
+    const top = topSpots(2);
     onStatus('Checking public transport…');
     const score = makeScore(rule, all);
     const checked = await Promise.all(top.map(async (cand) => {

@@ -171,3 +171,25 @@ test('spots the routing service could not place on a street never become a meeti
     assert.ok(Number.isFinite(r.meet.lat) && Number.isFinite(r.meet.lon), `meeting point ${JSON.stringify(r.meet)}`);
   }
 });
+
+test('with exact travel times for the best spots, the final choice uses them', async () => {
+  const { travelTimes } = fakeRouter();
+  const asked = [];
+  // The exact source says the first spot offered is much slower for the first person than estimated.
+  const checkTimes = async (people, spots) => {
+    asked.push(spots.length);
+    return {
+      durations: people.map((p, i) => spots.map((s, j) => secs(p, s, p.mode) * (i === 0 && j === 0 ? 3 : 1))),
+      distances: people.map((p) => spots.map((s) => haversine(p.lat, p.lon, s.lat, s.lon) * ROAD)),
+    };
+  };
+  const plain = await findMeetingPoint(london, { travelTimes });
+  const r = await findMeetingPoint(london, { travelTimes, checkTimes });
+  assert.deepEqual(asked, [3], 'three spots checked, once');
+  assert.deepEqual(r.real, [true, true, true]);
+  assert.equal(r.approx, false);
+  assert.notDeepEqual(r.meet, plain.meet, 'moved off the spot that turned out slow');
+  // When the exact source fails, the free estimates are used as before.
+  const failing = await findMeetingPoint(london, { travelTimes, checkTimes: async () => { throw new Error('down'); } });
+  assert.deepEqual(failing.meet, plain.meet);
+});

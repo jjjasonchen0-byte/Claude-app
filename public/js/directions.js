@@ -1,6 +1,8 @@
 // Real directions: walking, cycling and driving from OpenStreetMap routing
 // (OSRM, run by FOSSGIS at routing.openstreetmap.de) and public transport
-// from Transitous (MOTIS 2, api.transitous.org).
+// from Transitous (MOTIS 2, api.transitous.org). When the Meet server has a
+// Google key and the page shows Google's map, the server answers from
+// Google's Routes API instead (see lib/google.js).
 //
 // Pure functions shared by the browser and the server: request URLs,
 // response normalisers and a polyline decoder. The browser asks the Meet
@@ -21,7 +23,14 @@ const TRANSITOUS = 'https://api.transitous.org/api/v5/plan';
 export const ATTRIBUTION = {
   routing: { text: 'Routes © OpenStreetMap contributors, via FOSSGIS OSRM', url: 'https://routing.openstreetmap.de/about.html' },
   transit: { text: 'Public transport by Transitous', url: 'https://transitous.org/sources/' },
+  google: { text: 'Directions by Google Maps', url: 'https://www.google.com/maps' },
 };
+
+// Google directions only go with Google's map (Google's terms): the app turns
+// this on when it shows that map.
+let google = false;
+export function useGoogle(on) { google = !!on; }
+export const usingGoogle = () => google;
 
 const ll = (p) => `${Number(p.lat).toFixed(6)},${Number(p.lon).toFixed(6)}`;
 const lonlat = (p) => `${Number(p.lon).toFixed(6)},${Number(p.lat).toFixed(6)}`;
@@ -193,9 +202,10 @@ export function getDirections(mode, from, to, { time, arriveBy = false, alternat
   const road = mode !== 'transit';
   const viaPt = road && via ? via : null;
   const alt = road && alternatives && !viaPt;
-  const key = [mode, ll(from), ll(to), time || '', arriveBy, alt, viaPt ? ll(viaPt) : ''].join('|');
+  const key = [mode, ll(from), ll(to), time || '', arriveBy, alt, viaPt ? ll(viaPt) : '', google].join('|');
   if (cache.has(key)) return cache.get(key);
   const q = new URLSearchParams({ mode, from: ll(from), to: ll(to) });
+  if (google) q.set('g', '1');
   if (time) q.set('time', new Date(time).toISOString());
   if (arriveBy) q.set('arriveBy', '1');
   if (alt) q.set('alt', '1');
@@ -219,6 +229,28 @@ export function getTravelTimes(mode, sources, destinations, { signal } = {}) {
   cache.set(key, promise);
   promise.catch(() => cache.delete(key));
   return promise;
+}
+
+/**
+ * Real travel times from Google (when it is in use) from everyone to a few
+ * spots: [person][spot] seconds and metres, null where unknown. People are
+ * grouped by how they travel, one request per group.
+ */
+export async function getCheckTimes(people, spots, { signal } = {}) {
+  if (!google) throw Object.assign(new Error('Not available'), { status: 404 });
+  const durations = people.map(() => spots.map(() => null));
+  const distances = people.map(() => spots.map(() => null));
+  const groups = new Map();
+  people.forEach((p, i) => { if (!groups.has(p.mode)) groups.set(p.mode, []); groups.get(p.mode).push(i); });
+  await Promise.all([...groups].map(async ([mode, idx]) => {
+    const q = new URLSearchParams({ g: '1', mode, from: idx.map((i) => ll(people[i])).join(';'), to: spots.map(ll).join(';') });
+    const t = await getJson(`/api/checktimes?${q}`, { signal, credentials: 'same-origin' });
+    idx.forEach((pi, k) => spots.forEach((_, j) => {
+      durations[pi][j] = t.durations?.[k]?.[j] ?? null;
+      distances[pi][j] = t.distances?.[k]?.[j] ?? null;
+    }));
+  }));
+  return { durations, distances };
 }
 
 /** Hand-off links to full navigation apps. */

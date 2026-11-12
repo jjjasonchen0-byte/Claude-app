@@ -35,6 +35,10 @@ Requires Node 20.3+. Dependencies are Leaflet and MapLibre (for the map), served
 | `TRIPADVISOR_API_KEY` | Optional. Turns on Tripadvisor ratings, photos and reviews (see below) |
 | `TRIPADVISOR_DAILY_LIMIT` | Most Tripadvisor "billable entities" Meet uses per day (default 150) |
 | `TRANSIT_DAILY_LIMIT` | Most public-transport searches per day (default 600) |
+| `GOOGLE_MAPS_API_KEY` | Optional. Google's map and directions (see below) |
+| `GOOGLE_DAILY_ROUTES`, `GOOGLE_DAILY_ELEMENTS`, `GOOGLE_DAILY_TILES` | Most Google route requests, travel-time checks and map tiles per day (defaults 320, 320 and 3,200: inside Google's free monthly allowance) |
+| `GOOGLE_TRAFFIC` | `1` for driving times with live traffic (a pricier Google tier) |
+| `GOOGLE_MAP_REGION` | Two-letter country code for Google's map (borders and names as seen there; default `US`) |
 | `PORT`, `DATA_FILE` | Port and profile storage file |
 
 ### Put it online (for your phone)
@@ -69,6 +73,29 @@ Tripadvisor's API is now called **Terra** ([docs](https://docs.terra.tripadvisor
 - Show their branding: Meet credits Tripadvisor under lists and reviews, uses their rating image when the API provides one, and links to the place on Tripadvisor. Check their [brand guidelines](https://docs.terra.tripadvisor.com/docs/display-requirements.md) before going public.
 
 To turn it on: create an account at [terra.tripadvisor.com](https://terra.tripadvisor.com), create an API key, and add it as `TRIPADVISOR_API_KEY` (on Render: your service → **Environment** → **Add Environment Variable**). The key stays on the server; the browser never sees it. The integration was written against Tripadvisor's published API reference and tested with stand-in responses, since no key was available; check a few places after you add yours.
+
+### Google's map and directions (optional)
+
+With a Google key, directions come from Google's **Routes API**: walking, cycling, driving and public transport, with real stops, lines and times. The map becomes **Google's map**, styled quietly like the default one in light and dark, because Google's terms only allow its directions on its own map ([Service Specific Terms](https://cloud.google.com/maps-platform/terms/maps-service-terms), Routes API: "No use with a non-Google map"). Without a key, nothing changes.
+
+How Meet uses it:
+
+- **Directions:** one Google request per person for the routes after a search, and one per person when you open a place.
+- **Meeting point:** the free routing service still searches the grid of spots (about 500 travel times per search, which would cost around $2.50 a time with Google). Google then checks the three best spots for everyone, about 12 travel times per search, and the final choice uses Google's times.
+- **Map:** map tiles come through the Meet server, which keeps the key. "Google Maps" and Google's map credits for the area in view sit top right. Places, addresses and the search animation's streets still come from OpenStreetMap, credited separately at the bottom.
+- **Spending cap:** the daily caps above keep usage inside Google's free monthly allowance by default. When a cap is reached, routes and checks fall back to the free services until the next day. When the map tiles' cap is reached, pages opened after that use the free map and free routes.
+
+**Cost** (Google's pricing as of November 2026; check [their pricing page](https://developers.google.com/maps/billing-and-pricing/pricing)): each month, 10,000 route requests, 10,000 travel-time checks and 100,000 map tiles are free. After that, routes and checks cost $5 per 1,000 ($10 per 1,000 with `GOOGLE_TRAFFIC=1`, which has only 5,000 free a month), and tiles are billed per 1,000. A search with 4 people uses about 4 route requests and 12 checks; a map view uses roughly 20–40 tiles.
+
+To turn it on:
+
+1. Go to the [Google Cloud console](https://console.cloud.google.com), create a project and add a billing account (Google needs one even for free use).
+2. Enable **Routes API** and **Map Tiles API** for the project.
+3. Under **APIs & Services → Credentials**, create an API key. Restrict it to those two APIs. The key stays on the Meet server, so there are no website restrictions to set.
+4. Add it as `GOOGLE_MAPS_API_KEY` on Render (your service → **Environment**), and redeploy.
+5. Optionally, set daily quotas and a budget alert in the Cloud console as a second safety net.
+
+The integration was written against Google's published API reference and tested with stand-in responses, since no key was available; check a few routes after you add yours.
 
 ### Real-world data and the rules that come with it
 
@@ -111,8 +138,9 @@ The Sydney data comes from OpenStreetMap via [OpenFreeMap](https://openfreemap.o
 
 | File | What it does |
 | --- | --- |
-| `server.js` | Static hosting (compressed), a JSON API for optional profiles (scrypt-hashed passwords, httpOnly session cookie), saved addresses, settings and history, and relays for directions and ratings |
+| `server.js` | Static hosting (compressed), a JSON API for optional profiles (scrypt-hashed passwords, httpOnly session cookie), saved addresses, settings and history, and relays for directions, ratings and Google's map tiles |
 | `lib/tripadvisor.js` | Tripadvisor Terra client: matches places by name and distance, keeps the allowlist up to date, batches rating lookups, and enforces the daily limit |
+| `lib/google.js` | Google client (optional): Routes API directions and travel-time checks turned into the app's route format, Map Tiles API sessions and tiles in quiet light and dark styles, and the daily caps |
 | `public/js/api.js` | One data API for the app: guest storage (`guest.js`) until someone signs in, then the server (`remote.js`), moving guest data across |
 | `public/js/meetpoint.js` | Finds the meeting point from travel-time tables: a 7 × 7 grid over the group, then finer grids around the best spot, one request per way of travelling each round; public transport checked against timetables |
 | `public/js/flood.js` | The search animation: floods over the streets (shortest paths timed at each person's speed) converging on the meeting point, then the routes and travellers, on three canvases in their own map pane |
