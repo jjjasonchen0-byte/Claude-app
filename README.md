@@ -42,6 +42,7 @@ Requires Node 20.3+. Dependencies are Leaflet and MapLibre (for the map), served
 | `TRANSIT_DAILY_LIMIT` | Most public-transport searches per day (default 600) |
 | `GOOGLE_MAPS_API_KEY` | Optional. Google's map and directions (see below) |
 | `GOOGLE_DAILY_ROUTES`, `GOOGLE_DAILY_ELEMENTS`, `GOOGLE_DAILY_TILES` | Most Google route requests, travel-time checks and map tiles per day (defaults 320, 320 and 3,200: inside Google's free monthly allowance) |
+| `GOOGLE_DAILY_PLACES`, `GOOGLE_DAILY_PHOTOS` | Most Google place pages (rating and reviews) and place photos per day (defaults 32 and 32: inside Google's free 1,000 a month each) |
 | `GOOGLE_TRAFFIC` | `1` for driving times with live traffic (a pricier Google tier) |
 | `GOOGLE_MAP_REGION` | Two-letter country code for Google's map (borders and names as seen there; default `US`) |
 | `PORT`, `DATA_FILE` | Port and profile storage file |
@@ -81,22 +82,23 @@ To turn it on: create an account at [terra.tripadvisor.com](https://terra.tripad
 
 ### Google's map and directions (optional)
 
-With a Google key, directions come from Google's **Routes API**: walking, cycling, driving and public transport, with real stops, lines and times. The map becomes **Google's map**, styled quietly like the default one in light and dark, because Google's terms only allow its directions on its own map ([Service Specific Terms](https://cloud.google.com/maps-platform/terms/maps-service-terms), Routes API: "No use with a non-Google map"). Without a key, nothing changes.
+With a Google key, directions come from Google's **Routes API**: walking, cycling, driving and public transport, with real stops, lines and times. A place's page shows **real photos, its Google rating and reviews**, website, phone and opening hours from Google's **Places API**. The map becomes **Google's map**, styled quietly like the default one in light and dark, because Google's terms only allow its directions on its own map ([Service Specific Terms](https://cloud.google.com/maps-platform/terms/maps-service-terms), Routes API: "No use with a non-Google map"). Without a key, nothing changes.
 
 How Meet uses it:
 
 - **Directions:** one Google request per person for the routes after a search, and one per person when you open a place.
 - **Meeting point:** the free routing service still searches the grid of spots (about 500 travel times per search, which would cost around $2.50 a time with Google). Google then checks the three best spots for everyone, about 12 travel times per search, and the final choice uses Google's times.
+- **A place's page:** the place (from OpenStreetMap) is found on Google by name close to its position (free), and its details are fetched once when you open it, then used only if the name and position agree. Up to 6 photos, each credited to whoever took it (tap a photo), and Google's most relevant reviews (up to 5) with their authors. Only Google's ID for each place is stored, as Google's terms allow. Lists keep their free photos, so browsing costs nothing.
 - **Map:** map tiles come through the Meet server, which keeps the key. "Google Maps" and Google's map credits for the area in view sit top right. Places, addresses and the search animation's streets still come from OpenStreetMap, credited separately at the bottom.
 - **Spending cap:** the daily caps above keep usage inside Google's free monthly allowance by default. When a cap is reached, routes and checks fall back to the free services until the next day. When the map tiles' cap is reached, pages opened after that use the free map and free routes.
 
-**Cost** (Google's pricing as of November 2026; check [their pricing page](https://developers.google.com/maps/billing-and-pricing/pricing)): each month, 10,000 route requests, 10,000 travel-time checks and 100,000 map tiles are free. After that, routes and checks cost $5 per 1,000 ($10 per 1,000 with `GOOGLE_TRAFFIC=1`, which has only 5,000 free a month), and tiles are billed per 1,000. A search with 4 people uses about 4 route requests and 12 checks; a map view uses roughly 20–40 tiles.
+**Cost** (Google's pricing as of November 2026; check [their pricing page](https://developers.google.com/maps/billing-and-pricing/pricing)): each month, 10,000 route requests, 10,000 travel-time checks, 100,000 map tiles, 1,000 place pages and 1,000 place photos are free. After that, routes and checks cost $5 per 1,000 ($10 per 1,000 with `GOOGLE_TRAFFIC=1`, which has only 5,000 free a month), place pages $25 per 1,000, photos $7 per 1,000, and tiles are billed per 1,000. A search with 4 people uses about 4 route requests and 12 checks; a map view uses roughly 20–40 tiles; opening a place uses 1 place page and up to 6 photos. Photos are the first thing to run out: the default of 32 a day covers about 5 places a day with all their photos (after that, places show their rating and reviews with free photos where there are any).
 
 To turn it on:
 
 1. Go to the [Google Cloud console](https://console.cloud.google.com), create a project and add a billing account (Google needs one even for free use).
-2. Enable **Routes API** and **Map Tiles API** for the project.
-3. Under **APIs & Services → Credentials**, create an API key. Restrict it to those two APIs. The key stays on the Meet server, so there are no website restrictions to set.
+2. Enable **Routes API**, **Map Tiles API** and **Places API (New)** for the project.
+3. Under **APIs & Services → Credentials**, create an API key. Restrict it to those three APIs. The key stays on the Meet server, so there are no website restrictions to set.
 4. Add it as `GOOGLE_MAPS_API_KEY` on Render (your service → **Environment**), and redeploy.
 5. Optionally, set daily quotas and a budget alert in the Cloud console as a second safety net.
 
@@ -145,7 +147,7 @@ The Sydney data comes from OpenStreetMap via [OpenFreeMap](https://openfreemap.o
 | --- | --- |
 | `server.js` | Static hosting (compressed), a JSON API for optional profiles (scrypt-hashed passwords, httpOnly session cookie), saved addresses, settings and history, and relays for directions, ratings and Google's map tiles |
 | `lib/tripadvisor.js` | Tripadvisor Terra client: matches places by name and distance, keeps the allowlist up to date, batches rating lookups, and enforces the daily limit |
-| `lib/google.js` | Google client (optional): Routes API directions and travel-time checks turned into the app's route format, Map Tiles API sessions and tiles in quiet light and dark styles, and the daily caps |
+| `lib/google.js` | Google client (optional): Routes API directions and travel-time checks turned into the app's route format, Map Tiles API sessions and tiles in quiet light and dark styles, Places API photos, ratings and reviews for a place page, and the daily caps |
 | `public/js/api.js` | One data API for the app: guest storage (`guest.js`) until someone signs in, then the server (`remote.js`), moving guest data across |
 | `public/js/meetpoint.js` | Finds the meeting point: for groups with public transport riders, among the stops everyone reaches (real times to every stop, then the best three checked against real journeys); otherwise from travel-time tables over a 7 × 7 grid and finer grids around the best spot. Spots are kept on walkable streets |
 | `public/js/anchor.js` | Moves the meeting point to somewhere a group can meet: the liveliest café, park, museum or shops close by |

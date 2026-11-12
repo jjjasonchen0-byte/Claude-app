@@ -1,10 +1,15 @@
 // Ratings, photos and reviews for places.
 //
+//  • Google, when the Meet server has a Google key and the page shows Google's
+//    map (Google's terms allow its place content only there): the place page's
+//    photos, rating and reviews.
 //  • Tripadvisor, when the Meet server has a TRIPADVISOR_API_KEY: ratings in
 //    lists, a photo per place, and a full page of photos and reviews.
 //  • Always, for free: photos from Wikimedia Commons for places that
 //    OpenStreetMap links to Wikidata or Commons (museums, parks, landmarks and
 //    some restaurants).
+
+import { usingGoogle } from './directions.js';
 
 let configPromise = null;
 
@@ -79,6 +84,17 @@ export async function thumbFor(p) {
  * reviews, rating, …, source }. Tripadvisor when available, then free photos.
  */
 export async function detailsFor(p) {
+  if (usingGoogle() && p.id !== 'meet') {
+    try {
+      const q = new URLSearchParams({ g: '1', key: p.id, name: p.name, at: `${p.lat.toFixed(6)},${p.lon.toFixed(6)}` });
+      const { place } = await getJson(`/api/gplaces/details?${q}`);
+      if (place) {
+        // Few or no photos on Google: add free ones.
+        if (place.photos.length < 3) place.photos = [...place.photos, ...(await freeGallery(p).catch(() => []))];
+        return place;
+      }
+    } catch { /* not on Google, or not today: Tripadvisor and free photos below */ }
+  }
   let details = null;
   if (p.rating?.id) {
     try { details = (await getJson(`/api/places/details/${encodeURIComponent(p.rating.id)}`)).place; } catch { details = null; }

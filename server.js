@@ -11,7 +11,9 @@ import { Store } from './lib/store.js';
 import { osrmRouteUrl, osrmTableUrl, transitUrl, transitReachUrl, normalizeOsrm, normalizeOsrmTable, normalizeTransit, reduceReach } from './public/js/directions.js';
 import { simplify } from './public/js/geo.js';
 import { createTripadvisor } from './lib/tripadvisor.js';
-import { createGoogle, TILE_STYLES } from './lib/google.js';
+import { createGoogle, TILE_STYLES, normalizeGooglePlace } from './lib/google.js';
+import { nameSimilarity } from './public/js/match.js';
+import { haversine } from './public/js/geo.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
@@ -53,6 +55,7 @@ const tripadvisor = createTripadvisor({
 const positive = (v) => (Number(v) > 0 ? Number(v) : undefined);
 const googleLimits = Object.fromEntries(Object.entries({
   routes: positive(process.env.GOOGLE_DAILY_ROUTES), elements: positive(process.env.GOOGLE_DAILY_ELEMENTS), tiles: positive(process.env.GOOGLE_DAILY_TILES),
+  places: positive(process.env.GOOGLE_DAILY_PLACES), photos: positive(process.env.GOOGLE_DAILY_PHOTOS),
 }).filter(([, v]) => v));
 const google = createGoogle({
   apiKey: process.env.GOOGLE_MAPS_API_KEY,
@@ -552,6 +555,61 @@ route('GET', '/api/gmap/:style/viewport', async (req, res, { style }) => {
   }
   try { send(res, 200, await google.viewport(style, area), { 'Cache-Control': 'private, max-age=600' }); }
   catch { throw new HttpError(502, 'Map credits unavailable'); }
+});
+
+// ---------------------------------------------------------------- Google: a place's photos and reviews
+
+/**
+ * Rating, reviews and photos from Google for a place from OpenStreetMap,
+ * when the page shows Google's map (g=1). The place is found by name near
+ * its position (free), its details are fetched once per visit (billed), and
+ * they are used only if the name and position agree. Only the Google ID is
+ * kept (Google allows nothing else to be stored).
+ */
+route('GET', '/api/gplaces/details', async (req, res) => {
+  rateLimit(req);
+  const q = new URL(req.url, 'http://x').searchParams;
+  if (q.get('g') !== '1' || !google.enabled) throw new HttpError(404, 'Not set up on this server');
+  const key = String(q.get('key') || '').slice(0, 80);
+  const name = String(q.get('name') || '').trim().slice(0, 120);
+  const at = parsePoint(q.get('at'));
+  if (!key || !name) throw new HttpError(400, 'key and name are required');
+  if (!google.available('places')) throw new HttpError(429, 'Google place details are paused until tomorrow');
+  const known = store.data.gIds[key];
+  if (known && typeof known === 'object' && Date.now() - (known.none || 0) < NO_MATCH_DAYS * 864e5) throw new HttpError(404, 'Not on Google');
+  const remember = (v) => {
+    if (Object.keys(store.data.gIds).length > 50000) store.data.gIds = {};
+    store.data.gIds[key] = v;
+    store.save();
+  };
+  let place;
+  try {
+    const id = typeof known === 'string' ? known : (await google.findPlace(name, at.lat, at.lon))[0];
+    if (!id) { remember({ none: Date.now() }); throw new HttpError(404, 'Not on Google'); }
+    const json = await google.place(id);
+    const near = json.location ? haversine(at.lat, at.lon, json.location.latitude, json.location.longitude) : Infinity;
+    if (near > 250 || nameSimilarity(name, json.displayName?.text || '') < 0.6) { remember({ none: Date.now() }); throw new HttpError(404, 'Not on Google'); }
+    if (known !== id) remember(id);
+    place = normalizeGooglePlace(json, { photoUrl: (n, w) => `/api/gplaces/photo?${new URLSearchParams({ name: n, w })}`, maxPhotos: Math.min(6, google.left('photos')) });
+  } catch (err) {
+    if (err instanceof HttpError) throw err;
+    throw new HttpError(err.limit ? 429 : 502, 'Google place details unavailable');
+  }
+  send(res, 200, { place }, { 'Cache-Control': 'private, max-age=600' });
+});
+
+// A place's photo: sends the browser on to Google's short-lived picture address.
+route('GET', '/api/gplaces/photo', async (req, res) => {
+  if (!google.enabled) throw new HttpError(404, 'Not found');
+  const q = new URL(req.url, 'http://x').searchParams;
+  const name = String(q.get('name') || '');
+  const w = Math.round(Number(q.get('w')) || 1200);
+  if (!/^places\/[A-Za-z0-9_-]+\/photos\/[A-Za-z0-9_-]+$/.test(name) || w < 100 || w > 1600) throw new HttpError(400, 'Invalid photo');
+  let uri;
+  try { uri = await google.photo(name, w); } catch (err) { throw new HttpError(err.limit ? 429 : 502, 'Photo unavailable'); }
+  // The browser keeps the redirect for an hour, so a photo seen twice is fetched (and billed) once.
+  res.writeHead(302, { Location: uri, 'Cache-Control': 'private, max-age=3600' });
+  res.end();
 });
 
 // ---------------------------------------------------------------- places: ratings, photos, reviews

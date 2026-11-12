@@ -1527,7 +1527,7 @@ function placeReviews(p, d, r) {
   }).join('')}</div>` : '';
   const reviews = (d.reviews || []).map((rv) => `<li class="review">
       <div class="rv-head"><span class="avatar sm" style="--c:#8e8e93">${rv.avatar ? `<img src="${esc(rv.avatar)}" alt="" loading="lazy">` : esc(initial(rv.user))}</span>
-        <div class="rv-who"><b>${esc(rv.user)}</b><span class="footnote">${esc([fmtDate(rv.date), TRIP[rv.tripType]].filter(Boolean).join(' · '))}</span></div></div>
+        <div class="rv-who">${rv.userUrl ? `<a href="${esc(rv.userUrl)}" target="_blank" rel="noopener"><b>${esc(rv.user)}</b></a>` : `<b>${esc(rv.user)}</b>`}<span class="footnote">${esc([rv.when || fmtDate(rv.date), TRIP[rv.tripType]].filter(Boolean).join(' · '))}</span></div></div>
       <div class="rv-rating">${rv.ratingImage ? `<img class="bubbles" src="${esc(rv.ratingImage)}" alt="${rv.rating} of 5" width="66" height="13">` : stars(rv.rating)}</div>
       ${rv.title ? `<h4>${esc(rv.title)}</h4>` : ''}
       <p class="rv-text" data-action="rv-more">${esc(rv.text)}</p>
@@ -1540,7 +1540,7 @@ function placeReviews(p, d, r) {
     ${d.subratings?.length ? `<div class="subratings">${d.subratings.map((x) => `<span class="chip">${esc(x.name)} <b>${Number(x.rating).toFixed(1)}</b></span>`).join('')}</div>` : ''}
     ${reviews ? `<ul class="reviews">${reviews}</ul>` : '<div class="empty">No reviews to show here yet.</div>'}
     <div class="actions">
-      ${r?.url ? `<a class="btn btn-tinted" href="${esc(r.url)}" target="_blank" rel="noopener">All reviews on Tripadvisor</a>` : ''}
+      ${r?.url ? `<a class="btn btn-tinted" href="${esc(r.url)}" target="_blank" rel="noopener">All reviews on ${d.source === 'google' ? 'Google Maps' : 'Tripadvisor'}</a>` : ''}
       ${d.writeReview ? `<a class="btn btn-tinted" href="${esc(d.writeReview)}" target="_blank" rel="noopener">Write a review</a>` : ''}
     </div>
     ${from ? `<p class="footnote attrib">${esc(from)}</p>` : ''}`;
@@ -1548,9 +1548,8 @@ function placeReviews(p, d, r) {
 
 function placePhotos(p, d) {
   const photos = d.photos || [];
-  const free = photos.some((ph) => ph.credit);
   return `<div class="photo-grid">${photos.map((ph, k) => `<button class="g-item" data-action="photo" data-i="${k}" aria-label="Photo ${k + 1}"><img src="${esc(ph.url)}" alt="${esc(ph.caption || '')}" loading="lazy" decoding="async"></button>`).join('')}</div>
-    <p class="footnote attrib">${esc([d.source === 'tripadvisor' && 'Photos from Tripadvisor', free && 'Photos from Wikimedia Commons (tap one for its credit)', d.photoNote].filter(Boolean).join(' · '))}</p>`;
+    <p class="footnote attrib">${esc([d.source === 'tripadvisor' && 'Photos from Tripadvisor', d.source === 'google' && 'Photos from Google Maps (tap one to see who took it)', photos.some((ph) => ph.link) && 'Photos from Wikimedia Commons (tap one for its credit)', d.photoNote].filter(Boolean).join(' · '))}</p>`;
 }
 
 function placeAbout(p, d) {
@@ -1568,7 +1567,7 @@ function placeAbout(p, d) {
     ${unique.length ? `<div class="section-title">Good to know</div><ul class="group features">${unique.map((f) => `<li><div class="cell"><span class="check">✓</span>${esc(f)}</div></li>`).join('')}</ul>` : ''}
     ${d.ranking || d.awards?.length ? `<div class="section-title">Recognition</div><ul class="group features">${[d.ranking, ...(d.awards || [])].filter(Boolean).map((a) => `<li><div class="cell">${esc(a)}</div></li>`).join('')}</ul>` : ''}
     ${!unique.length && !cuisines.length && !d.description && !p.description ? '<div class="empty">No more details listed for this place.</div>' : ''}
-    <p class="footnote attrib">Place details from <a href="https://www.openstreetmap.org/${esc(p.id)}" target="_blank" rel="noopener">OpenStreetMap</a>${d.source === 'tripadvisor' ? ' and Tripadvisor' : ''}</p>`;
+    <p class="footnote attrib">Place details from <a href="https://www.openstreetmap.org/${esc(p.id)}" target="_blank" rel="noopener">OpenStreetMap</a>${d.source === 'tripadvisor' ? ' and Tripadvisor' : d.source === 'google' ? ' and Google Maps' : ''}</p>`;
 }
 
 afterRender.place = () => {
@@ -1598,7 +1597,12 @@ function openLightbox(photos, start) {
     const ph = photos[i];
     box.innerHTML = `<button class="lb-close" aria-label="Close">${glyph('close', 18, 2.4)}</button>
       ${photos.length > 1 ? `<button class="lb-prev" aria-label="Previous photo">‹</button><button class="lb-next" aria-label="Next photo">›</button>` : ''}
-      <figure><img src="${esc(ph.url)}" alt="${esc(ph.caption || '')}"><figcaption>${esc([ph.caption, ph.by && `by ${ph.by}`, ph.credit].filter(Boolean).join(' · '))}
+      <figure><img src="${esc(ph.url)}" alt="${esc(ph.caption || '')}"><figcaption>${[
+        esc(ph.caption || ''),
+        // Who took it, linked to their profile when there is one (Google asks for this).
+        ph.by ? `by ${ph.byUrl ? `<a href="${esc(ph.byUrl)}" target="_blank" rel="noopener">${esc(ph.by)}</a>` : esc(ph.by)}` : '',
+        esc(ph.credit || ''),
+      ].filter(Boolean).join(' · ')}
       ${ph.link ? ` · <a href="${esc(ph.link)}" target="_blank" rel="noopener">Licence &amp; source</a>` : ''}<span class="lb-count">${i + 1} / ${photos.length}</span></figcaption></figure>`;
   };
   const close = () => { box.remove(); document.removeEventListener('keydown', onKey); };

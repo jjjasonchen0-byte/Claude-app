@@ -1,7 +1,7 @@
 // Google directions, travel-time checks and map tiles (with a stand-in for Google's servers).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGoogle, normalizeGoogleRoute, normalizeGoogleMatrix, routeRequest, routeFields } from '../../lib/google.js';
+import { createGoogle, normalizeGoogleRoute, normalizeGoogleMatrix, normalizeGooglePlace, routeRequest, routeFields } from '../../lib/google.js';
 import { decodePolyline } from '../../public/js/directions.js';
 
 // "_p~iF~ps|U_ulLnnqC_mqNvxq`@" is Google's example polyline: (38.5,-120.2) (40.7,-120.95) (43.252,-126.453).
@@ -177,6 +177,94 @@ test('server: with a key, Google answers for pages showing its map; others keep 
     assert.equal((await get('/api/gmap/neon/12/2047/1361')).status, 400);
     assert.equal((await get('/api/gmap/light/3/9/1')).status, 400, 'tile outside the world');
     assert.ok(calls.every((c) => !String(c.init?.body || '').includes('k3y')), 'the key is never in a request body');
+  } finally {
+    await new Promise((r) => server.close(r));
+    globalThis.fetch = realFetch;
+    delete process.env.GOOGLE_MAPS_API_KEY;
+    fs.rmSync(process.env.DATA_FILE, { force: true });
+  }
+});
+
+const gPlace = {
+  id: 'ChIJabc', displayName: { text: 'Flour and Stone' }, location: { latitude: -33.8722, longitude: 151.2190 },
+  rating: 4.6, userRatingCount: 1234, googleMapsUri: 'https://maps.google.com/?cid=1', websiteUri: 'https://flourandstone.com.au',
+  nationalPhoneNumber: '(02) 8068 8818', priceLevel: 'PRICE_LEVEL_MODERATE',
+  regularOpeningHours: { weekdayDescriptions: ['Monday: 7:00 AM – 3:00 PM'] },
+  photos: Array.from({ length: 9 }, (_, i) => ({ name: `places/ChIJabc/photos/P${i}`, authorAttributions: [{ displayName: `Snapper ${i}`, uri: `https://maps.google.com/u/${i}` }] })),
+  reviews: [
+    { name: 'places/ChIJabc/reviews/R1', rating: 5, text: { text: 'Best lamington in town.' }, relativePublishTimeDescription: '2 weeks ago', publishTime: '2026-10-29T01:00:00Z', authorAttribution: { displayName: 'Sam K', uri: 'https://maps.google.com/u/sam', photoUri: 'https://lh3.googleusercontent.com/a/sam' } },
+    { name: 'places/ChIJabc/reviews/R2', rating: 4, originalText: { text: 'Lovely, small.' }, authorAttribution: { displayName: 'Jo' } },
+  ],
+};
+
+test('a Google place becomes the place page: photos with their authors, reviews with theirs, rating and details', () => {
+  const p = normalizeGooglePlace(gPlace, { photoUrl: (n, w) => `/photo?name=${n}&w=${w}`, maxPhotos: 6 });
+  assert.equal(p.source, 'google');
+  assert.equal(p.rating, 4.6);
+  assert.equal(p.count, 1234);
+  assert.equal(p.priceLevel, 'Mid Range');
+  assert.deepEqual(p.hours, ['Monday: 7:00 AM – 3:00 PM']);
+  assert.equal(p.photos.length, 6, 'at most six photos (each one is billed)');
+  assert.deepEqual(p.photos[0], { url: '/photo?name=places/ChIJabc/photos/P0&w=1200', caption: '', by: 'Snapper 0', byUrl: 'https://maps.google.com/u/0', credit: 'Google Maps' });
+  assert.equal(p.reviews.length, 2);
+  assert.deepEqual({ user: p.reviews[0].user, userUrl: p.reviews[0].userUrl, avatar: p.reviews[0].avatar, when: p.reviews[0].when, text: p.reviews[0].text },
+    { user: 'Sam K', userUrl: 'https://maps.google.com/u/sam', avatar: 'https://lh3.googleusercontent.com/a/sam', when: '2 weeks ago', text: 'Best lamington in town.' });
+  assert.equal(p.reviews[1].text, 'Lovely, small.');
+  assert.match(p.attribution, /Google Maps/);
+  assert.equal(normalizeGooglePlace(gPlace, { maxPhotos: 0 }).photos.length, 0, 'no photos left today: none listed');
+});
+
+test('server: a place is matched on Google (free search), checked, and its photos are sent on to Google', async () => {
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const calls = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    const u = String(url);
+    if (u.startsWith('http://localhost')) return realFetch(url, init);
+    calls.push({ url: u, init });
+    if (u.endsWith('places:searchText')) {
+      const body = JSON.parse(init.body);
+      return new Response(JSON.stringify(body.textQuery === 'Nowhere Cafe' ? {} : { places: [{ id: body.textQuery === 'Wrong Name' ? 'ChIJother' : 'ChIJabc' }] }));
+    }
+    if (u.includes('/places/ChIJabc?')) return new Response(JSON.stringify(gPlace));
+    if (u.includes('/places/ChIJother?')) return new Response(JSON.stringify({ ...gPlace, id: 'ChIJother', displayName: { text: 'Totally Different' } }));
+    if (u.includes('/media?')) return new Response(JSON.stringify({ photoUri: 'https://lh3.googleusercontent.com/p/xyz' }));
+    throw new Error(`unexpected request ${u}`);
+  };
+  process.env.DATA_FILE = path.join(os.tmpdir(), `meet-gplaces-test-${Date.now()}.json`);
+  process.env.GOOGLE_MAPS_API_KEY = 'k3y';
+  const { server } = await import(`../../server.js?gplaces-${Date.now()}`);
+  await new Promise((r) => server.listen(0, r));
+  const base = `http://localhost:${server.address().port}`;
+  const details = (name) => realFetch(`${base}/api/gplaces/details?${new URLSearchParams({ g: '1', key: `node/${name}`, name, at: '-33.8723,151.2191' })}`);
+  try {
+    const r = await details('Flour and Stone');
+    assert.equal(r.status, 200);
+    const { place } = await r.json();
+    assert.equal(place.reviews[0].user, 'Sam K');
+    assert.match(place.photos[0].url, /^\/api\/gplaces\/photo\?name=places%2FChIJabc%2Fphotos%2FP0&w=1200$/);
+    const search = calls.find((c) => c.url.endsWith('places:searchText'));
+    assert.equal(search.init.headers['X-Goog-FieldMask'], 'places.id', 'the search asks for IDs only (free)');
+    // Opened again: the stored ID is used, no new search.
+    const searches = calls.filter((c) => c.url.endsWith('places:searchText')).length;
+    assert.equal((await details('Flour and Stone')).status, 200);
+    assert.equal(calls.filter((c) => c.url.endsWith('places:searchText')).length, searches);
+    // A different place with the same position isn't taken for it, and nothing found is remembered.
+    assert.equal((await details('Wrong Name')).status, 404);
+    assert.equal((await details('Nowhere Cafe')).status, 404);
+    const before = calls.length;
+    assert.equal((await details('Nowhere Cafe')).status, 404);
+    assert.equal(calls.length, before, 'a place not on Google is not looked up again straight away');
+    // Photos: a redirect to Google's picture, kept by the browser for an hour.
+    const ph = await realFetch(base + place.photos[0].url, { redirect: 'manual' });
+    assert.equal(ph.status, 302);
+    assert.equal(ph.headers.get('location'), 'https://lh3.googleusercontent.com/p/xyz');
+    assert.match(ph.headers.get('cache-control'), /max-age=3600/);
+    assert.equal((await realFetch(`${base}/api/gplaces/photo?name=..%2Fsecret&w=800`, { redirect: 'manual' })).status, 400);
+    // Not for pages on the free map.
+    assert.equal((await realFetch(`${base}/api/gplaces/details?key=a&name=b&at=1,1`)).status, 404);
   } finally {
     await new Promise((r) => server.close(r));
     globalThis.fetch = realFetch;
