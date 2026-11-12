@@ -37,8 +37,6 @@ app = replaceOnce(app, 'map.attributionControl.setPrefix(false);', "map.attribut
 app = replaceOnce(app, '      <button class="btn btn-tinted" data-action="calendar">Calendar</button>\n', '', 'calendar button');
 // The test version has no timetables, so start on walking directions.
 app = replaceOnce(app, "const DEFAULT_SETTINGS = { mode: 'similar', travel: 'transit',", "const DEFAULT_SETTINGS = { mode: 'similar', travel: 'walk',", 'default travel mode');
-// Every address here is in Sydney (the test version's addresses don't name the city).
-app = replaceOnce(app, "const cityOf = (address) => {", "const cityOf = () => 'Sydney'; const cityOfAddress = (address) => {", 'city name');
 // Directions come from the streets built into the page, not the real routing services.
 app = app.replace(/ {2}map\.attributionControl\.addAttribution\(`Routes[^\n]*\n/, '');
 app = replaceOnce(app, '    <p class="footnote attrib">${credits}</p>',

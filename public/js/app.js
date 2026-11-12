@@ -760,17 +760,6 @@ function placeOf(address) {
   const parts = String(address || '').split(', ').map((x) => x.trim()).filter(Boolean);
   return parts.slice(1).find((x) => !STREETISH.test(x)) || parts[1] || parts[0] || '';
 }
-/** The town or city of an address: the part before the state and country. */
-const cityOf = (address) => {
-  const parts = String(address || '').split(', ').filter(Boolean);
-  return parts.length >= 4 ? parts[parts.length - 3] : parts.length === 3 ? parts[1] : '';
-};
-/** The city most of the group is in, for the corner of the map. */
-function groupCity(people) {
-  const n = new Map();
-  for (const p of people) { const c = cityOf(p.address); if (c) n.set(c, (n.get(c) || 0) + 1); }
-  return [...n].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
-}
 /** A person's name if they have one (no street address: the area instead). */
 const whoOf = (p) => p.nickname || (p.isHome ? 'You' : '');
 const pillText = (p, extra) => (extra ? `${whoOf(p) || placeOf(p.address)} · ${extra}` : [whoOf(p), placeOf(p.address)].filter(Boolean).join(' · '));
@@ -786,7 +775,7 @@ function meetName(search) {
 }
 
 let pills = [];
-/** The dark search map on or off: heading, the city's name, name tags over everyone. */
+/** The search map on or off: the line of text at the top, name tags over everyone. */
 function floodMode(on, people = []) {
   $('#screen-main').classList.toggle('flooding', on);
   fxLayer?.clearLayers();
@@ -794,23 +783,18 @@ function floodMode(on, people = []) {
     icon: L.divIcon({ className: 'flood-pill-icon', html: `<span class="flood-pill" style="--c:${p.color}">${esc(pillText(p))}</span>`, iconSize: [0, 0], iconAnchor: [0, 0] }),
     interactive: false, keyboard: false, zIndexOffset: 2000,
   }).addTo(fxLayer)) : [];
-  const city = on ? groupCity(people) : '';
-  $('#flood-city').hidden = !city;
-  $('#flood-city').textContent = city;
-  if (!on) setHud({ title: null });
+  if (!on) setHud('');
 }
 function setPill(i, text) {
   const el = pills[i]?.getElement()?.querySelector('.flood-pill');
   if (el) el.textContent = text;
 }
 
-/** The heading over the search map. Leave a field out to keep it; title null hides it. */
-function setHud({ title, sub } = {}) {
+/** The line of text at the top of the search map (empty hides it). */
+function setHud(text) {
   const h = $('#flood-hud');
-  if (title === null) { h.hidden = true; return; }
-  h.hidden = false;
-  if (title !== undefined) $('.flood-title', h).textContent = title;
-  if (sub !== undefined) $('.flood-sub', h).textContent = sub;
+  h.hidden = !text;
+  h.textContent = text || '';
 }
 
 /** The streets the animation floods: what's on screen and a little more. */
@@ -875,7 +859,6 @@ async function findPlaces({ replay = false } = {}) {
     meetingP.catch(() => {});
     const roadsP = withTimeout(loadRoads(streetsArea(), { signal: ctrl.signal }), 8000).catch(() => null);
     status(prev ? 'Replaying the search' : 'Finding the fairest spot…');
-    setHud({ title: `Where should ${people.length} friends meet?`, sub: '' });
     if (!(await fx.intro())) return;
     const roads = await roadsP;
     if (!live()) return;
@@ -916,12 +899,12 @@ async function findPlaces({ replay = false } = {}) {
       zIndexOffset: 1000,
     }).bindTooltip(esc(name === 'the middle' ? 'Meeting point' : name), { permanent: true, direction: 'bottom', className: 'label meet-label', offset: [0, 14] }).addTo(resultLayer);
     const times = people.map((p, i) => tripSeconds(search.routes[i], meeting.times[i]));
-    setHud({ sub: `Longest trip: ${mins(Math.max(...times))}` });
-    status('Found the fairest spot');
+    setHud(`Longest trip: ${mins(Math.max(...times))}`);
+    status('Searching…');
     const tracks = people.map((p, i) => trackFor(p, search.routes[i], meet, meeting.times[i]));
     const ok3 = await fx.reveal(meet, tracks, {
       onArrive: () => {
-        setHud({ sub: `Meet near ${name}` });
+        setHud(`Meet near ${name}`);
         people.forEach((p, i) => setPill(i, pillText(p, mins(times[i]))));
       },
     });
