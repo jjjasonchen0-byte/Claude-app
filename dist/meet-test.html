@@ -763,11 +763,7 @@ input, textarea { font: inherit; letter-spacing: inherit; color: inherit; }
 }
 .round-btn:active { transform: scale(0.94); }
 
-/* ---------------------------------------------------------------- fields */
-.field { display: block; margin: 0 0 12px; }
-.field > span { display: block; font-size: 13px; color: var(--text-2); margin: 0 0 6px 4px; }
-.field em { font-style: normal; color: var(--text-3); }
-input[type=email], input[type=password], input[type=text], input[type=search], input:not([type]), input[type=datetime-local], textarea {
+input[type=text], input[type=search], input:not([type]), input[type=datetime-local], textarea {
   width: 100%; border: 0; background: var(--fill); border-radius: 12px; padding: 11px 14px; outline: none; font-size: 16px; transition: box-shadow 0.15s;
   -webkit-appearance: none; appearance: none;
 }
@@ -779,7 +775,6 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='10.5' cy='10.5' r='6.5'/%3E%3Cpath d='M15.5 15.5l5 5'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: 12px center; background-size: 16px;
 }
-.form-error { color: var(--red); font-size: 13px; margin: 0 0 10px 4px; }
 
 /* iOS segmented control */
 .segmented { display: flex; gap: 2px; background: var(--fill); border-radius: 10px; padding: 2px; margin: 14px 0; }
@@ -812,20 +807,20 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .s-empty { color: var(--text-2); cursor: default !important; font-size: 14px; }
 
 /* ---------------------------------------------------------------- start screen */
-.intro { width: 100%; max-width: 420px; }
-.hero { display: block; width: 220px; max-width: 100%; height: auto; margin: 26px 0 0 -6px; color: var(--text-3); }
-.hero .flow { stroke-dasharray: 2 7; animation: flow 1.6s linear infinite; }
-@keyframes flow { to { stroke-dashoffset: -18; } }
-.hero .halo { transform-origin: 120px 70px; animation: breathe 2.4s ease-in-out infinite; }
+/* Just the logo and the address bar, a little above the middle. */
+.intro { width: 100%; max-width: 420px; display: flex; flex-direction: column; align-items: center; gap: 30px; margin-bottom: 12vh; }
+.wordmark-xl { font-size: 58px; }
+.intro .search { width: 100%; }
+.intro .search input { min-height: 54px; font-size: 17px; border-radius: 16px; padding-right: 52px; }
+/* A button inside the address bar, at its right end (start from where you are). */
+.field-btn {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 42px; height: 42px; border: 0; border-radius: 12px;
+  background: transparent; color: var(--accent); display: grid; place-items: center; cursor: pointer; transition: background 0.15s;
+}
+.field-btn:hover:not(:disabled) { background: var(--accent-tint); }
+.field-btn.busy svg { animation: breathe 1s ease-in-out infinite; }
 @keyframes breathe { 50% { transform: scale(1.25); opacity: 0.5; } }
-.intro > p { font-size: 16px; color: var(--text-2); margin: 0; }
-.intro .search { margin-top: 24px; }
-.intro .search input { min-height: 50px; font-size: 17px; border-radius: 14px; }
-.intro-actions { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
-.intro-foot { margin-top: 36px; font-size: 14px; color: var(--text-2); }
-.intro-foot .btn-plain { font-size: 14px; }
-.sample { margin-top: 28px; padding: 16px; border-radius: 18px; background: var(--fill); display: grid; gap: 10px; }
-.sample .btn { background: var(--card); color: var(--accent); box-shadow: var(--shadow-1); }
+.intro > .btn-plain { margin-top: -18px; }
 
 /* ---------------------------------------------------------------- main layout */
 #map { position: absolute; inset: 0; background: var(--bg); }
@@ -926,7 +921,8 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
   font: 700 12.5px/1.25 var(--font); box-shadow: 0 0 12px color-mix(in srgb, var(--c) 45%, transparent); animation: hud-in 0.4s ease both;
 }
 
-.app-version { margin: 4px 20px 16px; text-align: center; }
+.app-note { margin: 4px 20px 0; text-align: center; }
+.app-version { margin: 2px 20px 16px; text-align: center; }
 
 /* Google's place card (Places UI Kit) in a place's page. */
 .gcard-slot { margin: 0 0 14px; }
@@ -1031,21 +1027,9 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .share-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
 .share-grid .btn { width: 100%; }
 
-/* ---------------------------------------------------------------- sign-in sheet */
-.modal-backdrop, .drawer-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.28); z-index: 1500; animation: fade 0.2s; }
-.modal-backdrop { z-index: 1600; }
-@keyframes fade { from { opacity: 0; } }
-.modal {
-  position: fixed; z-index: 1601; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(400px, calc(100vw - 28px)); max-height: calc(100% - 40px); overflow: auto;
-  background: var(--bg); border-radius: 28px; padding: 26px 20px 20px; box-shadow: var(--shadow-2); animation: modal 0.35s cubic-bezier(0.2, 1.15, 0.4, 1);
-}
-@keyframes modal { from { transform: translate(-50%, -46%) scale(0.96); opacity: 0; } }
-.modal h2 { margin: 0 34px 6px 4px; }
-.modal > p { margin: 0 4px; }
-.modal-close { position: absolute; top: 18px; right: 18px; }
-.modal input { background: var(--card); }
-
 /* ---------------------------------------------------------------- menu */
+.drawer-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.28); z-index: 1500; animation: fade 0.2s; }
+@keyframes fade { from { opacity: 0; } }
 .drawer {
   position: fixed; top: 0; right: 0; bottom: 0; width: min(360px, 92vw); z-index: 1501; background: var(--bg);
   display: flex; flex-direction: column; overflow: auto; animation: slide 0.3s cubic-bezier(0.2, 0.9, 0.3, 1);
@@ -1053,9 +1037,6 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 }
 @keyframes slide { from { transform: translateX(100%); } }
 .drawer-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 22px 18px 14px; }
-.drawer-head .avatar { width: 46px; height: 46px; font-size: 19px; }
-.drawer-who { flex: 1; min-width: 0; }
-.drawer-name { font: 700 20px/1.2 var(--font-display); letter-spacing: -0.02em; }
 .drawer-section { margin: 0 14px 12px; padding: 14px; border-radius: 14px; background: var(--card); }
 .drawer-section h3 { font-size: 13px; font-weight: 600; color: var(--text-2); margin: 0 0 8px; }
 .drawer-section.grow { flex: 1; }
@@ -1385,40 +1366,19 @@ img.broken { display: none; }
 .map-label.bay span { color: var(--map-water-label); font-style: italic; font-size: 14px; letter-spacing: 0.04em; }
 
 </style>
-<!-- ============ Start: your address ============ -->
+<!-- ============ Start: the logo and your address ============ -->
   <section id="screen-home" class="screen screen-centered" hidden>
     <div class="intro">
-      <div class="wordmark wordmark-lg">meet<i></i></div>
-      <svg class="hero" viewBox="0 0 240 140" aria-hidden="true">
-        <g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
-          <path class="flow" d="M38 32 C 72 36, 98 52, 120 70"/>
-          <path class="flow" d="M204 40 C 172 44, 142 56, 120 70"/>
-          <path class="flow" d="M118 122 C 112 104, 122 88, 120 70"/>
-        </g>
-        <circle class="halo" cx="120" cy="70" r="20" fill="#007aff" opacity=".16"/>
-        <circle cx="120" cy="70" r="9" fill="#007aff" stroke="#fff" stroke-width="4"/>
-        <circle cx="38" cy="32" r="15" fill="#ff9500" stroke="#fff" stroke-width="3.5"/>
-        <circle cx="204" cy="40" r="15" fill="#34c759" stroke="#fff" stroke-width="3.5"/>
-        <circle cx="118" cy="122" r="15" fill="#af52de" stroke="#fff" stroke-width="3.5"/>
-      </svg>
-      <h1>Where are you starting from?</h1>
-      <p>Add your address, then the people you're meeting. Meet finds the spot that's fair for everyone.</p>
+      <div class="wordmark wordmark-xl" role="img" aria-label="Meet">meet<i></i></div>
       <div class="search searchfield" id="home-search">
-        <input id="home-input" type="search" placeholder="Try “George Street” or “Bondi”" autocomplete="off" aria-label="Your address">
+        <input id="home-input" type="search" placeholder="Try “George Street” or “Bondi”" autocomplete="off" aria-label="Where are you starting from?">
+        <button class="field-btn" type="button" id="home-locate" title="Pick a random address" aria-label="Pick a random address">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M20.5 3.5L3.5 10.6l7.3 2.6 2.6 7.3z" fill="currentColor"/></svg>
+        </button>
         <ul class="suggestions" role="listbox" hidden></ul>
       </div>
-      <div class="intro-actions">
-        <button class="btn btn-tinted btn-sm" type="button" id="home-locate">
-          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M20.5 3.5L3.5 10.6l7.3 2.6 2.6 7.3z" fill="currentColor"/></svg>
-          <span>Pick a random address</span>
-        </button>
-        <button class="btn btn-sm" type="button" id="home-cancel" hidden>Cancel</button>
-      </div>
-      <div class="sample">
-        <button class="btn btn-block btn-lg" type="button" id="demo-sample">Try a sample group</button>
-        <p class="footnote" style="margin:0 2px">Test version: central Sydney (Pyrmont to Bondi, North Sydney to Newtown) from OpenStreetMap, built into this page. Address search knows its streets, house numbers and places, and routes follow real streets. There's no public transport, ratings or photos here. Everything stays in this browser.</p>
-      </div>
-      <p class="intro-foot" id="home-signin-row">Have a profile? <button class="btn btn-plain" type="button" id="home-signin">Sign in</button></p>
+      <button class="btn btn-plain" type="button" id="demo-sample">Try a sample group</button>
+      <button class="btn btn-plain" type="button" id="home-cancel" hidden>Cancel</button>
     </div>
   </section>
 
@@ -1433,7 +1393,7 @@ img.broken { display: none; }
           <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path d="M20.5 3.5L3.5 10.6l7.3 2.6 2.6 7.3z" fill="var(--accent)"/></svg>
         </button>
         <button class="round-btn" id="btn-menu" title="Menu" aria-label="Open menu">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6" fill="currentColor"/><path d="M5 19.5c1.2-3.6 3.9-5.2 7-5.2s5.8 1.6 7 5.2" fill="currentColor"/></svg>
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
         </button>
       </div>
     </header>
@@ -1453,52 +1413,14 @@ img.broken { display: none; }
     </aside>
   </section>
 
-  <!-- ============ Optional sign-in ============ -->
-  <div class="modal-backdrop" id="auth-backdrop" hidden></div>
-  <section id="auth-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="auth-title" hidden>
-    <button class="icon-circle modal-close" id="auth-close" aria-label="Close">
-      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
-    </button>
-    <h2 id="auth-title">Save your places</h2>
-    <p class="footnote">Optional. A profile keeps your people and past meetups on every device. Anything you've added so far comes with you.</p>
-    <div class="segmented" role="tablist">
-      <button type="button" role="tab" class="seg active" data-auth-mode="login" aria-selected="true">Sign in</button>
-      <button type="button" role="tab" class="seg" data-auth-mode="signup" aria-selected="false">Create profile</button>
-    </div>
-    <form id="auth-form" novalidate>
-      <label class="field" data-signup-only hidden>
-        <span>Name <em>(optional)</em></span>
-        <input id="auth-name" name="name" autocomplete="name" maxlength="60">
-      </label>
-      <label class="field">
-        <span>Email</span>
-        <input id="auth-email" name="email" type="email" autocomplete="email" required>
-      </label>
-      <label class="field">
-        <span>Password</span>
-        <input id="auth-password" name="password" type="password" autocomplete="current-password" required minlength="6" placeholder="At least 6 characters">
-      </label>
-      <p class="form-error" id="auth-error" role="alert" hidden></p>
-      <button class="btn btn-primary btn-block btn-lg" type="submit" id="auth-submit">Sign in</button>
-    </form>
-  </section>
-
   <!-- ============ Menu ============ -->
   <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
   <nav class="drawer" id="drawer" aria-label="Menu" hidden>
     <div class="drawer-head">
-      <span class="avatar" id="drawer-avatar">G</span>
-      <div class="drawer-who">
-        <div class="drawer-name" id="drawer-name"></div>
-        <div class="footnote" id="drawer-email"></div>
-      </div>
+      <div class="wordmark wordmark-lg">meet<i></i></div>
       <button class="icon-circle" id="drawer-close" aria-label="Close menu">
         <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
       </button>
-    </div>
-    <div class="drawer-section" id="drawer-guest">
-      <p class="footnote">You're using Meet without a profile. Everything is saved in this browser.</p>
-      <button class="btn btn-primary btn-sm" id="btn-signin" style="margin-top:8px">Sign in or create a profile</button>
     </div>
     <div class="drawer-section">
       <h3>Starting point</h3>
@@ -1543,9 +1465,7 @@ img.broken { display: none; }
       <h3>Past meetups</h3>
       <ul class="history" id="history-list"></ul>
     </div>
-    <div class="drawer-section" id="drawer-account">
-      <button class="btn btn-plain" id="btn-logout" style="color:var(--red)">Sign out</button>
-    </div>
+    <p class="footnote app-note">Everything is saved on this device.</p>
     <p class="footnote app-version" id="app-version" hidden></p>
   </nav>
 
@@ -4242,7 +4162,6 @@ __m["sydney-data"] = { SYDNEY };
 //   • address search and reverse geocoding over its house numbers, streets,
 //     suburbs and places
 //   • about 6,400 real places: restaurants, cafés, pubs, museums, parks…
-//   • accounts, addresses and history kept in this browser's storage
 // There are no ratings, photos, reviews or opening hours: these are real
 // businesses, and the test version doesn't make any up.
 const { SYDNEY } = __m["sydney-data"];
@@ -4565,93 +4484,7 @@ async function currentPosition() {
 }
 
 
-// ---------------------------------------------------------------- local "server"
-
-const KEY = 'meet-test-accounts-v1';
-let memory = { users: {}, session: null };
-function load() {
-  try { const raw = localStorage.getItem(KEY); if (raw) memory = JSON.parse(raw); } catch { /* storage blocked: keep in memory */ }
-  return memory;
-}
-function save(db) {
-  memory = db;
-  try { localStorage.setItem(KEY, JSON.stringify(db)); } catch { /* in-memory only */ }
-}
-async function hash(pw, salt) {
-  const data = new TextEncoder().encode(`${salt}:${pw}`);
-  try {
-    const buf = await crypto.subtle.digest('SHA-256', data);
-    return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
-  } catch { return `${salt}:${pw.length}:${[...pw].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7)}`; }
-}
-const fail = (status, message) => Object.assign(new Error(message), { status });
-const newId = () => Math.random().toString(36).slice(2, 11);
-const pub = (u) => ({ id: u.id, email: u.email, name: u.name, home: u.home, places: u.places, history: u.history.slice(0, 50), settings: u.settings });
-function me() {
-  const db = load();
-  const u = db.session && db.users[db.session];
-  if (!u) throw fail(401, 'Please sign in');
-  return { db, u };
-}
-const clean = (p) => ({ address: String(p.address || '').slice(0, 300), nickname: String(p.nickname || '').trim().slice(0, 60), lat: Number(p.lat), lon: Number(p.lon), ...(['transit', 'walk', 'bike', 'drive'].includes(p.mode) ? { mode: p.mode } : {}) });
-
-const api = {
-  async me() { try { return { user: pub(me().u) }; } catch { return { user: null }; } },
-  async signup(email, password, name) {
-    const db = load();
-    const e = String(email).trim().toLowerCase();
-    if (db.users[e]) throw fail(409, 'An account with that email already exists — try signing in');
-    const salt = newId();
-    db.users[e] = { id: newId(), email: e, name: String(name || '').trim(), salt, hash: await hash(password, salt), home: null, places: [], history: [], settings: {} };
-    db.session = e;
-    save(db);
-    return { user: pub(db.users[e]) };
-  },
-  async login(email, password) {
-    const db = load();
-    const u = db.users[String(email).trim().toLowerCase()];
-    if (!u || (await hash(password, u.salt)) !== u.hash) throw fail(401, 'Email or password is incorrect');
-    db.session = u.email;
-    save(db);
-    return { user: pub(u) };
-  },
-  async logout() { const db = load(); db.session = null; save(db); return { ok: true }; },
-  async updateMe(patch) {
-    const { db, u } = me();
-    if ('name' in patch) u.name = patch.name;
-    if ('home' in patch) u.home = patch.home ? clean(patch.home) : null;
-    if (patch.settings) u.settings = { ...u.settings, ...patch.settings };
-    save(db);
-    return { user: pub(u) };
-  },
-  async addPlace(p) {
-    const { db, u } = me();
-    const place = { id: newId(), ...clean(p), active: p.active !== false };
-    u.places.push(place);
-    save(db);
-    return { place };
-  },
-  async updatePlace(id, patch) {
-    const { db, u } = me();
-    const place = u.places.find((x) => x.id === id);
-    if (!place) throw fail(404, 'Address not found');
-    if ('address' in patch || 'lat' in patch) Object.assign(place, clean({ ...place, ...patch }));
-    if ('nickname' in patch) place.nickname = String(patch.nickname || '').trim().slice(0, 60);
-    if ('active' in patch) place.active = !!patch.active;
-    if ('mode' in patch) { if (['transit', 'walk', 'bike', 'drive'].includes(patch.mode)) place.mode = patch.mode; else delete place.mode; }
-    save(db);
-    return { place };
-  },
-  async deletePlace(id) { const { db, u } = me(); u.places = u.places.filter((x) => x.id !== id); save(db); return { ok: true }; },
-  async addHistory(h) {
-    const { db, u } = me();
-    const entry = { id: newId(), at: Date.now(), name: h.name, category: h.category || '', address: h.address || '', lat: h.lat, lon: h.lon, people: h.people || [] };
-    u.history = [entry, ...u.history].slice(0, 50);
-    save(db);
-    return { entry };
-  },
-  async deleteHistory(id) { const { db, u } = me(); u.history = u.history.filter((x) => x.id !== id); save(db); return { ok: true }; },
-};
+// ---------------------------------------------------------------- directions
 
 // Directions in the test version: real shortest routes over Sydney's streets
 // for walking, cycling and driving. There are no timetables, so no public transport.
@@ -4959,21 +4792,31 @@ const rated = {
   async detailsFor() { return { source: null, photos: [], reviews: [] }; },
 };
 
-__m["demo"] = { warm, getBounds, findPois, searchAddress, reverseGeocode, currentPosition, api, directions, travelTimes, roads, sampleGroup, addBasemap, rated };
+__m["demo"] = { warm, getBounds, findPois, searchAddress, reverseGeocode, currentPosition, directions, travelTimes, roads, sampleGroup, addBasemap, rated };
 })();
-// ---- guest
+// ---- test-mode wiring: local stand-ins for the map, search and routing services
 (() => {
-// Guest mode: everything works without a profile. Home, people, history and
-// settings are kept in this browser until the person chooses to sign in.
-const KEY = 'meet-guest-v1';
+  const d = __m.demo;
+  __m.geocode = { searchAddress: d.searchAddress, reverseGeocode: d.reverseGeocode, currentPosition: d.currentPosition };
+  __m.rated = { ...__m.rated, ...d.rated };
+  __m.pois = { ...__m.pois, findPois: d.findPois };
+  __m.directions = { ...__m.directions, getDirections: d.directions, getTravelTimes: d.travelTimes };
+  __m.roads = { loadRoads: d.roads };
+})();
+// ---- api
+(() => {
+// Everything Meet keeps (your starting point, the people you meet, past
+// meetups and settings) is saved on this device, in the browser's storage.
+// There are no accounts and nothing to sign in to.
+const KEY = 'meet-guest-v1'; // its name from when profiles were optional, kept so nothing saved is lost
 let memory = null; // used when browser storage is blocked
 
-const blank = () => ({ id: 'guest', guest: true, email: '', name: '', home: null, places: [], history: [], settings: {} });
+const blank = () => ({ name: '', home: null, places: [], history: [], settings: {} });
 
 function load() {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...blank(), ...JSON.parse(raw), guest: true };
+    if (raw) return { ...blank(), ...JSON.parse(raw) };
   } catch { /* fall back to memory */ }
   return memory || blank();
 }
@@ -4994,13 +4837,9 @@ const clean = (p) => ({
 });
 const view = (d) => ({ ...d, history: d.history.slice(0, 50) });
 
-const guest = {
-  /** Raw stored data (used to move it into a profile on sign-in). */
-  data: () => load(),
-  clear() {
-    memory = null;
-    try { localStorage.removeItem(KEY); } catch { /* ignore */ }
-  },
+const api = {
+  /** Everything saved so far (a blank start the first time). */
+  async start() { return view(load()); },
   async me() { return { user: view(load()) }; },
   async updateMe(patch) {
     const d = load();
@@ -5047,77 +4886,6 @@ const guest = {
     save(d);
     return { ok: true };
   },
-};
-
-__m["guest"] = { guest };
-})();
-// ---- test-mode wiring: local stand-ins for the server and map services
-(() => {
-  const d = __m.demo;
-  __m.remote = { remote: d.api };
-  __m.geocode = { searchAddress: d.searchAddress, reverseGeocode: d.reverseGeocode, currentPosition: d.currentPosition };
-  __m.rated = { ...__m.rated, ...d.rated };
-  __m.pois = { ...__m.pois, findPois: d.findPois };
-  __m.directions = { ...__m.directions, getDirections: d.directions, getTravelTimes: d.travelTimes };
-  __m.roads = { loadRoads: d.roads };
-})();
-// ---- api
-(() => {
-// One data API for the app. People start as guests (saved in this browser);
-// signing in switches to their profile on the server and brings along
-// whatever they set up as a guest.
-const { remote } = __m["remote"];
-const { guest } = __m["guest"];
-let backend = guest;
-
-const spot = (p) => `${Number(p.lat).toFixed(4)},${Number(p.lon).toFixed(4)}`;
-
-/** Copy guest data into the signed-in profile, then forget it locally. */
-async function bringGuestData() {
-  const g = guest.data();
-  if (!g.home && !g.places.length && !g.history.length) return;
-  const { user } = await remote.me();
-  const patch = {};
-  if (!user.home && g.home) patch.home = g.home;
-  if (Object.keys(g.settings || {}).length) patch.settings = { ...g.settings, ...(user.settings || {}) };
-  if (Object.keys(patch).length) await remote.updateMe(patch);
-  const have = new Set((user.places || []).map(spot));
-  for (const p of g.places) if (!have.has(spot(p))) await remote.addPlace(p);
-  for (const h of [...g.history].reverse()) await remote.addHistory(h);
-  guest.clear();
-}
-
-async function signedIn(call) {
-  await call();
-  try { await bringGuestData(); } catch { /* keep guest data for next time */ }
-  backend = remote;
-  return remote.me();
-}
-
-const api = {
-  /** Resolve the current user: the signed-in profile, or the guest. */
-  async start() {
-    try {
-      const { user } = await remote.me();
-      if (user) { backend = remote; return user; }
-    } catch { /* no server: guest mode */ }
-    backend = guest;
-    return (await guest.me()).user;
-  },
-  isGuest: () => backend === guest,
-  login: (email, password) => signedIn(() => remote.login(email, password)),
-  signup: (email, password, name) => signedIn(() => remote.signup(email, password, name)),
-  async logout() {
-    try { await remote.logout(); } finally { backend = guest; }
-    return guest.me();
-  },
-  me: () => backend.me(),
-  updateMe: (patch) => backend.updateMe(patch),
-  addPlace: (p) => backend.addPlace(p),
-  updatePlace: (id, patch) => backend.updatePlace(id, patch),
-  deletePlace: (id) => backend.deletePlace(id),
-  addHistory: (h) => backend.addHistory(h),
-  deleteHistory: (id) => backend.deleteHistory(id),
 };
 
 __m["api"] = { api };
@@ -5303,7 +5071,7 @@ function attachSearch(root, { near, onPick }) {
   return { input, clear: () => { input.value = ''; close(); } };
 }
 
-// ---------------------------------------------------------------- user (guest or profile)
+// ---------------------------------------------------------------- what is saved on this device
 
 function onUser(user) {
   state.user = user;
@@ -5315,71 +5083,11 @@ function onUser(user) {
   else enterMain();
 }
 
-// ---------------------------------------------------------------- optional sign-in
-
-let authMode = 'login';
-function setAuthMode(mode) {
-  authMode = mode;
-  for (const b of $$('[data-auth-mode]')) {
-    b.classList.toggle('active', b.dataset.authMode === mode);
-    b.setAttribute('aria-selected', String(b.dataset.authMode === mode));
-  }
-  for (const el of $$('[data-signup-only]')) el.hidden = mode !== 'signup';
-  $('#auth-submit').textContent = mode === 'signup' ? 'Create profile' : 'Sign in';
-  $('#auth-password').autocomplete = mode === 'signup' ? 'new-password' : 'current-password';
-  $('#auth-error').hidden = true;
-}
-
-function openAuth(open, mode = 'login') {
-  $('#auth-modal').hidden = !open;
-  $('#auth-backdrop').hidden = !open;
-  if (open) {
-    setAuthMode(mode);
-    setTimeout(() => $('#auth-email').focus(), 30);
-  }
-}
-
-function initAuth() {
-  for (const b of $$('[data-auth-mode]')) b.onclick = () => setAuthMode(b.dataset.authMode);
-  $('#auth-close').onclick = () => openAuth(false);
-  $('#auth-backdrop').onclick = () => openAuth(false);
-  $('#auth-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const f = e.target;
-    const email = f.email.value.trim();
-    const password = f.password.value;
-    const err = $('#auth-error');
-    err.hidden = true;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { err.textContent = 'Enter a valid email address.'; err.hidden = false; return; }
-    if (password.length < 6) { err.textContent = 'Use at least 6 characters for the password.'; err.hidden = false; return; }
-    const btn = $('#auth-submit');
-    btn.disabled = true;
-    try {
-      const { user } = authMode === 'signup'
-        ? await api.signup(email, password, f.name.value)
-        : await api.login(email, password);
-      f.reset();
-      openAuth(false);
-      openDrawer(false);
-      cancelSearchQuietly();
-      onUser(user);
-      toast(authMode === 'signup' ? 'Profile created. Your places are saved to it.' : 'Signed in');
-    } catch (ex) {
-      err.textContent = ex.message;
-      err.hidden = false;
-      if (ex.status === 409) setTimeout(() => setAuthMode('login'), 50);
-    } finally {
-      btn.disabled = false;
-    }
-  });
-}
-
 // ---------------------------------------------------------------- start screen (your address)
 
 function showHomeScreen(cancellable) {
   showScreen('screen-home');
   $('#home-cancel').hidden = !cancellable;
-  $('#home-signin-row').hidden = cancellable || !api.isGuest();
   homeSearchCtl.clear();
   setTimeout(() => homeSearchCtl.input.focus(), 50);
 }
@@ -5396,12 +5104,11 @@ async function saveHome(loc) {
 
 function initHome() {
   homeSearchCtl = attachSearch($('#home-search'), { near: () => null, onPick: saveHome });
+  // The arrow in the address bar: start from where you are.
   $('#home-locate').onclick = async (e) => {
     const btn = e.currentTarget;
-    const span = $('span', btn);
-    const label = span.textContent;
     btn.disabled = true;
-    span.textContent = 'Locating…';
+    btn.classList.add('busy');
     try {
       const pos = await currentPosition();
       await saveHome(await reverseGeocode(pos.lat, pos.lon));
@@ -5409,11 +5116,10 @@ function initHome() {
       toast(err.message, { error: true });
     } finally {
       btn.disabled = false;
-      span.textContent = label;
+      btn.classList.remove('busy');
     }
   };
   $('#home-cancel').onclick = () => enterMain();
-  $('#home-signin').onclick = () => openAuth(true, 'login');
 }
 
 // ---------------------------------------------------------------- map
@@ -5690,7 +5396,7 @@ function renderPeople() {
     <p class="footnote" style="margin:0 6px">Or tap the map to drop a pin. Drag any pin to move it.</p>
     ${leaveRow()}
     <div class="cta">
-      <button class="btn btn-primary btn-block btn-lg" data-action="find" ${active < 2 ? 'disabled' : ''}>Find a place to meet</button>
+      <button class="btn btn-primary btn-block btn-lg" data-action="find" ${active < 2 ? 'disabled' : ''}>Let’s meet</button>
     </div>`;
 }
 
@@ -7018,12 +6724,6 @@ function openDrawer(open) {
   $('#drawer').hidden = !open;
   $('#drawer-backdrop').hidden = !open;
   if (!open) return;
-  const guest = api.isGuest();
-  $('#drawer-name').textContent = guest ? 'Guest' : (state.user.name || 'Your profile');
-  $('#drawer-avatar').textContent = guest ? '?' : initial(state.user.name || state.user.email);
-  $('#drawer-email').textContent = guest ? '' : state.user.email;
-  $('#drawer-guest').hidden = !guest;
-  $('#drawer-account').hidden = guest;
   $('#drawer-home').textContent = state.user.home?.address || 'Not set';
   syncSettingsUI();
   renderHistory();
@@ -7051,9 +6751,7 @@ function initDrawer() {
   $('#drawer-close').onclick = () => openDrawer(false);
   $('#drawer-backdrop').onclick = () => openDrawer(false);
   document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape') return;
-    if (!$('#auth-modal').hidden) openAuth(false);
-    else if (!$('#drawer').hidden) openDrawer(false);
+    if (e.key === 'Escape' && !$('#drawer').hidden) openDrawer(false);
   });
   for (const [id, key] of [['#set-mode', 'mode'], ['#set-travel', 'travel'], ['#set-speed', 'speed'], ['#set-theme', 'theme']]) {
     $(id).addEventListener('click', (e) => {
@@ -7061,16 +6759,7 @@ function initDrawer() {
       if (b) saveSettings({ [key]: b.dataset.value });
     });
   }
-  $('#btn-signin').onclick = () => { openDrawer(false); openAuth(true, 'signup'); };
   $('#btn-edit-home').onclick = () => { openDrawer(false); showHomeScreen(true); };
-  $('#btn-logout').onclick = async () => {
-    openDrawer(false);
-    cancelSearchQuietly();
-    const { user } = await api.logout();
-    state.mapCentred = false;
-    onUser(user);
-    toast('Signed out');
-  };
   $('#history-list').addEventListener('click', (e) => {
     const del = e.target.closest('[data-del]');
     if (del) {
@@ -7100,7 +6789,6 @@ function initDrawer() {
 // ---------------------------------------------------------------- boot
 
 async function boot() {
-  initAuth();
   initHome();
   initPanel();
   initSheet();

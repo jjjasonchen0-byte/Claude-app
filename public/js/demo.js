@@ -8,7 +8,6 @@
 //   • address search and reverse geocoding over its house numbers, streets,
 //     suburbs and places
 //   • about 6,400 real places: restaurants, cafés, pubs, museums, parks…
-//   • accounts, addresses and history kept in this browser's storage
 // There are no ratings, photos, reviews or opening hours: these are real
 // businesses, and the test version doesn't make any up.
 import { SYDNEY } from './sydney-data.js';
@@ -332,93 +331,7 @@ export async function currentPosition() {
 }
 
 
-// ---------------------------------------------------------------- local "server"
-
-const KEY = 'meet-test-accounts-v1';
-let memory = { users: {}, session: null };
-function load() {
-  try { const raw = localStorage.getItem(KEY); if (raw) memory = JSON.parse(raw); } catch { /* storage blocked: keep in memory */ }
-  return memory;
-}
-function save(db) {
-  memory = db;
-  try { localStorage.setItem(KEY, JSON.stringify(db)); } catch { /* in-memory only */ }
-}
-async function hash(pw, salt) {
-  const data = new TextEncoder().encode(`${salt}:${pw}`);
-  try {
-    const buf = await crypto.subtle.digest('SHA-256', data);
-    return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
-  } catch { return `${salt}:${pw.length}:${[...pw].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7)}`; }
-}
-const fail = (status, message) => Object.assign(new Error(message), { status });
-const newId = () => Math.random().toString(36).slice(2, 11);
-const pub = (u) => ({ id: u.id, email: u.email, name: u.name, home: u.home, places: u.places, history: u.history.slice(0, 50), settings: u.settings });
-function me() {
-  const db = load();
-  const u = db.session && db.users[db.session];
-  if (!u) throw fail(401, 'Please sign in');
-  return { db, u };
-}
-const clean = (p) => ({ address: String(p.address || '').slice(0, 300), nickname: String(p.nickname || '').trim().slice(0, 60), lat: Number(p.lat), lon: Number(p.lon), ...(['transit', 'walk', 'bike', 'drive'].includes(p.mode) ? { mode: p.mode } : {}) });
-
-export const api = {
-  async me() { try { return { user: pub(me().u) }; } catch { return { user: null }; } },
-  async signup(email, password, name) {
-    const db = load();
-    const e = String(email).trim().toLowerCase();
-    if (db.users[e]) throw fail(409, 'An account with that email already exists — try signing in');
-    const salt = newId();
-    db.users[e] = { id: newId(), email: e, name: String(name || '').trim(), salt, hash: await hash(password, salt), home: null, places: [], history: [], settings: {} };
-    db.session = e;
-    save(db);
-    return { user: pub(db.users[e]) };
-  },
-  async login(email, password) {
-    const db = load();
-    const u = db.users[String(email).trim().toLowerCase()];
-    if (!u || (await hash(password, u.salt)) !== u.hash) throw fail(401, 'Email or password is incorrect');
-    db.session = u.email;
-    save(db);
-    return { user: pub(u) };
-  },
-  async logout() { const db = load(); db.session = null; save(db); return { ok: true }; },
-  async updateMe(patch) {
-    const { db, u } = me();
-    if ('name' in patch) u.name = patch.name;
-    if ('home' in patch) u.home = patch.home ? clean(patch.home) : null;
-    if (patch.settings) u.settings = { ...u.settings, ...patch.settings };
-    save(db);
-    return { user: pub(u) };
-  },
-  async addPlace(p) {
-    const { db, u } = me();
-    const place = { id: newId(), ...clean(p), active: p.active !== false };
-    u.places.push(place);
-    save(db);
-    return { place };
-  },
-  async updatePlace(id, patch) {
-    const { db, u } = me();
-    const place = u.places.find((x) => x.id === id);
-    if (!place) throw fail(404, 'Address not found');
-    if ('address' in patch || 'lat' in patch) Object.assign(place, clean({ ...place, ...patch }));
-    if ('nickname' in patch) place.nickname = String(patch.nickname || '').trim().slice(0, 60);
-    if ('active' in patch) place.active = !!patch.active;
-    if ('mode' in patch) { if (['transit', 'walk', 'bike', 'drive'].includes(patch.mode)) place.mode = patch.mode; else delete place.mode; }
-    save(db);
-    return { place };
-  },
-  async deletePlace(id) { const { db, u } = me(); u.places = u.places.filter((x) => x.id !== id); save(db); return { ok: true }; },
-  async addHistory(h) {
-    const { db, u } = me();
-    const entry = { id: newId(), at: Date.now(), name: h.name, category: h.category || '', address: h.address || '', lat: h.lat, lon: h.lon, people: h.people || [] };
-    u.history = [entry, ...u.history].slice(0, 50);
-    save(db);
-    return { entry };
-  },
-  async deleteHistory(id) { const { db, u } = me(); u.history = u.history.filter((x) => x.id !== id); save(db); return { ok: true }; },
-};
+// ---------------------------------------------------------------- directions
 
 // Directions in the test version: real shortest routes over Sydney's streets
 // for walking, cycling and driving. There are no timetables, so no public transport.

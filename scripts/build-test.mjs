@@ -46,13 +46,12 @@ if (app.includes('addAttribution(ROUTES_CREDIT)')) throw new Error('build-test: 
 // ---- page markup
 const html = read('public/index.html');
 let body = html.slice(html.indexOf('<body>') + 6, html.indexOf('<script src="/vendor/leaflet/leaflet.js">'));
-body = replaceOnce(body, 'Use my current location', 'Pick a random address', 'locate label');
-body = replaceOnce(body, 'placeholder="Your address"', 'placeholder="Try “George Street” or “Bondi”"', 'home placeholder');
-body = replaceOnce(body, '      <p class="intro-foot" id="home-signin-row">', `      <div class="sample">
-        <button class="btn btn-block btn-lg" type="button" id="demo-sample">Try a sample group</button>
-        <p class="footnote" style="margin:0 2px">Test version: central Sydney (Pyrmont to Bondi, North Sydney to Newtown) from OpenStreetMap, built into this page. Address search knows its streets, house numbers and places, and routes follow real streets. There's no public transport, ratings or photos here. Everything stays in this browser.</p>
-      </div>
-      <p class="intro-foot" id="home-signin-row">`, 'sign-in row');
+body = replaceOnce(body, 'title="Use my current location" aria-label="Use my current location"', 'title="Pick a random address" aria-label="Pick a random address"', 'locate label');
+body = replaceOnce(body, 'placeholder="Where are you starting from?"', 'placeholder="Try “George Street” or “Bondi”"', 'home placeholder');
+// A sample group of friends, to try it in one tap.
+body = replaceOnce(body, '      <button class="btn btn-plain" type="button" id="home-cancel" hidden>Cancel</button>',
+  `      <button class="btn btn-plain" type="button" id="demo-sample">Try a sample group</button>
+      <button class="btn btn-plain" type="button" id="home-cancel" hidden>Cancel</button>`, 'sample group');
 
 // ---- styles
 const tokens = (t) => Object.entries(t).map(([k, v]) => `--map-${k}: ${v};`).join(' ');
@@ -94,7 +93,6 @@ const modules = [
   ['share', 'public/js/share.js'],
   ['sydney-data', 'scripts/sydney/sydney-data.js'],
   ['demo', 'public/js/demo.js'],
-  ['guest', 'public/js/guest.js'],
 ];
 let js = 'const __m = {};\n';
 const defined = new Set();
@@ -107,10 +105,9 @@ for (const [name, file] of modules) {
   js += wrapModule(name, src);
   defined.add(name);
 }
-js += `// ---- test-mode wiring: local stand-ins for the server and map services
+js += `// ---- test-mode wiring: local stand-ins for the map, search and routing services
 (() => {
   const d = __m.demo;
-  __m.remote = { remote: d.api };
   __m.geocode = { searchAddress: d.searchAddress, reverseGeocode: d.reverseGeocode, currentPosition: d.currentPosition };
   __m.rated = { ...__m.rated, ...d.rated };
   __m.pois = { ...__m.pois, findPois: d.findPois };

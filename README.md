@@ -2,9 +2,9 @@
 
 Find somewhere that's roughly as close for everyone in a group, with a press of a button.
 
-1. **Enter where you're starting from.** No account is needed. The map centres on your address.
+1. **Enter where you're starting from.** The start screen is just the logo and an address bar; the arrow at its end uses your current location. The map centres on your address.
 2. **Add the people you're meeting**, each with an optional name. You can type an address, tap the map, or drag a dot. Everyone has their own **way of travelling** (public transport, walk, bike or drive): tap the pill next to a name to change it. It's remembered.
-3. Choose when everyone leaves (**Now**, or a date and time), then press **Find a place to meet.** Meet looks for the spot where everyone's **travel times are as similar as possible**, without making anyone's trip much longer than it has to be (the longest trip may grow by about 12% at most): someone driving is asked to go further than someone walking.
+3. Choose when everyone leaves (**Now**, or a date and time), then press **Let’s meet.** Meet looks for the spot where everyone's **travel times are as similar as possible**, without making anyone's trip much longer than it has to be (the longest trip may grow by about 12% at most): someone driving is asked to go further than someone walking.
    - Walking, cycling and driving: real travel times from a routing service to a grid of spots around the group, zooming in around the best one.
    - Public transport: real times from each rider to every stop in the area at that time, so the spot is picked among stops everyone can reach (a bigger station wins a tie). The three best are then checked against the actual journeys people will be shown.
    - Then the pin moves to **somewhere a group can meet**: the liveliest café, restaurant, pub, park, museum or shops within 500 m (never a motorway, railway line or car park), and the results are named after it. With no such place nearby, the spot stays on a street you can walk along.
@@ -19,7 +19,7 @@ Find somewhere that's roughly as close for everyone in a group, with a press of 
 6. Open a place for a **full page like a search result**: photos (tap to view full screen), rating with a breakdown, reviews, opening hours, phone, website and menu, what it offers (outdoor seating, takeaway, step-free…), and **real directions for everyone, each in their own way of travelling**: public transport (lines in their official colours, times, changes, walking legs, with *Leave now* or *Arrive by*), walking, cycling or driving.
 7. **Send the location** by share sheet, WhatsApp, Messages, Email, Telegram, copy, a calendar invite, or Google/Apple Maps.
 
-**Profiles are optional.** Without one, everything is saved in the browser. Signing in or creating a profile (menu → *Sign in or create a profile*) keeps your people and past meetups on every device, and anything you set up as a guest moves into the profile.
+**No sign-in.** Your starting point, the people you meet, past meetups and settings are all saved on your device, in the browser's storage. Nothing about you is kept on the server. (They don't move between devices, and clearing the browser's site data clears them.)
 
 The look follows Apple's design language: a quiet map with white streets and no shop icons, system font, frosted-glass panels, inset grouped lists, coloured category tiles, iOS-style switches and segmented controls. On phones the panel is a bottom sheet. Drag its handle to resize it, or tap the handle to collapse and expand it.
 
@@ -30,7 +30,7 @@ npm install
 MEET_CONTACT="you@example.com" npm start      # http://localhost:3000
 ```
 
-Requires Node 20.3+. Dependencies are Leaflet and MapLibre (for the map), served from `node_modules`. Profiles are stored in `data/db.json`; set `DATA_FILE` to change where. Set `PORT` to change the port.
+Requires Node 20.3+. Dependencies are Leaflet and MapLibre (for the map), served from `node_modules`. The server keeps one small file, `data/db.json`: which Tripadvisor and Google listings match which places, so it doesn't look them up twice. Set `DATA_FILE` to change where. Set `PORT` to change the port.
 
 ### Settings
 
@@ -46,7 +46,7 @@ Requires Node 20.3+. Dependencies are Leaflet and MapLibre (for the map), served
 | `GOOGLE_DAILY_PLACES`, `GOOGLE_DAILY_PHOTOS` | Most Google place pages (rating and reviews) and place photos per day (defaults 32 and 32: inside Google's free 1,000 a month each) |
 | `GOOGLE_TRAFFIC` | `1` for driving times with live traffic (a pricier Google tier) |
 | `GOOGLE_MAP_REGION` | Two-letter country code for Google's map (borders and names as seen there; default `US`) |
-| `PORT`, `DATA_FILE` | Port and profile storage file |
+| `PORT`, `DATA_FILE` | Port, and where the server keeps its place-matching file |
 
 ### Put it online (for your phone)
 
@@ -57,7 +57,7 @@ Your phone's location button needs an `https://` address, so host it. The repo i
 3. When asked for **MEET_CONTACT**, enter your email or website. Leave **TRIPADVISOR_API_KEY** empty unless you have one. Click **Apply**.
 4. After a few minutes Render shows an address like `https://meet-xxxx.onrender.com`. Open it on your phone.
 
-The free plan pauses when idle (the first visit then takes about a minute) and doesn't keep files between restarts. Guest data lives in each browser, so that's fine, but saved profiles would be lost; pick a paid plan with a disk if you want profiles to last.
+The free plan pauses when idle (the first visit then takes about a minute) and doesn't keep files between restarts. That's fine: everyone's data lives on their own device, and the server only loses its place-matching file, which it rebuilds as people search.
 
 Any host that runs Node or Docker works too (Railway, Fly.io…). A `Dockerfile` is included:
 
@@ -164,11 +164,11 @@ The Sydney data comes from OpenStreetMap via [OpenFreeMap](https://openfreemap.o
 
 | File | What it does |
 | --- | --- |
-| `server.js` | Static hosting (compressed), a JSON API for optional profiles (scrypt-hashed passwords, httpOnly session cookie), saved addresses, settings and history, and relays for directions, ratings and Google's map tiles |
+| `server.js` | Static hosting (compressed) and relays for directions, ratings and Google's map tiles, so keys stay on the server. No accounts |
 | `lib/tripadvisor.js` | Tripadvisor Terra client: matches places by name and distance, keeps the allowlist up to date, batches rating lookups, and enforces the daily limit |
 | `public/js/placeskit.js` | Google's place card (Places UI Kit): loads Google's library, finds the place's ID for free and checks the loaded place is the same one |
 | `lib/google.js` | Google client (optional): Routes API directions and travel-time checks turned into the app's route format, Map Tiles API sessions and tiles in quiet light and dark styles, Places API photos, ratings and reviews for a place page, and the daily caps |
-| `public/js/api.js` | One data API for the app: guest storage (`guest.js`) until someone signs in, then the server (`remote.js`), moving guest data across |
+| `public/js/api.js` | Everything the app saves (starting point, people, history, settings), kept on the device in the browser's storage |
 | `public/js/meetpoint.js` | Finds the meeting point: for groups with public transport riders, among the stops everyone reaches (real times to every stop, then the best three checked against real journeys); otherwise from travel-time tables over a 7 × 7 grid and finer grids around the best spot. Spots are kept on walkable streets |
 | `public/js/anchor.js` | Moves the meeting point to somewhere a group can meet: the liveliest café, park, museum or shops close by |
 | `public/js/flood.js` | The search animation: floods over the streets (shortest paths timed at each person's speed) converging on the meeting point, then the routes and travellers, on three canvases in their own map pane |

@@ -178,7 +178,7 @@ function attachSearch(root, { near, onPick }) {
   return { input, clear: () => { input.value = ''; close(); } };
 }
 
-// ---------------------------------------------------------------- user (guest or profile)
+// ---------------------------------------------------------------- what is saved on this device
 
 function onUser(user) {
   state.user = user;
@@ -190,71 +190,11 @@ function onUser(user) {
   else enterMain();
 }
 
-// ---------------------------------------------------------------- optional sign-in
-
-let authMode = 'login';
-function setAuthMode(mode) {
-  authMode = mode;
-  for (const b of $$('[data-auth-mode]')) {
-    b.classList.toggle('active', b.dataset.authMode === mode);
-    b.setAttribute('aria-selected', String(b.dataset.authMode === mode));
-  }
-  for (const el of $$('[data-signup-only]')) el.hidden = mode !== 'signup';
-  $('#auth-submit').textContent = mode === 'signup' ? 'Create profile' : 'Sign in';
-  $('#auth-password').autocomplete = mode === 'signup' ? 'new-password' : 'current-password';
-  $('#auth-error').hidden = true;
-}
-
-function openAuth(open, mode = 'login') {
-  $('#auth-modal').hidden = !open;
-  $('#auth-backdrop').hidden = !open;
-  if (open) {
-    setAuthMode(mode);
-    setTimeout(() => $('#auth-email').focus(), 30);
-  }
-}
-
-function initAuth() {
-  for (const b of $$('[data-auth-mode]')) b.onclick = () => setAuthMode(b.dataset.authMode);
-  $('#auth-close').onclick = () => openAuth(false);
-  $('#auth-backdrop').onclick = () => openAuth(false);
-  $('#auth-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const f = e.target;
-    const email = f.email.value.trim();
-    const password = f.password.value;
-    const err = $('#auth-error');
-    err.hidden = true;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { err.textContent = 'Enter a valid email address.'; err.hidden = false; return; }
-    if (password.length < 6) { err.textContent = 'Use at least 6 characters for the password.'; err.hidden = false; return; }
-    const btn = $('#auth-submit');
-    btn.disabled = true;
-    try {
-      const { user } = authMode === 'signup'
-        ? await api.signup(email, password, f.name.value)
-        : await api.login(email, password);
-      f.reset();
-      openAuth(false);
-      openDrawer(false);
-      cancelSearchQuietly();
-      onUser(user);
-      toast(authMode === 'signup' ? 'Profile created. Your places are saved to it.' : 'Signed in');
-    } catch (ex) {
-      err.textContent = ex.message;
-      err.hidden = false;
-      if (ex.status === 409) setTimeout(() => setAuthMode('login'), 50);
-    } finally {
-      btn.disabled = false;
-    }
-  });
-}
-
 // ---------------------------------------------------------------- start screen (your address)
 
 function showHomeScreen(cancellable) {
   showScreen('screen-home');
   $('#home-cancel').hidden = !cancellable;
-  $('#home-signin-row').hidden = cancellable || !api.isGuest();
   homeSearchCtl.clear();
   setTimeout(() => homeSearchCtl.input.focus(), 50);
 }
@@ -271,12 +211,11 @@ async function saveHome(loc) {
 
 function initHome() {
   homeSearchCtl = attachSearch($('#home-search'), { near: () => null, onPick: saveHome });
+  // The arrow in the address bar: start from where you are.
   $('#home-locate').onclick = async (e) => {
     const btn = e.currentTarget;
-    const span = $('span', btn);
-    const label = span.textContent;
     btn.disabled = true;
-    span.textContent = 'Locating…';
+    btn.classList.add('busy');
     try {
       const pos = await currentPosition();
       await saveHome(await reverseGeocode(pos.lat, pos.lon));
@@ -284,11 +223,10 @@ function initHome() {
       toast(err.message, { error: true });
     } finally {
       btn.disabled = false;
-      span.textContent = label;
+      btn.classList.remove('busy');
     }
   };
   $('#home-cancel').onclick = () => enterMain();
-  $('#home-signin').onclick = () => openAuth(true, 'login');
 }
 
 // ---------------------------------------------------------------- map
@@ -711,7 +649,7 @@ function renderPeople() {
     <p class="footnote" style="margin:0 6px">Or tap the map to drop a pin. Drag any pin to move it.</p>
     ${leaveRow()}
     <div class="cta">
-      <button class="btn btn-primary btn-block btn-lg" data-action="find" ${active < 2 ? 'disabled' : ''}>Find a place to meet</button>
+      <button class="btn btn-primary btn-block btn-lg" data-action="find" ${active < 2 ? 'disabled' : ''}>Let’s meet</button>
     </div>`;
 }
 
@@ -2040,12 +1978,6 @@ function openDrawer(open) {
   $('#drawer').hidden = !open;
   $('#drawer-backdrop').hidden = !open;
   if (!open) return;
-  const guest = api.isGuest();
-  $('#drawer-name').textContent = guest ? 'Guest' : (state.user.name || 'Your profile');
-  $('#drawer-avatar').textContent = guest ? '?' : initial(state.user.name || state.user.email);
-  $('#drawer-email').textContent = guest ? '' : state.user.email;
-  $('#drawer-guest').hidden = !guest;
-  $('#drawer-account').hidden = guest;
   $('#drawer-home').textContent = state.user.home?.address || 'Not set';
   syncSettingsUI();
   renderHistory();
@@ -2073,9 +2005,7 @@ function initDrawer() {
   $('#drawer-close').onclick = () => openDrawer(false);
   $('#drawer-backdrop').onclick = () => openDrawer(false);
   document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape') return;
-    if (!$('#auth-modal').hidden) openAuth(false);
-    else if (!$('#drawer').hidden) openDrawer(false);
+    if (e.key === 'Escape' && !$('#drawer').hidden) openDrawer(false);
   });
   for (const [id, key] of [['#set-mode', 'mode'], ['#set-travel', 'travel'], ['#set-speed', 'speed'], ['#set-theme', 'theme']]) {
     $(id).addEventListener('click', (e) => {
@@ -2083,16 +2013,7 @@ function initDrawer() {
       if (b) saveSettings({ [key]: b.dataset.value });
     });
   }
-  $('#btn-signin').onclick = () => { openDrawer(false); openAuth(true, 'signup'); };
   $('#btn-edit-home').onclick = () => { openDrawer(false); showHomeScreen(true); };
-  $('#btn-logout').onclick = async () => {
-    openDrawer(false);
-    cancelSearchQuietly();
-    const { user } = await api.logout();
-    state.mapCentred = false;
-    onUser(user);
-    toast('Signed out');
-  };
   $('#history-list').addEventListener('click', (e) => {
     const del = e.target.closest('[data-del]');
     if (del) {
@@ -2122,7 +2043,6 @@ function initDrawer() {
 // ---------------------------------------------------------------- boot
 
 async function boot() {
-  initAuth();
   initHome();
   initPanel();
   initSheet();

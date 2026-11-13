@@ -137,6 +137,7 @@ try {
   await page.goto(`http://localhost:${PORT}/`);
   // Home address
   await page.waitForSelector('#screen-home:not([hidden])');
+  assert.equal(await page.locator('#screen-home :text("Sign in")').count(), 0, 'no sign-in on the start screen');
   await shot('01-start');
   await page.fill('#home-search input', 'Baker Street');
   await page.waitForSelector('#home-search .suggestions li[data-i]');
@@ -256,30 +257,20 @@ try {
   assert.match(text, /google\.com\/maps/);
   await shot('08-share');
 
-  // Guest history is visible in the menu; then create an optional profile.
+  // History is in the menu; there's nothing to sign in to.
   await page.click('#btn-menu');
   await page.waitForSelector('#history-list [data-hid]');
   await shot('09-menu');
-  await page.click('#btn-signin');
-  // The form puts the cursor in the email box just after opening; wait for that before typing.
-  await page.waitForFunction(() => document.activeElement?.id === 'auth-email');
-  await page.fill('#auth-name', 'Alex');
-  await page.fill('#auth-email', 'alex@example.com');
-  await page.fill('#auth-password', 'secret123');
-  await page.click('#auth-submit');
-  await page.waitForSelector('#auth-modal', { state: 'hidden' });
-  await page.waitForSelector('.person');
-  assert.equal(await page.locator('.person').count(), 3, 'guest people moved into the profile');
+  assert.equal(await page.locator('#drawer :text("Sign in")').count(), 0, 'no sign-in in the menu');
+  await page.click('#drawer-close');
 
-  // Reload: the server session survives and the profile has everything.
-  await page.evaluate(() => localStorage.clear());
+  // Reload: everything was saved on this device.
   await page.reload();
   await page.waitForSelector('.person');
-  assert.equal(await page.locator('.person').count(), 3, 'addresses persisted on the server');
+  assert.equal(await page.locator('.person').count(), 3, 'addresses saved on the device');
   assert.match(await page.locator('.person', { hasText: 'Sam' }).locator('.mode-pill').textContent(), /Bike/, "Sam's travel mode is remembered");
   await page.click('#btn-menu');
-  assert.equal(await page.textContent('#drawer-email'), 'alex@example.com');
-  assert.equal(await page.locator('#history-list [data-hid]').count(), 1, 'history moved into the profile');
+  assert.equal(await page.locator('#history-list [data-hid]').count(), 1, 'history saved on the device');
   await page.click('#drawer-close');
 
   // Exclude Jo and search again with just two people.
