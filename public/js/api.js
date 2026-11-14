@@ -2,7 +2,8 @@
 // meetups and settings) is saved on this device, in the browser's storage.
 // There are no accounts and nothing to sign in to.
 const KEY = 'meet-guest-v1'; // its name from when profiles were optional, kept so nothing saved is lost
-let memory = null; // used when browser storage is blocked
+let memory = null; // the latest data, for when the browser's storage can't be used
+let unsaved = false; // the browser refused the last save (private browsing, storage full or blocked): memory is ahead of it
 
 const blank = () => ({ name: '', home: null, places: [], history: [], settings: {} });
 const newId = () => Math.random().toString(36).slice(2, 11);
@@ -22,16 +23,18 @@ function tidy(d) {
 }
 
 function load() {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) return tidy(JSON.parse(raw));
-  } catch { /* fall back to memory */ }
+  if (!unsaved) {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw) return tidy(JSON.parse(raw));
+    } catch { /* fall back to memory */ }
+  }
   return memory || blank();
 }
 
 function save(data) {
   memory = data;
-  try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* memory only */ }
+  try { localStorage.setItem(KEY, JSON.stringify(data)); unsaved = false; } catch { unsaved = true; /* memory only, for this visit */ }
 }
 
 const MODES = ['transit', 'walk', 'bike', 'drive'];
@@ -47,6 +50,8 @@ const view = (d) => ({ ...d, history: d.history.slice(0, 50) });
 export const api = {
   /** Everything saved so far (a blank start the first time). */
   async start() { return view(load()); },
+  /** False when the browser refused the last save: what was added lasts only until the page is closed. */
+  saved: () => !unsaved,
   async me() { return { user: view(load()) }; },
   async updateMe(patch) {
     const d = load();

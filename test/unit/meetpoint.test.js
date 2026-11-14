@@ -229,3 +229,29 @@ test('public transport riders: the spot is picked among stops, by real times (a 
   const fallback = await findMeetingPoint(riders, { travelTimes, transitReach: async () => { throw new Error('down'); } });
   assert.ok(Number.isFinite(fallback.meet.lat));
 });
+
+test('a routing service that fails is asked once per search, not once per round', async () => {
+  const people = [{ lat: 51.50, lon: -0.20, mode: 'walk' }, { lat: 51.53, lon: -0.10, mode: 'bike' }, { lat: 51.47, lon: -0.10, mode: 'walk' }];
+  const { travelTimes, calls } = fakeRouter({ fail: ['bike'] });
+  const r = await findMeetingPoint(people, { travelTimes });
+  assert.equal(calls.filter((c) => c.mode === 'bike').length, 1, 'cycling asked once, then estimated');
+  assert.ok(calls.filter((c) => c.mode === 'walk').length > 1, 'walking, which answers, is asked every round');
+  assert.equal(r.approx, true);
+  assert.ok(r.times.every((t) => Number.isFinite(t) && t > 0));
+});
+
+test('when the timetables give no answer in time, the search does not wait for them a second time', async () => {
+  const people = [{ lat: 51.50, lon: -0.20, mode: 'transit' }, { lat: 51.53, lon: -0.10, mode: 'transit' }, { lat: 51.47, lon: -0.10, mode: 'walk' }];
+  const { travelTimes } = fakeRouter();
+  let asked = 0;
+  const directions = async () => { asked++; return { duration: 1200 }; };
+  // (The search gives a slow answer up with an error called "timeout".)
+  const r = await findMeetingPoint(people, { travelTimes, directions, transitReach: async () => { throw new Error('timeout'); } });
+  assert.equal(asked, 0, 'no timetable checks after the timetables went quiet');
+  assert.deepEqual(r.real, [false, false, true], 'riders are marked as estimated');
+  assert.ok(r.times.every((t) => Number.isFinite(t) && t > 0));
+  // A quick refusal (not a timeout) is different: the checks are still tried.
+  asked = 0;
+  await findMeetingPoint(people, { travelTimes, directions, transitReach: async () => { throw new Error('not available'); } });
+  assert.ok(asked > 0);
+});

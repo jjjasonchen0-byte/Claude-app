@@ -29,7 +29,7 @@ function wrapModule(name, src) {
 // ---- app tweaks for the test version (central Sydney, built into the page)
 let app = read('public/js/app.js');
 app = replaceOnce(app, "map = L.map('map', { zoomControl: false, worldCopyJump: true });",
-  "map = L.map('map', { zoomControl: false, zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 80, minZoom: 11.5, maxZoom: 19, maxBounds: __m.demo.getBounds(), maxBoundsViscosity: 0.8 });", 'map init');
+  "map = L.map('map', { zoomControl: false, zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 80, minZoom: 11.5, maxZoom: 19, maxBounds: L.latLngBounds(__m.demo.getBounds()).pad(0.55), maxBoundsViscosity: 0.8 });", 'map init');
 app = app.replace(/\/\/ basemap:start[\s\S]*?\/\/ basemap:end\n/, 'function addBasemap() { if (!baseLayer) baseLayer = __m.demo.addBasemap(map) || true; }\n');
 if (app.includes('basemaps.cartocdn.com')) throw new Error('build-test: base map not replaced');
 app = replaceOnce(app, 'map.attributionControl.setPrefix(false);', "map.attributionControl.setPrefix(false).addAttribution('Test version: central Sydney, built into this page');", 'attribution');
@@ -111,7 +111,9 @@ js += `// ---- test-mode wiring: local stand-ins for the map, search and routing
   __m.geocode = { searchAddress: d.searchAddress, reverseGeocode: d.reverseGeocode, currentPosition: d.currentPosition };
   __m.rated = { ...__m.rated, ...d.rated };
   __m.pois = { ...__m.pois, findPois: d.findPois };
-  __m.directions = { ...__m.directions, getDirections: d.directions, getTravelTimes: d.travelTimes };
+  // No server behind the test page: nothing may be asked of one (timetables, Google's times).
+  const none = async () => { throw Object.assign(new Error('Not available in the test version'), { status: 404 }); };
+  __m.directions = { ...__m.directions, getDirections: d.directions, getTravelTimes: d.travelTimes, getTransitReach: none, getCheckTimes: none };
   __m.roads = { loadRoads: d.roads };
 })();
 `;

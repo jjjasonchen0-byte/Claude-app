@@ -1817,7 +1817,7 @@ const timeout = (promise, ms) => Promise.race([promise, new Promise((_, rej) => 
  * candidate: people × candidates. Falls back to straight-line estimates for a
  * way of travelling whose service does not answer.
  */
-async function evaluate(people, cands, { travelTimes, signal }) {
+async function evaluate(people, cands, { travelTimes, signal, down = new Set() }) {
   const times = people.map(() => cands.map(() => null));
   const dists = people.map(() => cands.map(() => null));
   let snapped = null, snappedBy = null;
@@ -1827,6 +1827,9 @@ async function evaluate(people, cands, { travelTimes, signal }) {
   people.forEach((p, i) => (groups[p.mode === 'transit' ? 'walk' : p.mode] || groups.walk).push(i));
   await Promise.all(Object.entries(groups).map(async ([mode, idx]) => {
     if (!idx.length) return;
+    // The service did not answer for this way of travelling a moment ago (`down`
+    // is shared by one search): estimate straight away rather than wait again.
+    if (down.has(mode)) { approx = true; for (const pi of idx) estimate(pi); return; }
     try {
       const t = await timeout(travelTimes(mode, idx.map((i) => people[i]), cands, { signal }), 12000);
       if (t.destinations?.length === cands.length && (!snapped || SNAP_ORDER[mode] < SNAP_ORDER[snappedBy])) { snapped = t.destinations; snappedBy = mode; }
@@ -1842,6 +1845,7 @@ async function evaluate(people, cands, { travelTimes, signal }) {
       });
     } catch (err) {
       if (signal?.aborted) throw err;
+      down.add(mode);
       approx = true;
       for (const pi of idx) estimate(pi);
     }
@@ -1877,7 +1881,8 @@ async function evaluate(people, cands, { travelTimes, signal }) {
 }
 
 /** Move a spot onto the nearest street people can walk on (when no one walks, spots sit on roads). */
-async function onFoot(spot, from, { travelTimes, signal }) {
+async function onFoot(spot, from, { travelTimes, signal, down }) {
+  if (down?.has('walk')) return spot; // the walking service is not answering: leave the spot where it is
   try {
     const t = await timeout(travelTimes('walk', [from], [spot], { signal }), 8000);
     const d = t.destinations?.[0];
@@ -1894,14 +1899,21 @@ async function onFoot(spot, from, { travelTimes, signal }) {
  * picked among stops everyone can reach, by real times. Others' times to the
  * most promising stops come from the routing service. Null if it can't be done.
  */
-async function viaStops(people, { rule, transitReach, travelTimes, directions, time, box, signal, onStatus }) {
+async function viaStops(people, { rule, transitReach, travelTimes, directions, time, box, signal, onStatus, down }) {
   const riders = people.map((p, i) => (p.mode === 'transit' ? i : -1)).filter((i) => i >= 0);
   // Look comfortably further than the longest trip is likely to be.
   const mid = centroid(people);
   const longest = Math.max(...riders.map((i) => estimateSeconds('transit', haversine(people[i].lat, people[i].lon, mid.lat, mid.lon))));
   const max = Math.max(40, Math.min(120, Math.ceil((longest * 2.2) / 60)));
   onStatus('Checking public transport…');
-  const reach = await Promise.all(riders.map((i) => timeout(transitReach(people[i], { box, max, time, signal }), 15000)));
+  let reach;
+  try {
+    reach = await Promise.all(riders.map((i) => timeout(transitReach(people[i], { box, max, time, signal }), 15000)));
+  } catch (err) {
+    // No answer at all in that time: the timetable checks further on would only wait again.
+    if (err?.message === 'timeout') down?.add('transit');
+    throw err;
+  }
   const key = (lat, lon) => `${Math.round(lat * 1000)},${Math.round(lon * 1000)}`;
   const maps = reach.map((r) => new Map((r?.cells || []).map((c) => [key(c[0], c[1]), c])));
   const common = [...maps[0].keys()].filter((k) => maps.every((m) => m.has(k)));
@@ -1920,7 +1932,7 @@ async function viaStops(people, { rule, transitReach, travelTimes, directions, t
     // Walkers, cyclists and drivers: real times to the 60 most promising stops.
     const pre = makeScore(rule, rows);
     rows = rows.map((r) => ({ ...r, score: pre(r.times) })).sort((a, b) => a.score - b.score).slice(0, 60);
-    const measured = await evaluate(others.map((i) => people[i]), rows.map((r) => ({ lat: r.lat, lon: r.lon })), { travelTimes, signal });
+    const measured = await evaluate(others.map((i) => people[i]), rows.map((r) => ({ lat: r.lat, lon: r.lon })), { travelTimes, signal, down });
     others.forEach((pi, k) => rows.forEach((r, j) => {
       r.times[pi] = measured[j].times[k];
       r.dists[pi] = measured[j].dists[k] ?? r.dists[pi];
@@ -1986,12 +1998,13 @@ async function viaStops(people, { rule, transitReach, travelTimes, directions, t
  */
 async function findMeetingPoint(people, { rule = 'similar', travelTimes, directions, checkTimes, transitReach, time, signal, onStatus = () => {} } = {}) {
   if (people.length < 2) throw new Error('Add at least two people');
+  const down = new Set(); // ways of travelling whose routing service did not answer during this search
 
   // With public transport riders: pick among stops, by real timetables, when possible.
   if (transitReach && people.some((p) => p.mode === 'transit')) {
     try {
       const box = paddedBBox(people, 0.2, Math.max(400, span(people) * 0.45));
-      const r = await viaStops(people, { rule, transitReach, travelTimes, directions, time, box, signal, onStatus });
+      const r = await viaStops(people, { rule, transitReach, travelTimes, directions, time, box, signal, onStatus, down });
       if (r) return r;
     } catch (err) {
       if (signal?.aborted) throw err;
@@ -2015,7 +2028,7 @@ async function findMeetingPoint(people, { rule = 'similar', travelTimes, directi
   const sec = smallestEnclosingCircle(people);
   let cellLat = (box.n - box.s) / 6, cellLon = (box.e - box.w) / 6;
   onStatus('Finding the fairest spot…');
-  add(await evaluate(people, [...grid(box, 7), centroid(people), { lat: sec.lat, lon: sec.lon }], { travelTimes, signal }));
+  add(await evaluate(people, [...grid(box, 7), centroid(people), { lat: sec.lat, lon: sec.lon }], { travelTimes, signal, down }));
 
   // Then zoom in around the best spot so far, until the grid is about 200 m apart.
   for (let round = 0; round < 3; round++) {
@@ -2024,7 +2037,7 @@ async function findMeetingPoint(people, { rule = 'similar', travelTimes, directi
     const cellM = Math.max(cellLat * 111320, cellLon * 111320 * Math.cos((b.lat * Math.PI) / 180));
     if (round > 0 && cellM < 200) break;
     const fine = { s: b.lat - cellLat, n: b.lat + cellLat, w: b.lon - cellLon, e: b.lon + cellLon };
-    add(await evaluate(people, grid(fine, 5), { travelTimes, signal }));
+    add(await evaluate(people, grid(fine, 5), { travelTimes, signal, down }));
     cellLat /= 2; cellLon /= 2;
   }
   if (!all.some((r) => Number.isFinite(r.score))) throw new Error('No spot can be reached by everyone');
@@ -2054,7 +2067,7 @@ async function findMeetingPoint(people, { rule = 'similar', travelTimes, directi
       });
       const pick = checked.reduce((a, b) => (b.score < a.score ? b : a));
       if (pick.known.some(Boolean)) {
-        if (pick.snappedBy && pick.snappedBy !== 'walk') Object.assign(pick, await onFoot(pick, people[0], { travelTimes, signal }));
+        if (pick.snappedBy && pick.snappedBy !== 'walk') Object.assign(pick, await onFoot(pick, people[0], { travelTimes, signal, down }));
         return {
           meet: { lat: pick.lat, lon: pick.lon },
           times: pick.times.map((s) => Math.round(s)),
@@ -2074,7 +2087,7 @@ async function findMeetingPoint(people, { rule = 'similar', travelTimes, directi
   const riders = people.map((p, i) => (p.mode === 'transit' ? i : -1)).filter((i) => i >= 0);
   const real = people.map((p) => p.mode !== 'transit');
   let chosen = best();
-  if (riders.length && directions) {
+  if (riders.length && directions && !down.has('transit')) {
     const top = topSpots(2);
     onStatus('Checking public transport…');
     const score = makeScore(rule, all);
@@ -2099,7 +2112,7 @@ async function findMeetingPoint(people, { rule = 'similar', travelTimes, directi
   }
   if (chosen.approx) real.fill(false);
   // Nobody walks: the spot sits on the road network; move it onto a walkable street.
-  if (chosen.snappedBy && chosen.snappedBy !== 'walk') Object.assign(chosen, await onFoot(chosen, people[0], { travelTimes, signal }));
+  if (chosen.snappedBy && chosen.snappedBy !== 'walk') Object.assign(chosen, await onFoot(chosen, people[0], { travelTimes, signal, down }));
   return {
     meet: { lat: chosen.lat, lon: chosen.lon },
     times: chosen.times.map((t) => Math.round(t)),
@@ -3825,12 +3838,52 @@ function cached(key, signal, make) {
   return promise;
 }
 
-async function getJson(url, init) {
-  const res = await fetch(url, init);
-  let data = null;
-  try { data = await res.json(); } catch { /* not JSON */ }
+// The Meet server gives up on a routing service after about 25 seconds; a
+// request still unanswered after this long is not going to be.
+const GIVE_UP_MS = 30000;
+
+async function getJson(url, init = {}) {
+  // The caller's own cancel still works; on top of it, a time limit, so nothing waits for good.
+  const ctrl = new AbortController();
+  const outer = init.signal;
+  const onAbort = () => ctrl.abort();
+  if (outer?.aborted) ctrl.abort();
+  outer?.addEventListener('abort', onAbort);
+  let timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; ctrl.abort(); }, GIVE_UP_MS);
+  let res, data = null;
+  try {
+    res = await fetch(url, { ...init, signal: ctrl.signal });
+    try { data = await res.json(); } catch { /* not JSON */ }
+  } catch (err) {
+    if (timedOut && !outer?.aborted) throw Object.assign(new Error('No answer in time'), { status: 504 });
+    throw err;
+  } finally {
+    clearTimeout(timer);
+    outer?.removeEventListener('abort', onAbort);
+  }
   if (!res.ok) throw Object.assign(new Error(data?.error || `Request failed (${res.status})`), { status: res.status, data });
+  // "OK" with something that isn't data (a Wi-Fi sign-in page, a host that
+  // answers every address with its front page) is no answer at all.
+  if (data === null || typeof data !== 'object') throw Object.assign(new Error('Unreadable answer'), { unreadable: true });
   return data;
+}
+
+const unusable = (what) => Object.assign(new Error(`${what} unavailable right now`), { status: 502 });
+/** A route the app can draw and time, or an error: never a half-filled object. */
+function usableRoute(r) {
+  if (!r || !Number.isFinite(r.duration)) throw unusable('Directions');
+  if (r.options !== undefined) {
+    if (!Array.isArray(r.options) || !r.options.length || !r.options.every((o) => o && Array.isArray(o.legs) && Number.isFinite(o.duration))) throw unusable('Directions');
+    for (const o of r.options) for (const l of o.legs) { if (!Array.isArray(l.geometry)) l.geometry = []; l.from ||= {}; l.to ||= {}; }
+  }
+  if (!Array.isArray(r.geometry)) r.geometry = [];
+  return r;
+}
+/** A table of travel times with its rows, or an error. */
+function usableTable(t) {
+  if (!t || !Array.isArray(t.durations)) throw unusable('Travel times');
+  return t;
 }
 
 /** Ask the Meet server; if there is no server (404 / network error), call the provider directly. */
@@ -3865,7 +3918,7 @@ function getDirections(mode, from, to, { time, arriveBy = false, alternatives = 
   return cached(key, signal, () => viaServerOr(`/api/directions?${q}`, async () => {
     if (mode === 'transit') return normalizeTransit(await getJson(transitUrl(from, to, { time, arriveBy }), { signal }), { arriveBy });
     return normalizeOsrm(await getJson(osrmRouteUrl(mode, from, to, { alternatives: alt, via: viaPt }), { signal }), mode);
-  }, signal));
+  }, signal).then(usableRoute));
 }
 
 /**
@@ -3876,7 +3929,8 @@ function getDirections(mode, from, to, { time, arriveBy = false, alternatives = 
 function getTransitReach(from, { box, max = 60, time, signal } = {}) {
   const q = new URLSearchParams({ from: ll(from), max: String(max), box: [box.s, box.w, box.n, box.e].map((v) => v.toFixed(4)).join(',') });
   if (time) q.set('time', new Date(time).toISOString());
-  return cached(`reach|${q}`, signal, () => getJson(`/api/transit/reach?${q}`, { signal, credentials: 'same-origin' }));
+  return cached(`reach|${q}`, signal, () => getJson(`/api/transit/reach?${q}`, { signal, credentials: 'same-origin' })
+    .then((r) => { if (!Array.isArray(r.cells)) throw unusable('Public transport times'); return r; }));
 }
 
 /** Travel times from each source to each destination (walk, bike or drive only). */
@@ -3884,7 +3938,7 @@ function getTravelTimes(mode, sources, destinations, { signal } = {}) {
   if (mode === 'transit') return Promise.reject(Object.assign(new Error('Not available for public transport'), { status: 400 }));
   const key = ['table', mode, sources.map(ll).join(';'), destinations.map(ll).join(';')].join('|');
   const q = new URLSearchParams({ mode, from: sources.map(ll).join(';'), to: destinations.map(ll).join(';') });
-  return cached(key, signal, () => viaServerOr(`/api/traveltimes?${q}`, async () => normalizeOsrmTable(await getJson(osrmTableUrl(mode, sources, destinations), { signal })), signal));
+  return cached(key, signal, () => viaServerOr(`/api/traveltimes?${q}`, async () => normalizeOsrmTable(await getJson(osrmTableUrl(mode, sources, destinations), { signal })), signal).then(usableTable));
 }
 
 /**
@@ -4837,7 +4891,9 @@ __m["demo"] = { warm, getBounds, findPois, searchAddress, reverseGeocode, curren
   __m.geocode = { searchAddress: d.searchAddress, reverseGeocode: d.reverseGeocode, currentPosition: d.currentPosition };
   __m.rated = { ...__m.rated, ...d.rated };
   __m.pois = { ...__m.pois, findPois: d.findPois };
-  __m.directions = { ...__m.directions, getDirections: d.directions, getTravelTimes: d.travelTimes };
+  // No server behind the test page: nothing may be asked of one (timetables, Google's times).
+  const none = async () => { throw Object.assign(new Error('Not available in the test version'), { status: 404 }); };
+  __m.directions = { ...__m.directions, getDirections: d.directions, getTravelTimes: d.travelTimes, getTransitReach: none, getCheckTimes: none };
   __m.roads = { loadRoads: d.roads };
 })();
 // ---- api
@@ -4846,7 +4902,8 @@ __m["demo"] = { warm, getBounds, findPois, searchAddress, reverseGeocode, curren
 // meetups and settings) is saved on this device, in the browser's storage.
 // There are no accounts and nothing to sign in to.
 const KEY = 'meet-guest-v1'; // its name from when profiles were optional, kept so nothing saved is lost
-let memory = null; // used when browser storage is blocked
+let memory = null; // the latest data, for when the browser's storage can't be used
+let unsaved = false; // the browser refused the last save (private browsing, storage full or blocked): memory is ahead of it
 
 const blank = () => ({ name: '', home: null, places: [], history: [], settings: {} });
 const newId = () => Math.random().toString(36).slice(2, 11);
@@ -4866,16 +4923,18 @@ function tidy(d) {
 }
 
 function load() {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) return tidy(JSON.parse(raw));
-  } catch { /* fall back to memory */ }
+  if (!unsaved) {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw) return tidy(JSON.parse(raw));
+    } catch { /* fall back to memory */ }
+  }
   return memory || blank();
 }
 
 function save(data) {
   memory = data;
-  try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* memory only */ }
+  try { localStorage.setItem(KEY, JSON.stringify(data)); unsaved = false; } catch { unsaved = true; /* memory only, for this visit */ }
 }
 
 const MODES = ['transit', 'walk', 'bike', 'drive'];
@@ -4891,6 +4950,8 @@ const view = (d) => ({ ...d, history: d.history.slice(0, 50) });
 const api = {
   /** Everything saved so far (a blank start the first time). */
   async start() { return view(load()); },
+  /** False when the browser refused the last save: what was added lasts only until the page is closed. */
+  saved: () => !unsaved,
   async me() { return { user: view(load()) }; },
   async updateMe(patch) {
     const d = load();
@@ -5051,16 +5112,27 @@ function toast(msg, { error = false, action, onAction, ms = 3600 } = {}) {
   setTimeout(() => el.remove(), ms);
 }
 
+/** Said once if this browser won't let Meet save (private browsing, storage blocked or full). */
+let warnedUnsaved = false;
+function warnIfUnsaved() {
+  if (warnedUnsaved || api.saved()) return;
+  warnedUnsaved = true;
+  toast('This browser isn’t letting Meet save. What you add will be forgotten when you close the page.', { ms: 7000 });
+}
+
 function showScreen(id) {
   for (const s of $$('.screen')) s.hidden = s.id !== id;
 }
 
+/** A person's way of travelling: their own if it is one the app knows, otherwise the default. */
+const modeOf = (p) => (MODES.some((m) => m.id === p.mode) ? p.mode : state.settings.travel);
+
 /** Everyone: you first, then saved addresses. */
 function everyone() {
   const list = [];
-  if (state.user?.home) list.push({ id: 'home', isHome: true, name: 'You', ...state.user.home, mode: state.user.home.mode || state.settings.travel, active: true, color: COLORS[0] });
+  if (state.user?.home) list.push({ id: 'home', isHome: true, name: 'You', ...state.user.home, mode: modeOf(state.user.home), active: true, color: COLORS[0] });
   state.places.forEach((p, i) => list.push({
-    ...p, mode: p.mode || state.settings.travel, name: p.nickname || shortAddr(p.address) || `Friend ${i + 1}`, color: COLORS[1 + (i % (COLORS.length - 1))], // never your blue
+    ...p, mode: modeOf(p), name: p.nickname || shortAddr(p.address) || `Friend ${i + 1}`, color: COLORS[1 + (i % (COLORS.length - 1))], // never your blue
   }));
   return list;
 }
@@ -5158,6 +5230,7 @@ async function saveHome(loc) {
     if (map) cancelSearchQuietly();
     state.sharePlace = null;
     enterMain(true);
+    warnIfUnsaved();
   } catch (err) {
     toast(err.message, { error: true });
   }
@@ -5193,7 +5266,7 @@ function addBasemap() { if (!baseLayer) baseLayer = __m.demo.addBasemap(map) || 
 const ROUTES_CREDIT = `Routes <a href="${ATTRIBUTION.routing.url}" target="_blank" rel="noopener">FOSSGIS OSRM</a> · Public transport <a href="${ATTRIBUTION.transit.url}" target="_blank" rel="noopener">Transitous</a>`;
 
 function initMap() {
-  map = L.map('map', { zoomControl: false, zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 80, minZoom: 11.5, maxZoom: 19, maxBounds: __m.demo.getBounds(), maxBoundsViscosity: 0.8 });
+  map = L.map('map', { zoomControl: false, zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 80, minZoom: 11.5, maxZoom: 19, maxBounds: L.latLngBounds(__m.demo.getBounds()).pad(0.55), maxBoundsViscosity: 0.8 });
   L.control.zoom({ position: 'bottomright' }).addTo(map);
   addBasemap();
   map.attributionControl.setPrefix(false).addAttribution('Test version: central Sydney, built into this page');
@@ -5370,6 +5443,7 @@ function enterMain(recentre = false) {
 function setView(view, { pop = false } = {}) {
   state.view = view;
   state.modeMenu = null;
+  if (view !== 'people') map?.closePopup(); // an "Add this address" bubble belongs to the people list
   const panel = $('#panel');
   panel.classList.toggle('away', view === 'searching');
   showSearchRoutes();
@@ -5511,6 +5585,7 @@ async function addPlace(loc) {
     state.places.push(place);
     render();
     toast(`Added ${place.nickname || shortAddr(place.address)}`);
+    warnIfUnsaved();
     fitTo(activePeople().map((p) => [p.lat, p.lon]), { maxZoom: 15 });
   } catch (err) { toast(err.message, { error: true }); }
 }
@@ -5742,8 +5817,11 @@ async function findPlaces({ replay = false } = {}) {
     const areaP = search.area ? Promise.resolve() : anchorP.then((m) => reverseGeocode(m.lat, m.lon, { signal: ctrl.signal }))
       .then((r) => { if (r) search.area = r.address; if (state.view === 'results') render({ keepScroll: true }); })
       .catch(() => {});
+    // Someone whose times could not be checked a moment ago (their routing service
+    // did not answer) is not waited on for long again: their route is a straight line.
+    const routeWait = (i) => (meeting.approx || meeting.real?.[i] === false ? 4000 : 10000);
     const routesP = search.routes ? Promise.resolve(search.routes)
-      : anchorP.then((m) => Promise.all(people.map((p) => withTimeout(getDirections(p.mode, p, m, { signal: ctrl.signal, ...at }), 10000).catch(() => null))));
+      : anchorP.then((m) => Promise.all(people.map((p, i) => withTimeout(getDirections(p.mode, p, m, { signal: ctrl.signal, ...at }), routeWait(i)).catch(() => null))));
     status('Finding everyone’s routes…');
     const ok2 = await fx.allAtOnce(spot);
     if (!ok2 || !live()) return;
@@ -6431,6 +6509,8 @@ function loadPlaceDirections() {
   const key = [p.id, modes.join(','), when.type, when.time || '', s.leaveAt || ''].join('|');
   if (state.dir?.key === key) return;
   const prev = state.dir;
+  // The lines drawn for the old ways of travelling (or the old time) go: the new ones replace them.
+  if (prev?.layer) poiLayer.removeLayer(prev.layer);
   const dir = state.dir = { key, results: s.people.map(() => ({ status: 'loading' })), expanded: prev?.key?.startsWith(`${p.id}|`) ? prev.expanded : -1, fitted: false };
   const opts = when.type === 'arrive' && when.time ? { time: new Date(when.time), arriveBy: true } : s.leaveAt ? { time: s.leaveAt } : {};
   s.people.forEach((person, i) => {
@@ -6756,10 +6836,24 @@ function initPanel() {
   $('#btn-skip').onclick = () => anim?.skip();
   $('#btn-cancel-search').onclick = cancelSearch;
   $('#btn-recenter').onclick = () => {
-    const pts = state.search ? state.search.people : activePeople();
-    if (pts.length < 2) map.flyTo([state.user.home.lat, state.user.home.lon], 15, { duration: 0.6 });
-    else fitTo(pts.map((p) => [p.lat, p.lon]), { maxZoom: 16 });
+    const pts = viewPoints();
+    if (pts.length < 2) map.flyTo(pts[0] || [state.user.home.lat, state.user.home.lon], 15, { duration: 0.6 });
+    else fitTo(pts, { maxZoom: state.view === 'group' ? 17 : 16 });
   };
+}
+
+/** What the page in view is about, as points to keep in sight: the people, and the meeting point, the listed places or the chosen place. */
+function viewPoints() {
+  const s = state.search;
+  if (!s) {
+    const h = state.sharePlace;
+    return state.view === 'share' && h ? [[h.lat, h.lon]] : activePeople().map((p) => [p.lat, p.lon]);
+  }
+  const people = s.people.map((p) => [p.lat, p.lon]);
+  const meet = s.meet ? [[s.meet.lat, s.meet.lon]] : [];
+  if (state.view === 'group' && s.groupList?.length) return [...s.groupList.map((p) => [p.lat, p.lon]), ...meet];
+  if (['place', 'share'].includes(state.view) && s.place) return [...people, [s.place.lat, s.place.lon]];
+  return [...people, ...meet];
 }
 
 function nextHalfHour() {
@@ -6869,7 +6963,21 @@ async function boot() {
   initPanel();
   initSheet();
   initDrawer();
-  window.addEventListener('resize', () => map?.invalidateSize());
+  // A turned phone or a resized window: the map takes its new size, and when the
+  // width changed (not just the height, as when a keyboard opens) what the page
+  // is about is brought back into sight beside or above the panel.
+  let lastWidth = window.innerWidth, refit = 0;
+  window.addEventListener('resize', () => {
+    map?.invalidateSize();
+    if (!map || Math.abs(window.innerWidth - lastWidth) < 60) return;
+    lastWidth = window.innerWidth;
+    clearTimeout(refit);
+    refit = setTimeout(() => {
+      if ($('#screen-main').hidden) return;
+      const pts = viewPoints();
+      if (pts.length > 1) fitTo(pts, { maxZoom: 16, animate: false });
+    }, 250);
+  });
   ratingsSource().then((src) => { ratingsOn = !!src; ratingsName = src === 'tripadvisor' ? 'Tripadvisor' : src || ''; });
   getConfig().then((c) => {
     if (c.version) { $('#app-version').hidden = false; $('#app-version').textContent = `Version ${c.version}`; }

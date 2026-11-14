@@ -107,16 +107,27 @@ function toast(msg, { error = false, action, onAction, ms = 3600 } = {}) {
   setTimeout(() => el.remove(), ms);
 }
 
+/** Said once if this browser won't let Meet save (private browsing, storage blocked or full). */
+let warnedUnsaved = false;
+function warnIfUnsaved() {
+  if (warnedUnsaved || api.saved()) return;
+  warnedUnsaved = true;
+  toast('This browser isn’t letting Meet save. What you add will be forgotten when you close the page.', { ms: 7000 });
+}
+
 function showScreen(id) {
   for (const s of $$('.screen')) s.hidden = s.id !== id;
 }
 
+/** A person's way of travelling: their own if it is one the app knows, otherwise the default. */
+const modeOf = (p) => (MODES.some((m) => m.id === p.mode) ? p.mode : state.settings.travel);
+
 /** Everyone: you first, then saved addresses. */
 function everyone() {
   const list = [];
-  if (state.user?.home) list.push({ id: 'home', isHome: true, name: 'You', ...state.user.home, mode: state.user.home.mode || state.settings.travel, active: true, color: COLORS[0] });
+  if (state.user?.home) list.push({ id: 'home', isHome: true, name: 'You', ...state.user.home, mode: modeOf(state.user.home), active: true, color: COLORS[0] });
   state.places.forEach((p, i) => list.push({
-    ...p, mode: p.mode || state.settings.travel, name: p.nickname || shortAddr(p.address) || `Friend ${i + 1}`, color: COLORS[1 + (i % (COLORS.length - 1))], // never your blue
+    ...p, mode: modeOf(p), name: p.nickname || shortAddr(p.address) || `Friend ${i + 1}`, color: COLORS[1 + (i % (COLORS.length - 1))], // never your blue
   }));
   return list;
 }
@@ -214,6 +225,7 @@ async function saveHome(loc) {
     if (map) cancelSearchQuietly();
     state.sharePlace = null;
     enterMain(true);
+    warnIfUnsaved();
   } catch (err) {
     toast(err.message, { error: true });
   }
@@ -591,6 +603,7 @@ function enterMain(recentre = false) {
 function setView(view, { pop = false } = {}) {
   state.view = view;
   state.modeMenu = null;
+  if (view !== 'people') map?.closePopup(); // an "Add this address" bubble belongs to the people list
   const panel = $('#panel');
   panel.classList.toggle('away', view === 'searching');
   showSearchRoutes();
@@ -732,6 +745,7 @@ async function addPlace(loc) {
     state.places.push(place);
     render();
     toast(`Added ${place.nickname || shortAddr(place.address)}`);
+    warnIfUnsaved();
     fitTo(activePeople().map((p) => [p.lat, p.lon]), { maxZoom: 15 });
   } catch (err) { toast(err.message, { error: true }); }
 }
@@ -963,8 +977,11 @@ async function findPlaces({ replay = false } = {}) {
     const areaP = search.area ? Promise.resolve() : anchorP.then((m) => reverseGeocode(m.lat, m.lon, { signal: ctrl.signal }))
       .then((r) => { if (r) search.area = r.address; if (state.view === 'results') render({ keepScroll: true }); })
       .catch(() => {});
+    // Someone whose times could not be checked a moment ago (their routing service
+    // did not answer) is not waited on for long again: their route is a straight line.
+    const routeWait = (i) => (meeting.approx || meeting.real?.[i] === false ? 4000 : 10000);
     const routesP = search.routes ? Promise.resolve(search.routes)
-      : anchorP.then((m) => Promise.all(people.map((p) => withTimeout(getDirections(p.mode, p, m, { signal: ctrl.signal, ...at }), 10000).catch(() => null))));
+      : anchorP.then((m) => Promise.all(people.map((p, i) => withTimeout(getDirections(p.mode, p, m, { signal: ctrl.signal, ...at }), routeWait(i)).catch(() => null))));
     status('Finding everyone’s routes…');
     const ok2 = await fx.allAtOnce(spot);
     if (!ok2 || !live()) return;
@@ -1652,6 +1669,8 @@ function loadPlaceDirections() {
   const key = [p.id, modes.join(','), when.type, when.time || '', s.leaveAt || ''].join('|');
   if (state.dir?.key === key) return;
   const prev = state.dir;
+  // The lines drawn for the old ways of travelling (or the old time) go: the new ones replace them.
+  if (prev?.layer) poiLayer.removeLayer(prev.layer);
   const dir = state.dir = { key, results: s.people.map(() => ({ status: 'loading' })), expanded: prev?.key?.startsWith(`${p.id}|`) ? prev.expanded : -1, fitted: false };
   const opts = when.type === 'arrive' && when.time ? { time: new Date(when.time), arriveBy: true } : s.leaveAt ? { time: s.leaveAt } : {};
   s.people.forEach((person, i) => {
@@ -1978,10 +1997,24 @@ function initPanel() {
   $('#btn-skip').onclick = () => anim?.skip();
   $('#btn-cancel-search').onclick = cancelSearch;
   $('#btn-recenter').onclick = () => {
-    const pts = state.search ? state.search.people : activePeople();
-    if (pts.length < 2) map.flyTo([state.user.home.lat, state.user.home.lon], 15, { duration: 0.6 });
-    else fitTo(pts.map((p) => [p.lat, p.lon]), { maxZoom: 16 });
+    const pts = viewPoints();
+    if (pts.length < 2) map.flyTo(pts[0] || [state.user.home.lat, state.user.home.lon], 15, { duration: 0.6 });
+    else fitTo(pts, { maxZoom: state.view === 'group' ? 17 : 16 });
   };
+}
+
+/** What the page in view is about, as points to keep in sight: the people, and the meeting point, the listed places or the chosen place. */
+function viewPoints() {
+  const s = state.search;
+  if (!s) {
+    const h = state.sharePlace;
+    return state.view === 'share' && h ? [[h.lat, h.lon]] : activePeople().map((p) => [p.lat, p.lon]);
+  }
+  const people = s.people.map((p) => [p.lat, p.lon]);
+  const meet = s.meet ? [[s.meet.lat, s.meet.lon]] : [];
+  if (state.view === 'group' && s.groupList?.length) return [...s.groupList.map((p) => [p.lat, p.lon]), ...meet];
+  if (['place', 'share'].includes(state.view) && s.place) return [...people, [s.place.lat, s.place.lon]];
+  return [...people, ...meet];
 }
 
 function nextHalfHour() {
@@ -2091,7 +2124,21 @@ async function boot() {
   initPanel();
   initSheet();
   initDrawer();
-  window.addEventListener('resize', () => map?.invalidateSize());
+  // A turned phone or a resized window: the map takes its new size, and when the
+  // width changed (not just the height, as when a keyboard opens) what the page
+  // is about is brought back into sight beside or above the panel.
+  let lastWidth = window.innerWidth, refit = 0;
+  window.addEventListener('resize', () => {
+    map?.invalidateSize();
+    if (!map || Math.abs(window.innerWidth - lastWidth) < 60) return;
+    lastWidth = window.innerWidth;
+    clearTimeout(refit);
+    refit = setTimeout(() => {
+      if ($('#screen-main').hidden) return;
+      const pts = viewPoints();
+      if (pts.length > 1) fitTo(pts, { maxZoom: 16, animate: false });
+    }, 250);
+  });
   ratingsSource().then((src) => { ratingsOn = !!src; ratingsName = src === 'tripadvisor' ? 'Tripadvisor' : src || ''; });
   getConfig().then((c) => {
     if (c.version) { $('#app-version').hidden = false; $('#app-version').textContent = `Version ${c.version}`; }

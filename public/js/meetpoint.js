@@ -83,7 +83,7 @@ const timeout = (promise, ms) => Promise.race([promise, new Promise((_, rej) => 
  * candidate: people × candidates. Falls back to straight-line estimates for a
  * way of travelling whose service does not answer.
  */
-async function evaluate(people, cands, { travelTimes, signal }) {
+async function evaluate(people, cands, { travelTimes, signal, down = new Set() }) {
   const times = people.map(() => cands.map(() => null));
   const dists = people.map(() => cands.map(() => null));
   let snapped = null, snappedBy = null;
@@ -93,6 +93,9 @@ async function evaluate(people, cands, { travelTimes, signal }) {
   people.forEach((p, i) => (groups[p.mode === 'transit' ? 'walk' : p.mode] || groups.walk).push(i));
   await Promise.all(Object.entries(groups).map(async ([mode, idx]) => {
     if (!idx.length) return;
+    // The service did not answer for this way of travelling a moment ago (`down`
+    // is shared by one search): estimate straight away rather than wait again.
+    if (down.has(mode)) { approx = true; for (const pi of idx) estimate(pi); return; }
     try {
       const t = await timeout(travelTimes(mode, idx.map((i) => people[i]), cands, { signal }), 12000);
       if (t.destinations?.length === cands.length && (!snapped || SNAP_ORDER[mode] < SNAP_ORDER[snappedBy])) { snapped = t.destinations; snappedBy = mode; }
@@ -108,6 +111,7 @@ async function evaluate(people, cands, { travelTimes, signal }) {
       });
     } catch (err) {
       if (signal?.aborted) throw err;
+      down.add(mode);
       approx = true;
       for (const pi of idx) estimate(pi);
     }
@@ -143,7 +147,8 @@ async function evaluate(people, cands, { travelTimes, signal }) {
 }
 
 /** Move a spot onto the nearest street people can walk on (when no one walks, spots sit on roads). */
-async function onFoot(spot, from, { travelTimes, signal }) {
+async function onFoot(spot, from, { travelTimes, signal, down }) {
+  if (down?.has('walk')) return spot; // the walking service is not answering: leave the spot where it is
   try {
     const t = await timeout(travelTimes('walk', [from], [spot], { signal }), 8000);
     const d = t.destinations?.[0];
@@ -160,14 +165,21 @@ async function onFoot(spot, from, { travelTimes, signal }) {
  * picked among stops everyone can reach, by real times. Others' times to the
  * most promising stops come from the routing service. Null if it can't be done.
  */
-async function viaStops(people, { rule, transitReach, travelTimes, directions, time, box, signal, onStatus }) {
+async function viaStops(people, { rule, transitReach, travelTimes, directions, time, box, signal, onStatus, down }) {
   const riders = people.map((p, i) => (p.mode === 'transit' ? i : -1)).filter((i) => i >= 0);
   // Look comfortably further than the longest trip is likely to be.
   const mid = centroid(people);
   const longest = Math.max(...riders.map((i) => estimateSeconds('transit', haversine(people[i].lat, people[i].lon, mid.lat, mid.lon))));
   const max = Math.max(40, Math.min(120, Math.ceil((longest * 2.2) / 60)));
   onStatus('Checking public transport…');
-  const reach = await Promise.all(riders.map((i) => timeout(transitReach(people[i], { box, max, time, signal }), 15000)));
+  let reach;
+  try {
+    reach = await Promise.all(riders.map((i) => timeout(transitReach(people[i], { box, max, time, signal }), 15000)));
+  } catch (err) {
+    // No answer at all in that time: the timetable checks further on would only wait again.
+    if (err?.message === 'timeout') down?.add('transit');
+    throw err;
+  }
   const key = (lat, lon) => `${Math.round(lat * 1000)},${Math.round(lon * 1000)}`;
   const maps = reach.map((r) => new Map((r?.cells || []).map((c) => [key(c[0], c[1]), c])));
   const common = [...maps[0].keys()].filter((k) => maps.every((m) => m.has(k)));
@@ -186,7 +198,7 @@ async function viaStops(people, { rule, transitReach, travelTimes, directions, t
     // Walkers, cyclists and drivers: real times to the 60 most promising stops.
     const pre = makeScore(rule, rows);
     rows = rows.map((r) => ({ ...r, score: pre(r.times) })).sort((a, b) => a.score - b.score).slice(0, 60);
-    const measured = await evaluate(others.map((i) => people[i]), rows.map((r) => ({ lat: r.lat, lon: r.lon })), { travelTimes, signal });
+    const measured = await evaluate(others.map((i) => people[i]), rows.map((r) => ({ lat: r.lat, lon: r.lon })), { travelTimes, signal, down });
     others.forEach((pi, k) => rows.forEach((r, j) => {
       r.times[pi] = measured[j].times[k];
       r.dists[pi] = measured[j].dists[k] ?? r.dists[pi];
@@ -252,12 +264,13 @@ async function viaStops(people, { rule, transitReach, travelTimes, directions, t
  */
 export async function findMeetingPoint(people, { rule = 'similar', travelTimes, directions, checkTimes, transitReach, time, signal, onStatus = () => {} } = {}) {
   if (people.length < 2) throw new Error('Add at least two people');
+  const down = new Set(); // ways of travelling whose routing service did not answer during this search
 
   // With public transport riders: pick among stops, by real timetables, when possible.
   if (transitReach && people.some((p) => p.mode === 'transit')) {
     try {
       const box = paddedBBox(people, 0.2, Math.max(400, span(people) * 0.45));
-      const r = await viaStops(people, { rule, transitReach, travelTimes, directions, time, box, signal, onStatus });
+      const r = await viaStops(people, { rule, transitReach, travelTimes, directions, time, box, signal, onStatus, down });
       if (r) return r;
     } catch (err) {
       if (signal?.aborted) throw err;
@@ -281,7 +294,7 @@ export async function findMeetingPoint(people, { rule = 'similar', travelTimes, 
   const sec = smallestEnclosingCircle(people);
   let cellLat = (box.n - box.s) / 6, cellLon = (box.e - box.w) / 6;
   onStatus('Finding the fairest spot…');
-  add(await evaluate(people, [...grid(box, 7), centroid(people), { lat: sec.lat, lon: sec.lon }], { travelTimes, signal }));
+  add(await evaluate(people, [...grid(box, 7), centroid(people), { lat: sec.lat, lon: sec.lon }], { travelTimes, signal, down }));
 
   // Then zoom in around the best spot so far, until the grid is about 200 m apart.
   for (let round = 0; round < 3; round++) {
@@ -290,7 +303,7 @@ export async function findMeetingPoint(people, { rule = 'similar', travelTimes, 
     const cellM = Math.max(cellLat * 111320, cellLon * 111320 * Math.cos((b.lat * Math.PI) / 180));
     if (round > 0 && cellM < 200) break;
     const fine = { s: b.lat - cellLat, n: b.lat + cellLat, w: b.lon - cellLon, e: b.lon + cellLon };
-    add(await evaluate(people, grid(fine, 5), { travelTimes, signal }));
+    add(await evaluate(people, grid(fine, 5), { travelTimes, signal, down }));
     cellLat /= 2; cellLon /= 2;
   }
   if (!all.some((r) => Number.isFinite(r.score))) throw new Error('No spot can be reached by everyone');
@@ -320,7 +333,7 @@ export async function findMeetingPoint(people, { rule = 'similar', travelTimes, 
       });
       const pick = checked.reduce((a, b) => (b.score < a.score ? b : a));
       if (pick.known.some(Boolean)) {
-        if (pick.snappedBy && pick.snappedBy !== 'walk') Object.assign(pick, await onFoot(pick, people[0], { travelTimes, signal }));
+        if (pick.snappedBy && pick.snappedBy !== 'walk') Object.assign(pick, await onFoot(pick, people[0], { travelTimes, signal, down }));
         return {
           meet: { lat: pick.lat, lon: pick.lon },
           times: pick.times.map((s) => Math.round(s)),
@@ -340,7 +353,7 @@ export async function findMeetingPoint(people, { rule = 'similar', travelTimes, 
   const riders = people.map((p, i) => (p.mode === 'transit' ? i : -1)).filter((i) => i >= 0);
   const real = people.map((p) => p.mode !== 'transit');
   let chosen = best();
-  if (riders.length && directions) {
+  if (riders.length && directions && !down.has('transit')) {
     const top = topSpots(2);
     onStatus('Checking public transport…');
     const score = makeScore(rule, all);
@@ -365,7 +378,7 @@ export async function findMeetingPoint(people, { rule = 'similar', travelTimes, 
   }
   if (chosen.approx) real.fill(false);
   // Nobody walks: the spot sits on the road network; move it onto a walkable street.
-  if (chosen.snappedBy && chosen.snappedBy !== 'walk') Object.assign(chosen, await onFoot(chosen, people[0], { travelTimes, signal }));
+  if (chosen.snappedBy && chosen.snappedBy !== 'walk') Object.assign(chosen, await onFoot(chosen, people[0], { travelTimes, signal, down }));
   return {
     meet: { lat: chosen.lat, lon: chosen.lon },
     times: chosen.times.map((t) => Math.round(t)),

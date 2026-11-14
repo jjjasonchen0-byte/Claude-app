@@ -192,3 +192,77 @@ test('server: a stalled routing request is sent again and the first answer wins;
     fs.rmSync(process.env.DATA_FILE, { force: true });
   }
 });
+
+// ---------------------------------------------------------------- the browser's side
+
+/** Stand-in for fetch: `answer(url, init)` returns [status, body] (an object is sent as JSON), or a promise of it. */
+function withFetch(answer, run) {
+  const real = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, init = {}) => {
+    calls.push(String(url));
+    const [status, body] = await answer(String(url), init);
+    const json = typeof body === 'object';
+    return new Response(json ? JSON.stringify(body) : body, { status, headers: { 'Content-Type': json ? 'application/json' : 'text/html' } });
+  };
+  return run(calls).finally(() => { globalThis.fetch = real; });
+}
+
+test('browser: "no route" from the Meet server stands; the routing service is not asked a second time', async () => {
+  const { getDirections } = await import('../../public/js/directions.js');
+  await withFetch(() => [404, { error: 'No route found' }], async (calls) => {
+    await assert.rejects(getDirections('walk', { lat: 10.1, lon: 20.1 }, { lat: 10.2, lon: 20.2 }), (err) => err.status === 404 && /No route found/.test(err.message));
+    assert.equal(calls.length, 1);
+    assert.match(calls[0], /^\/api\/directions/);
+  });
+});
+
+test('browser: with no Meet server (a bare 404, or a front page for every address) the routing service is asked directly', async () => {
+  const { getDirections } = await import('../../public/js/directions.js');
+  for (const [k, server] of [[404, 'Not found'], [200, '<html>the app</html>']].entries()) {
+    await withFetch((url) => (url.startsWith('/api/') ? server : [200, fixture('osrm-route.json')]), async (calls) => {
+      const r = await getDirections('walk', { lat: 11.1 + k, lon: 20.1 }, { lat: 11.2 + k, lon: 20.2 });
+      assert.ok(r.duration > 0 && r.geometry.length > 1);
+      assert.equal(calls.length, 2);
+      assert.match(calls[1], /routing\.openstreetmap\.de/);
+    });
+  }
+});
+
+test('browser: an answer that is not a route (a Wi-Fi sign-in page everywhere, an empty object) is a failure, never a half-made route', async () => {
+  const { getDirections, getTravelTimes, getTransitReach } = await import('../../public/js/directions.js');
+  await withFetch(() => [200, '<html>Sign in to this Wi-Fi network</html>'], async () => {
+    await assert.rejects(getDirections('bike', { lat: 12.1, lon: 20.1 }, { lat: 12.2, lon: 20.2 }));
+    await assert.rejects(getTravelTimes('walk', [{ lat: 12.1, lon: 20.1 }], [{ lat: 12.2, lon: 20.2 }]));
+    await assert.rejects(getTransitReach({ lat: 12.1, lon: 20.1 }, { box: { s: 12, w: 20, n: 13, e: 21 } }));
+  });
+  await withFetch(() => [200, {}], async () => {
+    await assert.rejects(getDirections('drive', { lat: 13.1, lon: 20.1 }, { lat: 13.2, lon: 20.2 }), (err) => err.status === 502);
+    await assert.rejects(getDirections('transit', { lat: 13.1, lon: 20.1 }, { lat: 13.2, lon: 20.2 }), (err) => err.status === 502);
+    await assert.rejects(getTravelTimes('walk', [{ lat: 13.1, lon: 20.1 }], [{ lat: 13.2, lon: 20.2 }]), (err) => err.status === 502);
+    await assert.rejects(getTransitReach({ lat: 13.1, lon: 20.1 }, { box: { s: 13, w: 20, n: 14, e: 21 } }), (err) => err.status === 502);
+  });
+});
+
+test('browser: a request cancelled by the search that started it is asked again for a later search sharing it', async () => {
+  const { getTravelTimes } = await import('../../public/js/directions.js');
+  const table = { durations: [[100]], distances: [[130]], destinations: [[14.2, 20.2]] };
+  let n = 0;
+  await withFetch((url, init) => {
+    n++;
+    if (n === 1) return new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))); // never answers; cancelled
+    return [200, table];
+  }, async (calls) => {
+    const first = new AbortController(), second = new AbortController();
+    const args = ['walk', [{ lat: 14.1, lon: 20.1 }], [{ lat: 14.2, lon: 20.2 }]];
+    const a = getTravelTimes(...args, { signal: first.signal });
+    const b = getTravelTimes(...args, { signal: second.signal }); // shares the first one's request
+    first.abort();
+    await assert.rejects(a, (err) => err.name === 'AbortError');
+    assert.deepEqual((await b).durations, [[100]]);
+    assert.equal(calls.length, 2);
+    // and the answer is kept for whoever asks next
+    assert.deepEqual((await getTravelTimes(...args)).durations, [[100]]);
+    assert.equal(calls.length, 2);
+  });
+});

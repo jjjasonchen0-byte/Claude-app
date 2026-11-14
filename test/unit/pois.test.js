@@ -92,3 +92,13 @@ test('places: when Overpass is slow, Photon steps in after a moment', async () =
     assert.ok(Date.now() - t0 < 350, `took ${Date.now() - t0} ms`);
   } finally { s.restore(); }
 });
+
+test('a place whose image link has a stray % still loads with the rest of the list', () => {
+  const pois = parsePois([
+    { type: 'node', id: 1, lat: 51.5, lon: -0.1, tags: { name: 'Odd Museum', tourism: 'museum', image: 'https://commons.wikimedia.org/wiki/File:100%_odd.jpg' } },
+    { type: 'node', id: 2, lat: 51.5, lon: -0.1, tags: { name: 'Fine Museum', tourism: 'museum', image: 'https://commons.wikimedia.org/wiki/File:Fine%20museum.jpg' } },
+  ], { lat: 51.5, lon: -0.1 });
+  assert.equal(pois.length, 2);
+  assert.equal(pois.find((p) => p.name === 'Fine Museum').commons, 'File:Fine museum.jpg');
+  assert.match(pois.find((p) => p.name === 'Odd Museum').commons, /^File:100%_odd\.jpg$/);
+});

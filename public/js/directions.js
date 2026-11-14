@@ -219,12 +219,52 @@ function cached(key, signal, make) {
   return promise;
 }
 
-async function getJson(url, init) {
-  const res = await fetch(url, init);
-  let data = null;
-  try { data = await res.json(); } catch { /* not JSON */ }
+// The Meet server gives up on a routing service after about 25 seconds; a
+// request still unanswered after this long is not going to be.
+const GIVE_UP_MS = 30000;
+
+async function getJson(url, init = {}) {
+  // The caller's own cancel still works; on top of it, a time limit, so nothing waits for good.
+  const ctrl = new AbortController();
+  const outer = init.signal;
+  const onAbort = () => ctrl.abort();
+  if (outer?.aborted) ctrl.abort();
+  outer?.addEventListener('abort', onAbort);
+  let timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; ctrl.abort(); }, GIVE_UP_MS);
+  let res, data = null;
+  try {
+    res = await fetch(url, { ...init, signal: ctrl.signal });
+    try { data = await res.json(); } catch { /* not JSON */ }
+  } catch (err) {
+    if (timedOut && !outer?.aborted) throw Object.assign(new Error('No answer in time'), { status: 504 });
+    throw err;
+  } finally {
+    clearTimeout(timer);
+    outer?.removeEventListener('abort', onAbort);
+  }
   if (!res.ok) throw Object.assign(new Error(data?.error || `Request failed (${res.status})`), { status: res.status, data });
+  // "OK" with something that isn't data (a Wi-Fi sign-in page, a host that
+  // answers every address with its front page) is no answer at all.
+  if (data === null || typeof data !== 'object') throw Object.assign(new Error('Unreadable answer'), { unreadable: true });
   return data;
+}
+
+const unusable = (what) => Object.assign(new Error(`${what} unavailable right now`), { status: 502 });
+/** A route the app can draw and time, or an error: never a half-filled object. */
+function usableRoute(r) {
+  if (!r || !Number.isFinite(r.duration)) throw unusable('Directions');
+  if (r.options !== undefined) {
+    if (!Array.isArray(r.options) || !r.options.length || !r.options.every((o) => o && Array.isArray(o.legs) && Number.isFinite(o.duration))) throw unusable('Directions');
+    for (const o of r.options) for (const l of o.legs) { if (!Array.isArray(l.geometry)) l.geometry = []; l.from ||= {}; l.to ||= {}; }
+  }
+  if (!Array.isArray(r.geometry)) r.geometry = [];
+  return r;
+}
+/** A table of travel times with its rows, or an error. */
+function usableTable(t) {
+  if (!t || !Array.isArray(t.durations)) throw unusable('Travel times');
+  return t;
 }
 
 /** Ask the Meet server; if there is no server (404 / network error), call the provider directly. */
@@ -259,7 +299,7 @@ export function getDirections(mode, from, to, { time, arriveBy = false, alternat
   return cached(key, signal, () => viaServerOr(`/api/directions?${q}`, async () => {
     if (mode === 'transit') return normalizeTransit(await getJson(transitUrl(from, to, { time, arriveBy }), { signal }), { arriveBy });
     return normalizeOsrm(await getJson(osrmRouteUrl(mode, from, to, { alternatives: alt, via: viaPt }), { signal }), mode);
-  }, signal));
+  }, signal).then(usableRoute));
 }
 
 /**
@@ -270,7 +310,8 @@ export function getDirections(mode, from, to, { time, arriveBy = false, alternat
 export function getTransitReach(from, { box, max = 60, time, signal } = {}) {
   const q = new URLSearchParams({ from: ll(from), max: String(max), box: [box.s, box.w, box.n, box.e].map((v) => v.toFixed(4)).join(',') });
   if (time) q.set('time', new Date(time).toISOString());
-  return cached(`reach|${q}`, signal, () => getJson(`/api/transit/reach?${q}`, { signal, credentials: 'same-origin' }));
+  return cached(`reach|${q}`, signal, () => getJson(`/api/transit/reach?${q}`, { signal, credentials: 'same-origin' })
+    .then((r) => { if (!Array.isArray(r.cells)) throw unusable('Public transport times'); return r; }));
 }
 
 /** Travel times from each source to each destination (walk, bike or drive only). */
@@ -278,7 +319,7 @@ export function getTravelTimes(mode, sources, destinations, { signal } = {}) {
   if (mode === 'transit') return Promise.reject(Object.assign(new Error('Not available for public transport'), { status: 400 }));
   const key = ['table', mode, sources.map(ll).join(';'), destinations.map(ll).join(';')].join('|');
   const q = new URLSearchParams({ mode, from: sources.map(ll).join(';'), to: destinations.map(ll).join(';') });
-  return cached(key, signal, () => viaServerOr(`/api/traveltimes?${q}`, async () => normalizeOsrmTable(await getJson(osrmTableUrl(mode, sources, destinations), { signal })), signal));
+  return cached(key, signal, () => viaServerOr(`/api/traveltimes?${q}`, async () => normalizeOsrmTable(await getJson(osrmTableUrl(mode, sources, destinations), { signal })), signal).then(usableTable));
 }
 
 /**
