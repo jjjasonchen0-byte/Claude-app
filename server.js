@@ -130,13 +130,41 @@ const route = (method, pattern, handler) => {
 
 const upstreamCache = new Map(); // url -> { at, ttl, data }
 let transitDay = '', transitCount = 0;
-const visitors = new Map(); // ip -> { start, n }
+const visitors = new Map(); // visitor -> { start, n }
+const everyone = { start: 0, n: 0 };
+// One search is 20 to 40 requests (travel times for a grid of spots, a route
+// each, times to the places in a list); opening a place adds one per person.
+const VISITOR_LIMIT = Number(process.env.RATE_LIMIT) > 0 ? Number(process.env.RATE_LIMIT) : 600;
+const TOTAL_LIMIT = VISITOR_LIMIT * 8; // everyone together, so the free services behind this are never flooded
+const RATE_WINDOW_MS = 10 * 60 * 1000;
 
-function rateLimit(req, max = 240, windowMs = 10 * 60 * 1000) {
-  const ip = req.socket.remoteAddress || 'unknown';
+const PRIVATE_ADDRESS = /^(::1$|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|f[cd][0-9a-f]{2}:|fe[89ab][0-9a-f]:)/i;
+/**
+ * Who a request is from, for the request limits. On a host like Render every
+ * request arrives from the host's own proxy, which reports the visitor in
+ * X-Forwarded-For; counting by the proxy's address would make all visitors
+ * share one allowance. The header is believed only when the request does come
+ * from a proxy (a private address, or a host known to use one).
+ */
+export function clientOf(req) {
+  const direct = String(req.socket?.remoteAddress || 'unknown').replace(/^::ffff:/i, '');
+  const proxied = PRIVATE_ADDRESS.test(direct) || process.env.RENDER || process.env.TRUST_PROXY === '1';
+  const reported = proxied ? String(req.headers?.['x-forwarded-for'] || '').split(',')[0].trim().slice(0, 64) : '';
+  return reported || direct;
+}
+
+function rateLimit(req, max = VISITOR_LIMIT, windowMs = RATE_WINDOW_MS) {
   const now = Date.now();
-  const v = visitors.get(ip);
-  if (!v || now - v.start > windowMs) { visitors.set(ip, { start: now, n: 1 }); return; }
+  if (now - everyone.start > windowMs) { everyone.start = now; everyone.n = 0; }
+  if (++everyone.n > TOTAL_LIMIT) throw new HttpError(429, 'Meet is very busy right now. Try again in a few minutes.');
+  const who = clientOf(req);
+  const v = visitors.get(who);
+  if (!v || now - v.start > windowMs) {
+    // Forget visitors whose ten minutes are up, so the list stays small.
+    if (visitors.size > 2000) for (const [k, x] of visitors) if (now - x.start > windowMs) visitors.delete(k);
+    visitors.set(who, { start: now, n: 1 });
+    return;
+  }
   if (++v.n > max) throw new HttpError(429, 'Too many requests — try again in a few minutes');
 }
 
@@ -198,8 +226,11 @@ async function upstream(url, ttlMs, { transit = false } = {}) {
     throw new HttpError(502, 'The directions service could not be reached');
   }
   if (!res.ok && !data) throw new HttpError(502, `The directions service answered ${res.status}`);
+  // A busy or failing service is not an answer: nothing is kept, so the next try asks again.
+  if (res.status === 429 || res.status >= 500) throw new HttpError(502, 'The directions service is busy right now. Try again in a moment.');
   if (upstreamCache.size > 800) upstreamCache.delete(upstreamCache.keys().next().value);
-  upstreamCache.set(url, { at: Date.now(), ttl: ttlMs, data });
+  // "No route between these points" is an answer (sent as an error status): kept, but only for a while.
+  upstreamCache.set(url, { at: Date.now(), ttl: res.ok ? ttlMs : Math.min(ttlMs, 10 * 60 * 1000), data });
   return data;
 }
 
@@ -494,14 +525,12 @@ function compressedBody(file, stat, encoding) {
   return c[encoding];
 }
 
-function serveStatic(req, res) {
-  const url = new URL(req.url, 'http://x');
-  let pathname = decodeURIComponent(url.pathname);
+function serveStatic(req, res, pathname) {
   for (const { prefix, dir } of STATIC_ROOTS) {
     if (!pathname.startsWith(prefix)) continue;
-    let rel = pathname.slice(prefix.length) || 'index.html';
+    const rel = pathname.slice(prefix.length) || 'index.html';
     const file = path.join(dir, rel);
-    if (!file.startsWith(dir)) break; // path traversal guard
+    if (file !== dir && !file.startsWith(dir + path.sep)) break; // path traversal guard
     let stat;
     try { stat = fs.statSync(file); } catch { stat = null; }
     if (stat?.isFile()) {
@@ -521,13 +550,11 @@ function serveStatic(req, res) {
       }
       res.writeHead(200, { ...headers, 'Content-Length': stat.size });
       if (req.method === 'HEAD') return res.end();
-      fs.createReadStream(file).pipe(res);
+      fs.createReadStream(file).on('error', () => res.destroy()).pipe(res);
       return;
     }
-    if (prefix === '/' && !path.extname(rel)) {
-      // Single-page app fallback.
-      return serveStatic({ ...req, url: '/index.html', method: req.method }, res);
-    }
+    // An unknown page (not a file with an extension) gets the app.
+    if (prefix === '/' && !path.extname(rel) && pathname !== '/index.html') return serveStatic(req, res, '/index.html');
     break;
   }
   res.writeHead(404, { 'Content-Type': 'text/plain' });
@@ -536,28 +563,40 @@ function serveStatic(req, res) {
 
 // ---------------------------------------------------------------- server
 
-export const server = http.createServer(async (req, res) => {
+async function handle(req, res) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  const { pathname } = new URL(req.url, 'http://x');
+  let pathname;
+  try { pathname = new URL(req.url, 'http://x').pathname; }
+  catch { throw new HttpError(400, 'Bad request'); }
   if (pathname.startsWith('/api/')) {
     for (const r of routes) {
       if (r.method !== req.method) continue;
       const m = pathname.match(r.re);
       if (!m) continue;
-      const params = Object.fromEntries(r.keys.map((k, i) => [k, decodeURIComponent(m[i + 1])]));
-      try { await r.handler(req, res, params); }
-      catch (err) {
-        const status = err.status || 500;
-        if (status === 500) console.error(err);
-        send(res, status, { error: status === 500 ? 'Something went wrong' : err.message });
-      }
+      let params;
+      try { params = Object.fromEntries(r.keys.map((k, i) => [k, decodeURIComponent(m[i + 1])])); }
+      catch { throw new HttpError(400, 'Bad request'); }
+      await r.handler(req, res, params);
       return;
     }
-    return send(res, 404, { error: 'Not found' });
+    throw new HttpError(404, 'Not found');
   }
-  if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, { error: 'Method not allowed' });
-  serveStatic(req, res);
+  if (req.method !== 'GET' && req.method !== 'HEAD') throw new HttpError(405, 'Method not allowed');
+  try { pathname = decodeURIComponent(pathname); }
+  catch { throw new HttpError(400, 'Bad request'); }
+  serveStatic(req, res, pathname);
+}
+
+// Nothing a request does may take the server down: whatever goes wrong, it
+// gets an answer (a 500 at worst) and the next request is served as usual.
+export const server = http.createServer((req, res) => {
+  handle(req, res).catch((err) => {
+    const status = err.status || 500;
+    if (status === 500) console.error(err);
+    if (res.headersSent) { res.destroy(); return; }
+    send(res, status, { error: status === 500 ? 'Something went wrong' : err.message });
+  });
 });
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
@@ -567,6 +606,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     console.log(tripadvisor.enabled ? 'Ratings, photos and reviews: Tripadvisor' : 'Ratings: off (set TRIPADVISOR_API_KEY to show Tripadvisor ratings, photos and reviews)');
     console.log(google.enabled ? `Map and directions: Google (daily caps: ${JSON.stringify(google.usage().caps)})` : 'Map and directions: OpenFreeMap, OSRM and Transitous (set GOOGLE_MAPS_API_KEY for Google)');
   });
+  // A mistake somewhere in the background is logged, not fatal.
+  process.on('unhandledRejection', (err) => console.error('Unhandled:', err));
   const shutdown = () => { store.flush(); process.exit(0); };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
