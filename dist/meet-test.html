@@ -905,8 +905,8 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 #screen-main.flooding .status-chip { top: auto; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
 /* Everyone as a glowing ring with their name tag; the meeting point keeps its label. */
 .flooding .avatar-pin {
-  background: var(--flood-glass); color: color-mix(in srgb, var(--c) var(--flood-tint), var(--flood-edge)); border-color: var(--c);
-  box-shadow: 0 0 16px color-mix(in srgb, var(--c) 70%, transparent), 0 1px 3px rgba(0, 0, 0, 0.25);
+  background: var(--flood-glass); color: var(--flood-ink); border-color: var(--c);
+  box-shadow: 0 0 16px var(--c), 0 1px 3px rgba(0, 0, 0, 0.25);
 }
 .flooding .avatar-pin::after { border-top-color: var(--c); }
 .flooding .leaflet-tooltip.label:not(.meet-label) { display: none; }
@@ -917,8 +917,9 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .flood-pill-icon { width: 0; height: 0; }
 .flood-pill {
   position: absolute; left: 0; bottom: 56px; transform: translateX(-50%); white-space: nowrap; padding: 3px 8px; border-radius: 6px;
-  border: 1.5px solid var(--c); background: var(--flood-glass); color: color-mix(in srgb, var(--c) var(--flood-tint), var(--flood-edge));
-  font: 700 12.5px/1.25 var(--font); box-shadow: 0 0 12px color-mix(in srgb, var(--c) 45%, transparent); animation: hud-in 0.4s ease both;
+  border: 1.5px solid var(--c); background: var(--flood-glass); color: var(--flood-ink);
+  font: 700 12.5px/1.25 var(--font); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25); animation: hud-in 0.4s ease both;
+}
 }
 
 .app-note { margin: 4px 20px 0; text-align: center; }
@@ -959,7 +960,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .chev { color: var(--text-3); flex: none; }
 .avatar {
   --c: var(--accent); width: 36px; height: 36px; border-radius: 50%; flex: none; display: grid; place-items: center;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--c) 78%, #fff), var(--c)); color: #fff; font: 600 15px/1 var(--font-display);
+  background: var(--c); color: #fff; font: 600 15px/1 var(--font-display);
 }
 .avatar.sm { width: 30px; height: 30px; font-size: 13px; }
 .tile { --c: var(--accent); width: 32px; height: 32px; border-radius: 9px; flex: none; display: grid; place-items: center; background: var(--c); color: #fff; }
@@ -1065,7 +1066,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 /* ---------------------------------------------------------------- map markers */
 .avatar-pin {
   --c: var(--accent); position: relative; width: 38px; height: 38px; border-radius: 50%; border: 3px solid #fff; display: grid; place-items: center;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--c) 78%, #fff), var(--c)); color: #fff; font: 700 15px/1 var(--font-display);
+  background: var(--c); color: #fff; font: 700 15px/1 var(--font-display);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
 }
 .avatar-pin::after { content: ""; position: absolute; left: 50%; bottom: -9px; transform: translateX(-50%); border: 6px solid transparent; border-top: 7px solid #fff; border-bottom: 0; }
@@ -1263,7 +1264,7 @@ img.broken { display: none; }
 .thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.3s; z-index: 1; }
 .thumb img.in { opacity: 1; }
 .thumb-art { position: absolute; inset: 0; display: grid; place-items: center; color: #fff;
-  background: radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--c) 55%, #fff), var(--c)); }
+  background: var(--c); }
 .thumb .num { position: absolute; left: 4px; top: 4px; width: 20px; height: 20px; font-size: 11px; z-index: 2; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); }
 .cell-meta { display: flex; align-items: center; gap: 0; font-size: 13px; color: var(--text-2); margin-top: 2px; white-space: nowrap; overflow: hidden; }
 .cell-meta .dot { margin: 0 5px; }
@@ -1280,7 +1281,7 @@ img.broken { display: none; }
 .g-item img.in { opacity: 1; }
 .g-item.skel { display: block; height: auto; border-radius: 14px; }
 .hero-art { height: 120px; border-radius: 16px; margin: 0 0 14px; display: grid; place-items: center; color: #fff;
-  background: radial-gradient(circle at 25% 20%, color-mix(in srgb, var(--c) 50%, #fff), var(--c) 70%); }
+  background: var(--c); }
 .place-title { margin: 0 4px 14px; display: grid; gap: 4px; }
 .place-title h2 { font-size: 26px; }
 .place-rating { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
@@ -1347,6 +1348,19 @@ img.broken { display: none; }
 .lb-prev { left: 14px; top: 50%; transform: translateY(-50%); }
 .lb-next { right: 14px; top: 50%; transform: translateY(-50%); }
 @media (max-width: 759px) { .lb-prev, .lb-next { display: none !important; } }
+
+/* ---------------------------------------------------------------- richer colours */
+/* Each person's colour as a soft gradient or tint, where the browser can mix colours (not Safari before 16.2;
+   there the plain colour above is used). Kept last so it wins over the plain rules. */
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  .flooding .avatar-pin {
+    color: color-mix(in srgb, var(--c) var(--flood-tint), var(--flood-edge));
+    box-shadow: 0 0 16px color-mix(in srgb, var(--c) 70%, transparent), 0 1px 3px rgba(0, 0, 0, 0.25);
+  }
+  .flood-pill { color: color-mix(in srgb, var(--c) var(--flood-tint), var(--flood-edge)); box-shadow: 0 0 12px color-mix(in srgb, var(--c) 45%, transparent); }
+  .avatar, .avatar-pin { background: linear-gradient(180deg, color-mix(in srgb, var(--c) 78%, #fff), var(--c)); }
+  .thumb-art { background: radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--c) 55%, #fff), var(--c)); }
+  .hero-art { background: radial-gradient(circle at 25% 20%, color-mix(in srgb, var(--c) 50%, #fff), var(--c) 70%); }
 
 :root { --map-sand: #f4ead0; --map-path: #d9d4c9; --map-forest: #dfeed6; --map-motorway: #fbd38d; --map-motorway-casing: #f0bb6a; --map-land: #f7f6f2; --map-park: #d6ecc9; --map-water: #b4dcf7; --map-road: #ffffff; --map-casing: #ebe8e1; --map-major: #fdf0c4; --map-major-casing: #f0dc9c; --map-label: #8a8a8e; --map-halo: rgba(255,255,255,.95); --map-park-label: #4f8a48; --map-water-label: #4b88bf; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --map-sand: #3b3628; --map-path: #3d3e42; --map-forest: #1d2620; --map-motorway: #6a5232; --map-motorway-casing: #4f3d25; --map-land: #1f2023; --map-park: #203024; --map-water: #152a3d; --map-road: #36373b; --map-casing: #28292c; --map-major: #4f4a3a; --map-major-casing: #3c382c; --map-label: #98989d; --map-halo: rgba(20,20,22,.9); --map-park-label: #79b378; --map-water-label: #6aa5d9; } }
@@ -2069,6 +2083,7 @@ async function findMeetingPoint(people, { rule = 'similar', travelTimes, directi
       const ok = await Promise.all(riders.map(async (i) => {
         try {
           const d = await timeout(directions('transit', people[i], cand, { signal }), 9000);
+          if (!Number.isFinite(d?.duration)) return false; // an answer without a time: keep the estimate
           // Walking straight there can beat the timetable.
           times[i] = Math.min(d.duration, cand.dists[i] != null ? cand.dists[i] / SPEEDS.walk : Infinity);
           return true;
@@ -2451,6 +2466,16 @@ class FloodAnimation {
 
   /** Hurry to the end: the remaining steps finish at once. */
   skip() { this.skipping = true; }
+
+  /** The app's theme changed while the animation (or its routes) is showing. */
+  setTheme(theme) {
+    const th = THEMES[theme] || THEMES.dark;
+    if (th === this.theme || this.dead) return;
+    this.theme = th;
+    for (const f of this.shown) { f.color = shade(this.people[f.i].color, th.shade); f.front = th.front(this.people[f.i].color); }
+    for (const r of this.routes || []) r.glow = shade(r.color, th.shade);
+    this.redrawAll();
+  }
 
   destroy() {
     this.dead = true;
@@ -2938,13 +2963,6 @@ class FloodAnimation {
   }
 }
 
-/** How many of a flood's pieces of street (in the order they finish) are finished by time c. */
-function upTo(fl, c) {
-  let lo = 0, hi = fl.count;
-  while (lo < hi) { const mid = (lo + hi) >> 1; if (fl.t1[fl.byEnd[mid]] <= c) lo = mid + 1; else hi = mid; }
-  return lo;
-}
-
 /** Split a projected line into segments timed evenly by length between t0 and t1. */
 function addTimed(out, raw, t0, t1, mode) {
   // Repeated points would make zero-length steps (and uneven dots).
@@ -3097,6 +3115,13 @@ function poiQuery(center, radius) {
   return `[out:json][timeout:12];(${sel.join(';')};);out center tags 400;`;
 }
 
+/** The Wikimedia Commons file an image link points at ("File:…"), or ''. */
+function commonsFile(link) {
+  const m = /commons\.wikimedia\.org\/wiki\/(File:[^?#]+)/.exec(link || '');
+  if (!m) return '';
+  try { return decodeURIComponent(m[1]); } catch { return m[1]; } // a stray % in the link
+}
+
 function formatAddress(tags) {
   const street = [tags['addr:housenumber'], tags['addr:street']].filter(Boolean).join(' ');
   return [street, tags['addr:suburb'] || tags['addr:city']].filter(Boolean).join(', ');
@@ -3142,7 +3167,7 @@ function parsePois(elements, center) {
       vegetarian: /yes|only/.test(tags['diet:vegetarian'] || ''),
       // Free photo sources: a Wikidata item or a Wikimedia Commons file.
       wikidata: /^Q\d+$/.test(tags.wikidata || '') ? tags.wikidata : '',
-      commons: tags.wikimedia_commons || (/commons\.wikimedia\.org\/wiki\/(File:[^?#]+)/.exec(tags.image || '')?.[1] ? decodeURIComponent(/commons\.wikimedia\.org\/wiki\/(File:[^?#]+)/.exec(tags.image)[1]) : ''),
+      commons: tags.wikimedia_commons || commonsFile(tags.image),
       fromCenter: haversine(center.lat, center.lon, lat, lon),
     });
   }
@@ -3254,12 +3279,18 @@ function photonElements(features) {
   });
 }
 
-async function photonPois(center, radiusM, { signal } = {}) {
+async function photonPois(center, radiusM, { signal, timeoutMs = 8000 } = {}) {
+  // Like Overpass, Photon gets a time limit: a request that never answers must not hold the search up.
+  const ctrl = new AbortController();
+  const onAbort = () => ctrl.abort();
+  if (signal?.aborted) ctrl.abort();
+  signal?.addEventListener('abort', onAbort);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   const results = await Promise.allSettled(PHOTON_GROUPS.map(async (tags) => {
-    const res = await fetch(photonUrl(center, radiusM, tags), { signal, headers: { Accept: 'application/json' } });
+    const res = await fetch(photonUrl(center, radiusM, tags), { signal: ctrl.signal, headers: { Accept: 'application/json' } });
     if (!res.ok) throw new Error(`Photon ${res.status}`);
     return (await res.json()).features;
-  }));
+  })).finally(() => { clearTimeout(timer); signal?.removeEventListener('abort', onAbort); });
   const ok = results.filter((r) => r.status === 'fulfilled');
   if (!ok.length) throw new Error('Places could not be loaded');
   return parsePois(photonElements(ok.flatMap((r) => r.value)), center)
@@ -3496,7 +3527,8 @@ function parseHours(spec) {
   if (s === '24/7') return DAYS.map(() => [[0, 24 * 60]]);
   const week = DAYS.map(() => []);
   // "Mo-Fr 09:00-17:00, Sa 10:00-14:00" uses commas between rules too.
-  const rules = s.replace(/\|\|/g, ';').split(';').flatMap((r) => r.split(/(?<=[\d+]|off|closed),\s*(?=(?:Mo|Tu|We|Th|Fr|Sa|Su)\b)/));
+  // (Written without a look-behind: Safari before 16.4 can't read one, and the whole app would fail to load.)
+  const rules = s.replace(/\|\|/g, ';').replace(/([\d+]|off|closed),\s*(?=(?:Mo|Tu|We|Th|Fr|Sa|Su)\b)/g, '$1;').split(';');
   for (const raw of rules) {
     const rule = raw.trim().replace(/\s*"[^"]*"\s*$/, ''); // drop comments
     if (!rule) continue;
@@ -3538,7 +3570,7 @@ function openStatus(spec, date = new Date(), { fmt = defaultFmt } = {}) {
   // Merge touching spans (e.g. 00:00-24:00 every day).
   const merged = [];
   for (const sp of spans) {
-    const last = merged.at(-1);
+    const last = merged[merged.length - 1];
     if (last && sp[0] <= last[1]) last[1] = Math.max(last[1], sp[1]); else merged.push([...sp]);
   }
   const cur = merged.find(([a, b]) => a <= now && now < b);
@@ -3747,7 +3779,7 @@ function normalizeItinerary(it) {
   return {
     duration: Math.round(it.duration || 0),
     start: it.startTime || legs[0]?.from.time || null,
-    end: it.endTime || legs.at(-1)?.to.time || null,
+    end: it.endTime || legs[legs.length - 1]?.to.time || null,
     transfers: it.transfers ?? Math.max(0, legs.filter((l) => !isWalkLeg(l)).length - 1),
     legs,
   };
@@ -3776,6 +3808,22 @@ function normalizeTransit(json, { arriveBy = false } = {}) {
 // ---------------------------------------------------------------- browser client
 
 const cache = new Map();
+const MAX_CACHED = 300;
+
+/**
+ * One request per key: whoever asks for the same thing while it is running,
+ * or afterwards, gets the same answer. A request cancelled by whoever started
+ * it (an earlier search) is not an answer for anyone else: they ask again.
+ */
+function cached(key, signal, make) {
+  const hit = cache.get(key);
+  if (hit) return hit.catch((err) => { if (err?.name === 'AbortError' && !signal?.aborted) return cached(key, signal, make); throw err; });
+  const promise = make();
+  cache.set(key, promise);
+  if (cache.size > MAX_CACHED) cache.delete(cache.keys().next().value); // the oldest goes
+  promise.catch(() => { if (cache.get(key) === promise) cache.delete(key); });
+  return promise;
+}
 
 async function getJson(url, init) {
   const res = await fetch(url, init);
@@ -3791,7 +3839,9 @@ async function viaServerOr(path, direct, signal) {
     return await getJson(path, { signal, credentials: 'same-origin' });
   } catch (err) {
     if (signal?.aborted) throw err;
-    if (err.status && err.status !== 404 && err.status !== 405) throw err;
+    // The Meet server's own answer ("No route found" comes as a 404 with a message) stands;
+    // only a missing server (a bare 404 or 405, or no connection) sends the request to the provider.
+    if (err.status && (err.data?.error || (err.status !== 404 && err.status !== 405))) throw err;
   }
   return direct();
 }
@@ -3806,20 +3856,16 @@ function getDirections(mode, from, to, { time, arriveBy = false, alternatives = 
   const viaPt = road && via ? via : null;
   const alt = road && alternatives && !viaPt;
   const key = [mode, ll(from), ll(to), time || '', arriveBy, alt, viaPt ? ll(viaPt) : '', google].join('|');
-  if (cache.has(key)) return cache.get(key);
   const q = new URLSearchParams({ mode, from: ll(from), to: ll(to) });
   if (google) q.set('g', '1');
   if (time) q.set('time', new Date(time).toISOString());
   if (arriveBy) q.set('arriveBy', '1');
   if (alt) q.set('alt', '1');
   if (viaPt) q.set('via', ll(viaPt));
-  const promise = viaServerOr(`/api/directions?${q}`, async () => {
+  return cached(key, signal, () => viaServerOr(`/api/directions?${q}`, async () => {
     if (mode === 'transit') return normalizeTransit(await getJson(transitUrl(from, to, { time, arriveBy }), { signal }), { arriveBy });
     return normalizeOsrm(await getJson(osrmRouteUrl(mode, from, to, { alternatives: alt, via: viaPt }), { signal }), mode);
-  }, signal);
-  cache.set(key, promise);
-  promise.catch(() => cache.delete(key));
-  return promise;
+  }, signal));
 }
 
 /**
@@ -3830,24 +3876,15 @@ function getDirections(mode, from, to, { time, arriveBy = false, alternatives = 
 function getTransitReach(from, { box, max = 60, time, signal } = {}) {
   const q = new URLSearchParams({ from: ll(from), max: String(max), box: [box.s, box.w, box.n, box.e].map((v) => v.toFixed(4)).join(',') });
   if (time) q.set('time', new Date(time).toISOString());
-  const key = `reach|${q}`;
-  if (cache.has(key)) return cache.get(key);
-  const promise = getJson(`/api/transit/reach?${q}`, { signal, credentials: 'same-origin' });
-  cache.set(key, promise);
-  promise.catch(() => cache.delete(key));
-  return promise;
+  return cached(`reach|${q}`, signal, () => getJson(`/api/transit/reach?${q}`, { signal, credentials: 'same-origin' }));
 }
 
 /** Travel times from each source to each destination (walk, bike or drive only). */
 function getTravelTimes(mode, sources, destinations, { signal } = {}) {
   if (mode === 'transit') return Promise.reject(Object.assign(new Error('Not available for public transport'), { status: 400 }));
   const key = ['table', mode, sources.map(ll).join(';'), destinations.map(ll).join(';')].join('|');
-  if (cache.has(key)) return cache.get(key);
   const q = new URLSearchParams({ mode, from: sources.map(ll).join(';'), to: destinations.map(ll).join(';') });
-  const promise = viaServerOr(`/api/traveltimes?${q}`, async () => normalizeOsrmTable(await getJson(osrmTableUrl(mode, sources, destinations), { signal })), signal);
-  cache.set(key, promise);
-  promise.catch(() => cache.delete(key));
-  return promise;
+  return cached(key, signal, () => viaServerOr(`/api/traveltimes?${q}`, async () => normalizeOsrmTable(await getJson(osrmTableUrl(mode, sources, destinations), { signal })), signal));
 }
 
 /**
@@ -4812,11 +4849,26 @@ const KEY = 'meet-guest-v1'; // its name from when profiles were optional, kept 
 let memory = null; // used when browser storage is blocked
 
 const blank = () => ({ name: '', home: null, places: [], history: [], settings: {} });
+const newId = () => Math.random().toString(36).slice(2, 11);
+
+const located = (p) => !!p && typeof p === 'object' && Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lon));
+/** Whatever was stored (by an older version, or damaged), in the shape the app expects. */
+function tidy(d) {
+  const o = d && typeof d === 'object' ? d : {};
+  return {
+    name: typeof o.name === 'string' ? o.name : '',
+    home: located(o.home) ? o.home : null,
+    // (A record saved without an id gets one from its position in the list, the same every time it is read.)
+    places: (Array.isArray(o.places) ? o.places : []).filter(located).map((p, i) => (p.id ? p : { ...p, id: `p${i}` })),
+    history: (Array.isArray(o.history) ? o.history : []).filter(located).map((h, i) => (h.id ? h : { ...h, id: `h${i}` })),
+    settings: o.settings && typeof o.settings === 'object' && !Array.isArray(o.settings) ? o.settings : {},
+  };
+}
 
 function load() {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...blank(), ...JSON.parse(raw) };
+    if (raw) return tidy(JSON.parse(raw));
   } catch { /* fall back to memory */ }
   return memory || blank();
 }
@@ -4826,7 +4878,6 @@ function save(data) {
   try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* memory only */ }
 }
 
-const newId = () => Math.random().toString(36).slice(2, 11);
 const MODES = ['transit', 'walk', 'bike', 'drive'];
 const clean = (p) => ({
   address: String(p.address || '').slice(0, 300),
@@ -4892,8 +4943,8 @@ __m["api"] = { api };
 })();
 // ---- app
 (() => {
-// Meet — app controller: start screen, map, panel views, search flow,
-// optional sign-in and the draggable bottom sheet on phones.
+// Meet — app controller: start screen, map, panel views, search flow and
+// the draggable bottom sheet on phones.
 const { api } = __m["api"];
 const { searchAddress, reverseGeocode, currentPosition } = __m["geocode"];
 const { findMeetingPoint, estimateSeconds, SPEEDS } = __m["meetpoint"];
@@ -5009,7 +5060,7 @@ function everyone() {
   const list = [];
   if (state.user?.home) list.push({ id: 'home', isHome: true, name: 'You', ...state.user.home, mode: state.user.home.mode || state.settings.travel, active: true, color: COLORS[0] });
   state.places.forEach((p, i) => list.push({
-    ...p, mode: p.mode || state.settings.travel, name: p.nickname || shortAddr(p.address) || `Friend ${i + 1}`, color: COLORS[(i + 1) % COLORS.length],
+    ...p, mode: p.mode || state.settings.travel, name: p.nickname || shortAddr(p.address) || `Friend ${i + 1}`, color: COLORS[1 + (i % (COLORS.length - 1))], // never your blue
   }));
   return list;
 }
@@ -5026,6 +5077,8 @@ function attachSearch(root, { near, onPick }) {
   let ctrl;
 
   const close = () => { list.hidden = true; sel = -1; };
+  // A lookup still on its way is dropped when something newer happens (typing on, picking, clearing).
+  const stop = () => { clearTimeout(timer); ctrl?.abort(); ctrl = null; };
   const render = () => {
     list.innerHTML = items.length
       ? items.map((r, i) => `<li role="option" data-i="${i}" aria-selected="${i === sel}">
@@ -5036,23 +5089,25 @@ function attachSearch(root, { near, onPick }) {
   const pick = (i) => {
     const r = items[i];
     if (!r) return;
+    stop();
     close();
     input.value = r.address;
     onPick(r);
   };
   input.addEventListener('input', () => {
-    clearTimeout(timer);
+    stop();
     const q = input.value;
     if (q.trim().length < 3) { close(); return; }
     timer = setTimeout(async () => {
-      ctrl?.abort();
-      ctrl = new AbortController();
+      const mine = ctrl = new AbortController();
       try {
-        items = await searchAddress(q, { near: near?.(), signal: ctrl.signal });
+        const found = await searchAddress(q, { near: near?.(), signal: mine.signal });
+        if (mine.signal.aborted) return;
+        items = found;
         sel = items.length ? 0 : -1;
         if (document.activeElement === input) render();
       } catch (err) {
-        if (err.name !== 'AbortError') { items = []; render(); }
+        if (!mine.signal.aborted) { items = []; if (document.activeElement === input) render(); }
       }
     }, 300);
   });
@@ -5068,7 +5123,7 @@ function attachSearch(root, { near, onPick }) {
     const li = e.target.closest('li[data-i]');
     if (li) { e.preventDefault(); pick(Number(li.dataset.i)); }
   });
-  return { input, clear: () => { input.value = ''; close(); } };
+  return { input, clear: () => { stop(); input.value = ''; close(); } };
 }
 
 // ---------------------------------------------------------------- what is saved on this device
@@ -5078,6 +5133,9 @@ function onUser(user) {
   state.places = user.places || [];
   state.settings = { ...DEFAULT_SETTINGS, ...(user.settings || {}) };
   if (state.settings.mode !== 'total') state.settings.mode = 'similar'; // "fair" from before is now "similar"
+  if (!MODES.some((m) => m.id === state.settings.travel)) state.settings.travel = DEFAULT_SETTINGS.travel;
+  if (!PACE[state.settings.speed]) state.settings.speed = DEFAULT_SETTINGS.speed;
+  if (!['auto', 'light', 'dark'].includes(state.settings.theme)) state.settings.theme = DEFAULT_SETTINGS.theme;
   applyTheme();
   if (!user.home) showHomeScreen(false);
   else enterMain();
@@ -5096,6 +5154,9 @@ async function saveHome(loc) {
   try {
     const { user } = await api.updateMe({ home: { address: loc.address, lat: loc.lat, lon: loc.lon, mode: state.user?.home?.mode || state.settings.travel } });
     state.user = user;
+    // Anything found for the old starting point (a search under way, results, routes) no longer applies.
+    if (map) cancelSearchQuietly();
+    state.sharePlace = null;
     enterMain(true);
   } catch (err) {
     toast(err.message, { error: true });
@@ -5119,7 +5180,8 @@ function initHome() {
       btn.classList.remove('busy');
     }
   };
-  $('#home-cancel').onclick = () => enterMain();
+  // Cancel: back to the map exactly as it was (results and all).
+  $('#home-cancel').onclick = () => { showScreen('screen-main'); map?.invalidateSize(); };
 }
 
 // ---------------------------------------------------------------- map
@@ -5148,6 +5210,7 @@ function initMap() {
       .setContent('<div class="muted">Looking up address…</div>').openOn(map);
     const loc = await reverseGeocode(lat, lng);
     if (!map.hasLayer(popup)) return;
+    if (state.view !== 'people') { map.closePopup(popup); return; }
     const div = document.createElement('div');
     div.innerHTML = `<div style="font-weight:600;max-width:220px">${esc(shortAddr(loc.address))}</div>
       <button class="btn btn-primary">Add this address</button>`;
@@ -5187,7 +5250,8 @@ async function moveAddress(p, ll) {
       state.user = (await api.updateMe({ home: { ...state.user.home, ...patch } })).user;
     } else {
       const { place } = await api.updatePlace(p.id, patch);
-      Object.assign(state.places.find((x) => x.id === p.id), place);
+      const mine = state.places.find((x) => x.id === p.id);
+      if (mine) Object.assign(mine, place);
     }
     toast(`Moved ${p.isHome ? 'your starting point' : p.name}`);
   } catch (err) { toast(err.message, { error: true }); }
@@ -5402,6 +5466,7 @@ function renderPeople() {
 
 /** "Leaving: Now | [date and time]" above the Find button. */
 function leaveRow() {
+  if (state.leaveAt && !leaveTime()) state.leaveAt = ''; // the chosen time has passed: back to "Now"
   const later = state.leaveAt || toLocalInput(nextHalfHour());
   return `<div class="leave-row" role="group" aria-label="When everyone leaves">
     <span class="leave-label">Leaving</span>
@@ -5461,9 +5526,11 @@ async function deletePlace(id) {
     toast(`Removed ${place.nickname || shortAddr(place.address)}`, {
       action: 'Undo',
       onAction: async () => {
-        const { place: restored } = await api.addPlace(place);
-        state.places.splice(idx, 0, restored);
-        render();
+        try {
+          const { place: restored } = await api.addPlace(place);
+          state.places.splice(Math.min(idx, state.places.length), 0, restored);
+          render();
+        } catch (err) { toast(err.message, { error: true }); }
       },
     });
   } catch (err) {
@@ -5475,6 +5542,7 @@ async function deletePlace(id) {
 
 async function patchPlace(id, patch) {
   const p = state.places.find((x) => x.id === id);
+  if (!p) return;
   const before = { ...p };
   Object.assign(p, patch);
   render();
@@ -5502,9 +5570,12 @@ function clearSearchVisuals() {
   poiLayer?.clearLayers();
 }
 
+let radiusAbort = null; // a change of radius still loading its places
 function cancelSearchQuietly() {
   searchAbort?.abort();
   searchAbort = null;
+  radiusAbort?.abort();
+  radiusAbort = null;
   clearSearchVisuals();
   setStatus('');
   state.search = null;
@@ -5588,7 +5659,7 @@ function trackFor(person, route, meet, estimate) {
     const o = route.options[0];
     const t00 = Date.parse(o?.start);
     let t = 0;
-    const pieces = (o?.legs || []).filter((l) => l.geometry.length > 1).map((l) => {
+    const pieces = (o?.legs || []).filter((l) => l.geometry?.length > 1).map((l) => {
       const a = Date.parse(l.from.time);
       const t0 = Number.isFinite(a) && Number.isFinite(t00) ? Math.max(t, (a - t00) / 1000) : t;
       t = t0 + l.duration;
@@ -5598,7 +5669,8 @@ function trackFor(person, route, meet, estimate) {
     pieces.unshift({ pts: [door, pieces[0].pts[0]], t0: 0, t1: 0, mode: 'walk' });
     return { ...base, pieces, duration: Math.max(t, o.duration || 0) };
   }
-  return { ...base, duration: route.duration, pieces: [{ pts: [door, ...route.geometry, end], t0: 0, t1: route.duration, mode: person.mode }] };
+  if (!Number.isFinite(route.duration)) return straight;
+  return { ...base, duration: route.duration, pieces: [{ pts: [door, ...(route.geometry || []), end], t0: 0, t1: route.duration, mode: person.mode }] };
 }
 
 async function findPlaces({ replay = false } = {}) {
@@ -5715,6 +5787,7 @@ async function findPlaces({ replay = false } = {}) {
     console.error(err);
     clearSearchVisuals();
     setStatus('');
+    state.search = null; // nothing half-made left behind
     setView('people');
     toast(err.message || 'Something went wrong. Try again.', { error: true });
   }
@@ -6197,7 +6270,7 @@ function placeOverview(p, d, r, ds) {
   const when = state.when || { type: 'now' };
   const anyTransit = s.people.some((x) => x.mode === 'transit');
   const anyRoad = s.people.some((x) => x.mode !== 'transit');
-  const fromGoogle = ds.some((d) => d?.provider === 'google');
+  const fromGoogle = (state.dir?.results || []).some((r) => r.status === 'ok' && r.data?.provider === 'google');
   const credits = [fromGoogle && ATTRIBUTION.google, !fromGoogle && anyTransit && ATTRIBUTION.transit, !fromGoogle && anyRoad && ATTRIBUTION.routing].filter(Boolean)
     .map((a) => `<a href="${a.url}" target="_blank" rel="noopener">${esc(a.text)}</a>`).join(' · ');
   const site = hrefOf(d.website || p.website);
@@ -6586,9 +6659,11 @@ function initPanel() {
         drawRadius({ fit: true });
         for (const b of $$('[data-action=radius]')) b.classList.toggle('active', b === el);
         el.textContent = '…';
-        const ctrl = new AbortController();
-        searchAbort = ctrl;
+        // Only the latest choice counts: one still loading is dropped.
+        radiusAbort?.abort();
+        const ctrl = radiusAbort = new AbortController();
         await loadPois(s, ctrl.signal, r).catch(() => {});
+        if (ctrl.signal.aborted || state.search !== s) break;
         render();
         break;
       }
@@ -6700,6 +6775,7 @@ function applyTheme() {
   if (t === 'auto') document.documentElement.removeAttribute('data-theme');
   else document.documentElement.setAttribute('data-theme', t);
   if (map) addBasemap();
+  anim?.setTheme(isDark() ? 'dark' : 'light');
 }
 
 function syncSettingsUI() {

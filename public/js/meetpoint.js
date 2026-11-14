@@ -349,6 +349,7 @@ export async function findMeetingPoint(people, { rule = 'similar', travelTimes, 
       const ok = await Promise.all(riders.map(async (i) => {
         try {
           const d = await timeout(directions('transit', people[i], cand, { signal }), 9000);
+          if (!Number.isFinite(d?.duration)) return false; // an answer without a time: keep the estimate
           // Walking straight there can beat the timetable.
           times[i] = Math.min(d.duration, cand.dists[i] != null ? cand.dists[i] / SPEEDS.walk : Infinity);
           return true;

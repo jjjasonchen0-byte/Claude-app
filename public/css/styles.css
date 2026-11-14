@@ -239,8 +239,8 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 #screen-main.flooding .status-chip { top: auto; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
 /* Everyone as a glowing ring with their name tag; the meeting point keeps its label. */
 .flooding .avatar-pin {
-  background: var(--flood-glass); color: color-mix(in srgb, var(--c) var(--flood-tint), var(--flood-edge)); border-color: var(--c);
-  box-shadow: 0 0 16px color-mix(in srgb, var(--c) 70%, transparent), 0 1px 3px rgba(0, 0, 0, 0.25);
+  background: var(--flood-glass); color: var(--flood-ink); border-color: var(--c);
+  box-shadow: 0 0 16px var(--c), 0 1px 3px rgba(0, 0, 0, 0.25);
 }
 .flooding .avatar-pin::after { border-top-color: var(--c); }
 .flooding .leaflet-tooltip.label:not(.meet-label) { display: none; }
@@ -251,8 +251,9 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .flood-pill-icon { width: 0; height: 0; }
 .flood-pill {
   position: absolute; left: 0; bottom: 56px; transform: translateX(-50%); white-space: nowrap; padding: 3px 8px; border-radius: 6px;
-  border: 1.5px solid var(--c); background: var(--flood-glass); color: color-mix(in srgb, var(--c) var(--flood-tint), var(--flood-edge));
-  font: 700 12.5px/1.25 var(--font); box-shadow: 0 0 12px color-mix(in srgb, var(--c) 45%, transparent); animation: hud-in 0.4s ease both;
+  border: 1.5px solid var(--c); background: var(--flood-glass); color: var(--flood-ink);
+  font: 700 12.5px/1.25 var(--font); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25); animation: hud-in 0.4s ease both;
+}
 }
 
 .app-note { margin: 4px 20px 0; text-align: center; }
@@ -293,7 +294,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .chev { color: var(--text-3); flex: none; }
 .avatar {
   --c: var(--accent); width: 36px; height: 36px; border-radius: 50%; flex: none; display: grid; place-items: center;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--c) 78%, #fff), var(--c)); color: #fff; font: 600 15px/1 var(--font-display);
+  background: var(--c); color: #fff; font: 600 15px/1 var(--font-display);
 }
 .avatar.sm { width: 30px; height: 30px; font-size: 13px; }
 .tile { --c: var(--accent); width: 32px; height: 32px; border-radius: 9px; flex: none; display: grid; place-items: center; background: var(--c); color: #fff; }
@@ -399,7 +400,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 /* ---------------------------------------------------------------- map markers */
 .avatar-pin {
   --c: var(--accent); position: relative; width: 38px; height: 38px; border-radius: 50%; border: 3px solid #fff; display: grid; place-items: center;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--c) 78%, #fff), var(--c)); color: #fff; font: 700 15px/1 var(--font-display);
+  background: var(--c); color: #fff; font: 700 15px/1 var(--font-display);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
 }
 .avatar-pin::after { content: ""; position: absolute; left: 50%; bottom: -9px; transform: translateX(-50%); border: 6px solid transparent; border-top: 7px solid #fff; border-bottom: 0; }
@@ -597,7 +598,7 @@ img.broken { display: none; }
 .thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.3s; z-index: 1; }
 .thumb img.in { opacity: 1; }
 .thumb-art { position: absolute; inset: 0; display: grid; place-items: center; color: #fff;
-  background: radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--c) 55%, #fff), var(--c)); }
+  background: var(--c); }
 .thumb .num { position: absolute; left: 4px; top: 4px; width: 20px; height: 20px; font-size: 11px; z-index: 2; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); }
 .cell-meta { display: flex; align-items: center; gap: 0; font-size: 13px; color: var(--text-2); margin-top: 2px; white-space: nowrap; overflow: hidden; }
 .cell-meta .dot { margin: 0 5px; }
@@ -614,7 +615,7 @@ img.broken { display: none; }
 .g-item img.in { opacity: 1; }
 .g-item.skel { display: block; height: auto; border-radius: 14px; }
 .hero-art { height: 120px; border-radius: 16px; margin: 0 0 14px; display: grid; place-items: center; color: #fff;
-  background: radial-gradient(circle at 25% 20%, color-mix(in srgb, var(--c) 50%, #fff), var(--c) 70%); }
+  background: var(--c); }
 .place-title { margin: 0 4px 14px; display: grid; gap: 4px; }
 .place-title h2 { font-size: 26px; }
 .place-rating { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
@@ -681,3 +682,16 @@ img.broken { display: none; }
 .lb-prev { left: 14px; top: 50%; transform: translateY(-50%); }
 .lb-next { right: 14px; top: 50%; transform: translateY(-50%); }
 @media (max-width: 759px) { .lb-prev, .lb-next { display: none !important; } }
+
+/* ---------------------------------------------------------------- richer colours */
+/* Each person's colour as a soft gradient or tint, where the browser can mix colours (not Safari before 16.2;
+   there the plain colour above is used). Kept last so it wins over the plain rules. */
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  .flooding .avatar-pin {
+    color: color-mix(in srgb, var(--c) var(--flood-tint), var(--flood-edge));
+    box-shadow: 0 0 16px color-mix(in srgb, var(--c) 70%, transparent), 0 1px 3px rgba(0, 0, 0, 0.25);
+  }
+  .flood-pill { color: color-mix(in srgb, var(--c) var(--flood-tint), var(--flood-edge)); box-shadow: 0 0 12px color-mix(in srgb, var(--c) 45%, transparent); }
+  .avatar, .avatar-pin { background: linear-gradient(180deg, color-mix(in srgb, var(--c) 78%, #fff), var(--c)); }
+  .thumb-art { background: radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--c) 55%, #fff), var(--c)); }
+  .hero-art { background: radial-gradient(circle at 25% 20%, color-mix(in srgb, var(--c) 50%, #fff), var(--c) 70%); }

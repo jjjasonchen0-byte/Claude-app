@@ -5,11 +5,26 @@ const KEY = 'meet-guest-v1'; // its name from when profiles were optional, kept 
 let memory = null; // used when browser storage is blocked
 
 const blank = () => ({ name: '', home: null, places: [], history: [], settings: {} });
+const newId = () => Math.random().toString(36).slice(2, 11);
+
+const located = (p) => !!p && typeof p === 'object' && Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lon));
+/** Whatever was stored (by an older version, or damaged), in the shape the app expects. */
+function tidy(d) {
+  const o = d && typeof d === 'object' ? d : {};
+  return {
+    name: typeof o.name === 'string' ? o.name : '',
+    home: located(o.home) ? o.home : null,
+    // (A record saved without an id gets one from its position in the list, the same every time it is read.)
+    places: (Array.isArray(o.places) ? o.places : []).filter(located).map((p, i) => (p.id ? p : { ...p, id: `p${i}` })),
+    history: (Array.isArray(o.history) ? o.history : []).filter(located).map((h, i) => (h.id ? h : { ...h, id: `h${i}` })),
+    settings: o.settings && typeof o.settings === 'object' && !Array.isArray(o.settings) ? o.settings : {},
+  };
+}
 
 function load() {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...blank(), ...JSON.parse(raw) };
+    if (raw) return tidy(JSON.parse(raw));
   } catch { /* fall back to memory */ }
   return memory || blank();
 }
@@ -19,7 +34,6 @@ function save(data) {
   try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* memory only */ }
 }
 
-const newId = () => Math.random().toString(36).slice(2, 11);
 const MODES = ['transit', 'walk', 'bike', 'drive'];
 const clean = (p) => ({
   address: String(p.address || '').slice(0, 300),

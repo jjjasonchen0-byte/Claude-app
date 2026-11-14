@@ -1,5 +1,5 @@
-// Meet — app controller: start screen, map, panel views, search flow,
-// optional sign-in and the draggable bottom sheet on phones.
+// Meet — app controller: start screen, map, panel views, search flow and
+// the draggable bottom sheet on phones.
 import { api } from './api.js';
 import { searchAddress, reverseGeocode, currentPosition } from './geocode.js';
 import { findMeetingPoint, estimateSeconds, SPEEDS } from './meetpoint.js';
@@ -116,7 +116,7 @@ function everyone() {
   const list = [];
   if (state.user?.home) list.push({ id: 'home', isHome: true, name: 'You', ...state.user.home, mode: state.user.home.mode || state.settings.travel, active: true, color: COLORS[0] });
   state.places.forEach((p, i) => list.push({
-    ...p, mode: p.mode || state.settings.travel, name: p.nickname || shortAddr(p.address) || `Friend ${i + 1}`, color: COLORS[(i + 1) % COLORS.length],
+    ...p, mode: p.mode || state.settings.travel, name: p.nickname || shortAddr(p.address) || `Friend ${i + 1}`, color: COLORS[1 + (i % (COLORS.length - 1))], // never your blue
   }));
   return list;
 }
@@ -133,6 +133,8 @@ function attachSearch(root, { near, onPick }) {
   let ctrl;
 
   const close = () => { list.hidden = true; sel = -1; };
+  // A lookup still on its way is dropped when something newer happens (typing on, picking, clearing).
+  const stop = () => { clearTimeout(timer); ctrl?.abort(); ctrl = null; };
   const render = () => {
     list.innerHTML = items.length
       ? items.map((r, i) => `<li role="option" data-i="${i}" aria-selected="${i === sel}">
@@ -143,23 +145,25 @@ function attachSearch(root, { near, onPick }) {
   const pick = (i) => {
     const r = items[i];
     if (!r) return;
+    stop();
     close();
     input.value = r.address;
     onPick(r);
   };
   input.addEventListener('input', () => {
-    clearTimeout(timer);
+    stop();
     const q = input.value;
     if (q.trim().length < 3) { close(); return; }
     timer = setTimeout(async () => {
-      ctrl?.abort();
-      ctrl = new AbortController();
+      const mine = ctrl = new AbortController();
       try {
-        items = await searchAddress(q, { near: near?.(), signal: ctrl.signal });
+        const found = await searchAddress(q, { near: near?.(), signal: mine.signal });
+        if (mine.signal.aborted) return;
+        items = found;
         sel = items.length ? 0 : -1;
         if (document.activeElement === input) render();
       } catch (err) {
-        if (err.name !== 'AbortError') { items = []; render(); }
+        if (!mine.signal.aborted) { items = []; if (document.activeElement === input) render(); }
       }
     }, 300);
   });
@@ -175,7 +179,7 @@ function attachSearch(root, { near, onPick }) {
     const li = e.target.closest('li[data-i]');
     if (li) { e.preventDefault(); pick(Number(li.dataset.i)); }
   });
-  return { input, clear: () => { input.value = ''; close(); } };
+  return { input, clear: () => { stop(); input.value = ''; close(); } };
 }
 
 // ---------------------------------------------------------------- what is saved on this device
@@ -185,6 +189,9 @@ function onUser(user) {
   state.places = user.places || [];
   state.settings = { ...DEFAULT_SETTINGS, ...(user.settings || {}) };
   if (state.settings.mode !== 'total') state.settings.mode = 'similar'; // "fair" from before is now "similar"
+  if (!MODES.some((m) => m.id === state.settings.travel)) state.settings.travel = DEFAULT_SETTINGS.travel;
+  if (!PACE[state.settings.speed]) state.settings.speed = DEFAULT_SETTINGS.speed;
+  if (!['auto', 'light', 'dark'].includes(state.settings.theme)) state.settings.theme = DEFAULT_SETTINGS.theme;
   applyTheme();
   if (!user.home) showHomeScreen(false);
   else enterMain();
@@ -203,6 +210,9 @@ async function saveHome(loc) {
   try {
     const { user } = await api.updateMe({ home: { address: loc.address, lat: loc.lat, lon: loc.lon, mode: state.user?.home?.mode || state.settings.travel } });
     state.user = user;
+    // Anything found for the old starting point (a search under way, results, routes) no longer applies.
+    if (map) cancelSearchQuietly();
+    state.sharePlace = null;
     enterMain(true);
   } catch (err) {
     toast(err.message, { error: true });
@@ -226,7 +236,8 @@ function initHome() {
       btn.classList.remove('busy');
     }
   };
-  $('#home-cancel').onclick = () => enterMain();
+  // Cancel: back to the map exactly as it was (results and all).
+  $('#home-cancel').onclick = () => { showScreen('screen-main'); map?.invalidateSize(); };
 }
 
 // ---------------------------------------------------------------- map
@@ -316,27 +327,35 @@ function loadMapLibre() {
 // terms allow its directions only on its own map). Tiles come through the
 // server, which keeps the key. Google's name and its map credits for the
 // area in view sit top right, apart from the other credits.
-let googleCredit = null;
+let googleCredit = null; // { el, update }: Google's name and map credits, top right
+let googleOff = false; // Google's map stopped answering (say, today's allowance ran out): the free map for the rest of this visit
+const OSM_DATA_CREDIT = `Places, addresses and the search animation's streets ${OSM_ATTR} contributors`;
 function addGoogleBasemap(want) {
   const style = `${want}${(window.devicePixelRatio || 1) > 1.3 ? '2x' : ''}`;
   const id = `google|${style}`;
   if (baseLayer?.meetId === id) return;
   baseLayer?.remove();
-  baseLayer = L.tileLayer(`/api/gmap/${style}/{z}/{x}/{y}`, { maxZoom: 21 });
+  const layer = baseLayer = L.tileLayer(`/api/gmap/${style}/{z}/{x}/{y}`, { maxZoom: 21 });
   baseLayer.meetId = id;
+  // Tiles that keep failing (the day's allowance used up, or Google unreachable)
+  // would leave a blank map: the free map takes over instead.
+  let failed = 0;
+  layer.on('tileload', () => { failed = 0; });
+  layer.on('tileerror', () => { if (++failed >= 6 && baseLayer === layer) leaveGoogle(); });
   baseLayer.addTo(map).bringToBack();
   if (!usingGoogle()) {
     useGoogle(true);
     map.attributionControl.removeAttribution(ROUTES_CREDIT);
-    map.attributionControl.addAttribution(`Places, addresses and the search animation's streets ${OSM_ATTR} contributors`);
+    map.attributionControl.addAttribution(OSM_DATA_CREDIT);
   }
   if (!googleCredit) {
-    googleCredit = Object.assign(document.createElement('div'), { className: 'gmap-credit', innerHTML: '<b>Google Maps</b><span></span>' });
-    $('#screen-main').append(googleCredit);
+    const el = Object.assign(document.createElement('div'), { className: 'gmap-credit', innerHTML: '<b>Google Maps</b><span></span>' });
+    $('#screen-main').append(el);
     let timer = 0, last = '';
     const update = () => {
       clearTimeout(timer);
       timer = setTimeout(async () => {
+        if (!googleCredit || !String(baseLayer?.meetId).startsWith('google|')) return;
         const b = map.getBounds();
         const q = new URLSearchParams({ zoom: Math.round(map.getZoom()), north: b.getNorth().toFixed(3), south: b.getSouth().toFixed(3), east: b.getEast().toFixed(3), west: b.getWest().toFixed(3) });
         const url = `/api/gmap/${baseLayer.meetId.split('|')[1]}/viewport?${q}`;
@@ -344,18 +363,29 @@ function addGoogleBasemap(want) {
         last = url;
         try {
           const r = await fetch(url);
-          if (r.ok) $('span', googleCredit).textContent = (await r.json()).copyright || '';
+          if (r.ok) $('span', el).textContent = (await r.json()).copyright || '';
         } catch { /* keep the last credits */ }
       }, 400);
     };
+    googleCredit = { el, update };
     map.on('moveend', update);
     update();
   }
 }
 
+/** Back to the free map and the free routing services (Google's directions only go with Google's map). */
+function leaveGoogle() {
+  googleOff = true;
+  useGoogle(false);
+  if (googleCredit) { map.off('moveend', googleCredit.update); googleCredit.el.remove(); googleCredit = null; }
+  map.attributionControl.removeAttribution(OSM_DATA_CREDIT);
+  map.attributionControl.addAttribution(ROUTES_CREDIT);
+  addFreeBasemap(isDark() ? 'dark' : 'light');
+}
+
 function addBasemap() {
   const want = isDark() ? 'dark' : 'light';
-  getConfig().then((c) => (c.google ? addGoogleBasemap(want) : addFreeBasemap(want)));
+  getConfig().then((c) => (c.google && !googleOff ? addGoogleBasemap(want) : addFreeBasemap(want)));
 }
 
 function addFreeBasemap(want) {
@@ -401,6 +431,7 @@ function initMap() {
       .setContent('<div class="muted">Looking up address…</div>').openOn(map);
     const loc = await reverseGeocode(lat, lng);
     if (!map.hasLayer(popup)) return;
+    if (state.view !== 'people') { map.closePopup(popup); return; }
     const div = document.createElement('div');
     div.innerHTML = `<div style="font-weight:600;max-width:220px">${esc(shortAddr(loc.address))}</div>
       <button class="btn btn-primary">Add this address</button>`;
@@ -440,7 +471,8 @@ async function moveAddress(p, ll) {
       state.user = (await api.updateMe({ home: { ...state.user.home, ...patch } })).user;
     } else {
       const { place } = await api.updatePlace(p.id, patch);
-      Object.assign(state.places.find((x) => x.id === p.id), place);
+      const mine = state.places.find((x) => x.id === p.id);
+      if (mine) Object.assign(mine, place);
     }
     toast(`Moved ${p.isHome ? 'your starting point' : p.name}`);
   } catch (err) { toast(err.message, { error: true }); }
@@ -655,6 +687,7 @@ function renderPeople() {
 
 /** "Leaving: Now | [date and time]" above the Find button. */
 function leaveRow() {
+  if (state.leaveAt && !leaveTime()) state.leaveAt = ''; // the chosen time has passed: back to "Now"
   const later = state.leaveAt || toLocalInput(nextHalfHour());
   return `<div class="leave-row" role="group" aria-label="When everyone leaves">
     <span class="leave-label">Leaving</span>
@@ -714,9 +747,11 @@ async function deletePlace(id) {
     toast(`Removed ${place.nickname || shortAddr(place.address)}`, {
       action: 'Undo',
       onAction: async () => {
-        const { place: restored } = await api.addPlace(place);
-        state.places.splice(idx, 0, restored);
-        render();
+        try {
+          const { place: restored } = await api.addPlace(place);
+          state.places.splice(Math.min(idx, state.places.length), 0, restored);
+          render();
+        } catch (err) { toast(err.message, { error: true }); }
       },
     });
   } catch (err) {
@@ -728,6 +763,7 @@ async function deletePlace(id) {
 
 async function patchPlace(id, patch) {
   const p = state.places.find((x) => x.id === id);
+  if (!p) return;
   const before = { ...p };
   Object.assign(p, patch);
   render();
@@ -755,9 +791,12 @@ function clearSearchVisuals() {
   poiLayer?.clearLayers();
 }
 
+let radiusAbort = null; // a change of radius still loading its places
 function cancelSearchQuietly() {
   searchAbort?.abort();
   searchAbort = null;
+  radiusAbort?.abort();
+  radiusAbort = null;
   clearSearchVisuals();
   setStatus('');
   state.search = null;
@@ -841,7 +880,7 @@ function trackFor(person, route, meet, estimate) {
     const o = route.options[0];
     const t00 = Date.parse(o?.start);
     let t = 0;
-    const pieces = (o?.legs || []).filter((l) => l.geometry.length > 1).map((l) => {
+    const pieces = (o?.legs || []).filter((l) => l.geometry?.length > 1).map((l) => {
       const a = Date.parse(l.from.time);
       const t0 = Number.isFinite(a) && Number.isFinite(t00) ? Math.max(t, (a - t00) / 1000) : t;
       t = t0 + l.duration;
@@ -851,7 +890,8 @@ function trackFor(person, route, meet, estimate) {
     pieces.unshift({ pts: [door, pieces[0].pts[0]], t0: 0, t1: 0, mode: 'walk' });
     return { ...base, pieces, duration: Math.max(t, o.duration || 0) };
   }
-  return { ...base, duration: route.duration, pieces: [{ pts: [door, ...route.geometry, end], t0: 0, t1: route.duration, mode: person.mode }] };
+  if (!Number.isFinite(route.duration)) return straight;
+  return { ...base, duration: route.duration, pieces: [{ pts: [door, ...(route.geometry || []), end], t0: 0, t1: route.duration, mode: person.mode }] };
 }
 
 async function findPlaces({ replay = false } = {}) {
@@ -968,6 +1008,7 @@ async function findPlaces({ replay = false } = {}) {
     console.error(err);
     clearSearchVisuals();
     setStatus('');
+    state.search = null; // nothing half-made left behind
     setView('people');
     toast(err.message || 'Something went wrong. Try again.', { error: true });
   }
@@ -1450,7 +1491,7 @@ function placeOverview(p, d, r, ds) {
   const when = state.when || { type: 'now' };
   const anyTransit = s.people.some((x) => x.mode === 'transit');
   const anyRoad = s.people.some((x) => x.mode !== 'transit');
-  const fromGoogle = ds.some((d) => d?.provider === 'google');
+  const fromGoogle = (state.dir?.results || []).some((r) => r.status === 'ok' && r.data?.provider === 'google');
   const credits = [fromGoogle && ATTRIBUTION.google, !fromGoogle && anyTransit && ATTRIBUTION.transit, !fromGoogle && anyRoad && ATTRIBUTION.routing].filter(Boolean)
     .map((a) => `<a href="${a.url}" target="_blank" rel="noopener">${esc(a.text)}</a>`).join(' · ');
   const site = hrefOf(d.website || p.website);
@@ -1840,9 +1881,11 @@ function initPanel() {
         drawRadius({ fit: true });
         for (const b of $$('[data-action=radius]')) b.classList.toggle('active', b === el);
         el.textContent = '…';
-        const ctrl = new AbortController();
-        searchAbort = ctrl;
+        // Only the latest choice counts: one still loading is dropped.
+        radiusAbort?.abort();
+        const ctrl = radiusAbort = new AbortController();
         await loadPois(s, ctrl.signal, r).catch(() => {});
+        if (ctrl.signal.aborted || state.search !== s) break;
         render();
         break;
       }
@@ -1954,6 +1997,7 @@ function applyTheme() {
   if (t === 'auto') document.documentElement.removeAttribute('data-theme');
   else document.documentElement.setAttribute('data-theme', t);
   if (map) addBasemap();
+  anim?.setTheme(isDark() ? 'dark' : 'light');
 }
 
 function syncSettingsUI() {

@@ -130,6 +130,13 @@ export function poiQuery(center, radius) {
   return `[out:json][timeout:12];(${sel.join(';')};);out center tags 400;`;
 }
 
+/** The Wikimedia Commons file an image link points at ("File:…"), or ''. */
+function commonsFile(link) {
+  const m = /commons\.wikimedia\.org\/wiki\/(File:[^?#]+)/.exec(link || '');
+  if (!m) return '';
+  try { return decodeURIComponent(m[1]); } catch { return m[1]; } // a stray % in the link
+}
+
 function formatAddress(tags) {
   const street = [tags['addr:housenumber'], tags['addr:street']].filter(Boolean).join(' ');
   return [street, tags['addr:suburb'] || tags['addr:city']].filter(Boolean).join(', ');
@@ -175,7 +182,7 @@ export function parsePois(elements, center) {
       vegetarian: /yes|only/.test(tags['diet:vegetarian'] || ''),
       // Free photo sources: a Wikidata item or a Wikimedia Commons file.
       wikidata: /^Q\d+$/.test(tags.wikidata || '') ? tags.wikidata : '',
-      commons: tags.wikimedia_commons || (/commons\.wikimedia\.org\/wiki\/(File:[^?#]+)/.exec(tags.image || '')?.[1] ? decodeURIComponent(/commons\.wikimedia\.org\/wiki\/(File:[^?#]+)/.exec(tags.image)[1]) : ''),
+      commons: tags.wikimedia_commons || commonsFile(tags.image),
       fromCenter: haversine(center.lat, center.lon, lat, lon),
     });
   }
@@ -287,12 +294,18 @@ export function photonElements(features) {
   });
 }
 
-async function photonPois(center, radiusM, { signal } = {}) {
+async function photonPois(center, radiusM, { signal, timeoutMs = 8000 } = {}) {
+  // Like Overpass, Photon gets a time limit: a request that never answers must not hold the search up.
+  const ctrl = new AbortController();
+  const onAbort = () => ctrl.abort();
+  if (signal?.aborted) ctrl.abort();
+  signal?.addEventListener('abort', onAbort);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   const results = await Promise.allSettled(PHOTON_GROUPS.map(async (tags) => {
-    const res = await fetch(photonUrl(center, radiusM, tags), { signal, headers: { Accept: 'application/json' } });
+    const res = await fetch(photonUrl(center, radiusM, tags), { signal: ctrl.signal, headers: { Accept: 'application/json' } });
     if (!res.ok) throw new Error(`Photon ${res.status}`);
     return (await res.json()).features;
-  }));
+  })).finally(() => { clearTimeout(timer); signal?.removeEventListener('abort', onAbort); });
   const ok = results.filter((r) => r.status === 'fulfilled');
   if (!ok.length) throw new Error('Places could not be loaded');
   return parsePois(photonElements(ok.flatMap((r) => r.value)), center)

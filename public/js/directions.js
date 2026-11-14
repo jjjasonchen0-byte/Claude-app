@@ -173,7 +173,7 @@ function normalizeItinerary(it) {
   return {
     duration: Math.round(it.duration || 0),
     start: it.startTime || legs[0]?.from.time || null,
-    end: it.endTime || legs.at(-1)?.to.time || null,
+    end: it.endTime || legs[legs.length - 1]?.to.time || null,
     transfers: it.transfers ?? Math.max(0, legs.filter((l) => !isWalkLeg(l)).length - 1),
     legs,
   };
@@ -202,6 +202,22 @@ export function normalizeTransit(json, { arriveBy = false } = {}) {
 // ---------------------------------------------------------------- browser client
 
 const cache = new Map();
+const MAX_CACHED = 300;
+
+/**
+ * One request per key: whoever asks for the same thing while it is running,
+ * or afterwards, gets the same answer. A request cancelled by whoever started
+ * it (an earlier search) is not an answer for anyone else: they ask again.
+ */
+function cached(key, signal, make) {
+  const hit = cache.get(key);
+  if (hit) return hit.catch((err) => { if (err?.name === 'AbortError' && !signal?.aborted) return cached(key, signal, make); throw err; });
+  const promise = make();
+  cache.set(key, promise);
+  if (cache.size > MAX_CACHED) cache.delete(cache.keys().next().value); // the oldest goes
+  promise.catch(() => { if (cache.get(key) === promise) cache.delete(key); });
+  return promise;
+}
 
 async function getJson(url, init) {
   const res = await fetch(url, init);
@@ -217,7 +233,9 @@ async function viaServerOr(path, direct, signal) {
     return await getJson(path, { signal, credentials: 'same-origin' });
   } catch (err) {
     if (signal?.aborted) throw err;
-    if (err.status && err.status !== 404 && err.status !== 405) throw err;
+    // The Meet server's own answer ("No route found" comes as a 404 with a message) stands;
+    // only a missing server (a bare 404 or 405, or no connection) sends the request to the provider.
+    if (err.status && (err.data?.error || (err.status !== 404 && err.status !== 405))) throw err;
   }
   return direct();
 }
@@ -232,20 +250,16 @@ export function getDirections(mode, from, to, { time, arriveBy = false, alternat
   const viaPt = road && via ? via : null;
   const alt = road && alternatives && !viaPt;
   const key = [mode, ll(from), ll(to), time || '', arriveBy, alt, viaPt ? ll(viaPt) : '', google].join('|');
-  if (cache.has(key)) return cache.get(key);
   const q = new URLSearchParams({ mode, from: ll(from), to: ll(to) });
   if (google) q.set('g', '1');
   if (time) q.set('time', new Date(time).toISOString());
   if (arriveBy) q.set('arriveBy', '1');
   if (alt) q.set('alt', '1');
   if (viaPt) q.set('via', ll(viaPt));
-  const promise = viaServerOr(`/api/directions?${q}`, async () => {
+  return cached(key, signal, () => viaServerOr(`/api/directions?${q}`, async () => {
     if (mode === 'transit') return normalizeTransit(await getJson(transitUrl(from, to, { time, arriveBy }), { signal }), { arriveBy });
     return normalizeOsrm(await getJson(osrmRouteUrl(mode, from, to, { alternatives: alt, via: viaPt }), { signal }), mode);
-  }, signal);
-  cache.set(key, promise);
-  promise.catch(() => cache.delete(key));
-  return promise;
+  }, signal));
 }
 
 /**
@@ -256,24 +270,15 @@ export function getDirections(mode, from, to, { time, arriveBy = false, alternat
 export function getTransitReach(from, { box, max = 60, time, signal } = {}) {
   const q = new URLSearchParams({ from: ll(from), max: String(max), box: [box.s, box.w, box.n, box.e].map((v) => v.toFixed(4)).join(',') });
   if (time) q.set('time', new Date(time).toISOString());
-  const key = `reach|${q}`;
-  if (cache.has(key)) return cache.get(key);
-  const promise = getJson(`/api/transit/reach?${q}`, { signal, credentials: 'same-origin' });
-  cache.set(key, promise);
-  promise.catch(() => cache.delete(key));
-  return promise;
+  return cached(`reach|${q}`, signal, () => getJson(`/api/transit/reach?${q}`, { signal, credentials: 'same-origin' }));
 }
 
 /** Travel times from each source to each destination (walk, bike or drive only). */
 export function getTravelTimes(mode, sources, destinations, { signal } = {}) {
   if (mode === 'transit') return Promise.reject(Object.assign(new Error('Not available for public transport'), { status: 400 }));
   const key = ['table', mode, sources.map(ll).join(';'), destinations.map(ll).join(';')].join('|');
-  if (cache.has(key)) return cache.get(key);
   const q = new URLSearchParams({ mode, from: sources.map(ll).join(';'), to: destinations.map(ll).join(';') });
-  const promise = viaServerOr(`/api/traveltimes?${q}`, async () => normalizeOsrmTable(await getJson(osrmTableUrl(mode, sources, destinations), { signal })), signal);
-  cache.set(key, promise);
-  promise.catch(() => cache.delete(key));
-  return promise;
+  return cached(key, signal, () => viaServerOr(`/api/traveltimes?${q}`, async () => normalizeOsrmTable(await getJson(osrmTableUrl(mode, sources, destinations), { signal })), signal));
 }
 
 /**

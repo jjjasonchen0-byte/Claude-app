@@ -222,8 +222,9 @@ function findJunctions(segs, tol = 1.5) {
 }
 
 let template = null;
-function tileTemplate(signal) {
-  template ||= fetch(TILEJSON, { signal })
+// Shared by every search (asked for once), so no single search's cancel button is tied to it.
+function tileTemplate() {
+  template ||= fetch(TILEJSON)
     .then((r) => { if (!r.ok) throw new Error(`Map tiles: ${r.status}`); return r.json(); })
     .then((j) => j.tiles[0])
     .catch((err) => { template = null; throw err; });
@@ -232,7 +233,8 @@ function tileTemplate(signal) {
 
 /** The streets in an area (bounds: { s, w, n, e }) as a network for the animation. */
 export async function loadRoads(bounds, { signal } = {}) {
-  const url = await tileTemplate(signal);
+  const url = await tileTemplate();
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
   const tiles = await Promise.all(tilesFor(bounds).map(async (t) => {
     const res = await fetch(url.replace('{z}', t.z).replace('{x}', t.x).replace('{y}', t.y), { signal });
     if (!res.ok) throw new Error(`Map tile: ${res.status}`);

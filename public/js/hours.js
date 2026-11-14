@@ -48,7 +48,8 @@ export function parseHours(spec) {
   if (s === '24/7') return DAYS.map(() => [[0, 24 * 60]]);
   const week = DAYS.map(() => []);
   // "Mo-Fr 09:00-17:00, Sa 10:00-14:00" uses commas between rules too.
-  const rules = s.replace(/\|\|/g, ';').split(';').flatMap((r) => r.split(/(?<=[\d+]|off|closed),\s*(?=(?:Mo|Tu|We|Th|Fr|Sa|Su)\b)/));
+  // (Written without a look-behind: Safari before 16.4 can't read one, and the whole app would fail to load.)
+  const rules = s.replace(/\|\|/g, ';').replace(/([\d+]|off|closed),\s*(?=(?:Mo|Tu|We|Th|Fr|Sa|Su)\b)/g, '$1;').split(';');
   for (const raw of rules) {
     const rule = raw.trim().replace(/\s*"[^"]*"\s*$/, ''); // drop comments
     if (!rule) continue;
@@ -90,7 +91,7 @@ export function openStatus(spec, date = new Date(), { fmt = defaultFmt } = {}) {
   // Merge touching spans (e.g. 00:00-24:00 every day).
   const merged = [];
   for (const sp of spans) {
-    const last = merged.at(-1);
+    const last = merged[merged.length - 1];
     if (last && sp[0] <= last[1]) last[1] = Math.max(last[1], sp[1]); else merged.push([...sp]);
   }
   const cur = merged.find(([a, b]) => a <= now && now < b);

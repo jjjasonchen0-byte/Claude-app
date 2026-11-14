@@ -352,6 +352,16 @@ export class FloodAnimation {
   /** Hurry to the end: the remaining steps finish at once. */
   skip() { this.skipping = true; }
 
+  /** The app's theme changed while the animation (or its routes) is showing. */
+  setTheme(theme) {
+    const th = THEMES[theme] || THEMES.dark;
+    if (th === this.theme || this.dead) return;
+    this.theme = th;
+    for (const f of this.shown) { f.color = shade(this.people[f.i].color, th.shade); f.front = th.front(this.people[f.i].color); }
+    for (const r of this.routes || []) r.glow = shade(r.color, th.shade);
+    this.redrawAll();
+  }
+
   destroy() {
     this.dead = true;
     cancelAnimationFrame(this.raf);
@@ -836,13 +846,6 @@ export class FloodAnimation {
     if (this.routes) this.drawTop();
     else { this.clearTop(); this.drawFronts(); }
   }
-}
-
-/** How many of a flood's pieces of street (in the order they finish) are finished by time c. */
-function upTo(fl, c) {
-  let lo = 0, hi = fl.count;
-  while (lo < hi) { const mid = (lo + hi) >> 1; if (fl.t1[fl.byEnd[mid]] <= c) lo = mid + 1; else hi = mid; }
-  return lo;
 }
 
 /** Split a projected line into segments timed evenly by length between t0 and t1. */

@@ -26,10 +26,21 @@ function fromNominatim(r) {
   };
 }
 
-async function getJson(url, signal) {
-  const res = await fetch(url, { signal, headers: { Accept: 'application/json' } });
-  if (!res.ok) throw new Error(`Geocoder ${res.status}`);
-  return res.json();
+/** GET JSON, giving up after `ms` (a stalled lookup must not leave "Looking up address…" on screen for good). */
+async function getJson(url, signal, ms = 7000) {
+  const ctrl = new AbortController();
+  const onAbort = () => ctrl.abort();
+  if (signal?.aborted) ctrl.abort();
+  signal?.addEventListener('abort', onAbort);
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal, headers: { Accept: 'application/json' } });
+    if (!res.ok) throw new Error(`Geocoder ${res.status}`);
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
 }
 
 /** Search for addresses; `near` biases results towards a location. */
@@ -42,7 +53,7 @@ export async function searchAddress(q, { near, signal, limit = 6 } = {}) {
     u.searchParams.set('limit', String(limit));
     if (near) { u.searchParams.set('lat', near.lat.toFixed(5)); u.searchParams.set('lon', near.lon.toFixed(5)); }
     const json = await getJson(u, signal);
-    const out = (json.features || []).map(fromPhoton);
+    const out = (json.features || []).filter((f) => Array.isArray(f?.geometry?.coordinates)).map(fromPhoton).filter((r) => r.address && Number.isFinite(r.lat) && Number.isFinite(r.lon));
     if (out.length) return out;
   } catch (err) {
     if (signal?.aborted) throw err;
@@ -55,7 +66,8 @@ export async function searchAddress(q, { near, signal, limit = 6 } = {}) {
     const d = 0.5;
     u.searchParams.set('viewbox', [near.lon - d, near.lat + d, near.lon + d, near.lat - d].map((x) => x.toFixed(4)).join(','));
   }
-  return (await getJson(u, signal)).map(fromNominatim);
+  const found = await getJson(u, signal);
+  return (Array.isArray(found) ? found : []).filter((r) => r?.display_name).map(fromNominatim).filter((r) => Number.isFinite(r.lat) && Number.isFinite(r.lon));
 }
 
 /** Address text for a coordinate (falls back to the coordinates themselves). */
@@ -64,7 +76,8 @@ export async function reverseGeocode(lat, lon, { signal } = {}) {
   try {
     const json = await getJson(`${PHOTON}/reverse?lat=${lat}&lon=${lon}&limit=1`, signal);
     const f = json.features?.[0];
-    if (f) return { ...fromPhoton(f), lat, lon };
+    const found = Array.isArray(f?.geometry?.coordinates) ? fromPhoton(f) : null;
+    if (found?.address) return { ...found, lat, lon }; // a place with no name or street falls through
   } catch (err) { if (signal?.aborted) throw err; }
   try {
     const json = await getJson(`${NOMINATIM}/reverse?lat=${lat}&lon=${lon}&format=jsonv2`, signal);
