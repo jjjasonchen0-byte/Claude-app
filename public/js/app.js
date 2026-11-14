@@ -135,6 +135,13 @@ const activePeople = () => everyone().filter((p) => p.active);
 
 // ---------------------------------------------------------------- address search widget
 
+// The list of suggestions now open, if any: it is fitted again when the part of
+// the page in sight changes (an on-screen keyboard opening, a turned phone).
+let fitSuggestions = null;
+for (const target of [window, window.visualViewport]) {
+  for (const type of ['resize', 'scroll']) target?.addEventListener(type, () => fitSuggestions?.());
+}
+
 function attachSearch(root, { near, onPick }) {
   const input = $('input', root);
   const list = $('.suggestions', root);
@@ -143,7 +150,28 @@ function attachSearch(root, { near, onPick }) {
   let timer;
   let ctrl;
 
-  const close = () => { list.hidden = true; sel = -1; };
+  /**
+   * Put the list where it can be seen: below the box when there is room
+   * there, above it when there isn't (an on-screen keyboard covers the lower
+   * part of a phone's screen), and no taller than the room it has.
+   */
+  const fit = () => {
+    if (list.hidden || !list.isConnected) { if (fitSuggestions === fit) fitSuggestions = null; return; }
+    const vv = window.visualViewport;
+    let top = vv ? vv.offsetTop : 0, bottom = top + (vv ? vv.height : window.innerHeight);
+    const panelBody = root.closest('#panel-body'); // in the panel, the list is cut off at the panel's edges
+    if (panelBody) {
+      const c = panelBody.getBoundingClientRect();
+      top = Math.max(top, c.top);
+      bottom = Math.min(bottom, c.bottom - ($('.cta', panelBody)?.offsetHeight || 0));
+    }
+    const r = input.getBoundingClientRect();
+    const below = bottom - r.bottom - 12, above = r.top - top - 12;
+    const up = below < 170 && above > below;
+    list.classList.toggle('up', up);
+    list.style.maxHeight = `${Math.round(Math.max(96, Math.min(300, up ? above : below)))}px`;
+  };
+  const close = () => { list.hidden = true; sel = -1; if (fitSuggestions === fit) fitSuggestions = null; };
   // A lookup still on its way is dropped when something newer happens (typing on, picking, clearing).
   const stop = () => { clearTimeout(timer); ctrl?.abort(); ctrl = null; };
   const render = () => {
@@ -152,6 +180,8 @@ function attachSearch(root, { near, onPick }) {
           <div class="s-title">${esc(r.title)}</div><div class="s-sub">${esc(r.subtitle)}</div></li>`).join('')
       : '<li class="s-empty">No matches. Try adding a town or postcode.</li>';
     list.hidden = false;
+    fitSuggestions = fit;
+    fit();
   };
   const pick = (i) => {
     const r = items[i];
@@ -190,7 +220,7 @@ function attachSearch(root, { near, onPick }) {
     const li = e.target.closest('li[data-i]');
     if (li) { e.preventDefault(); pick(Number(li.dataset.i)); }
   });
-  return { input, clear: () => { stop(); input.value = ''; close(); } };
+  return { input, fit, clear: () => { stop(); input.value = ''; close(); } };
 }
 
 // ---------------------------------------------------------------- what is saved on this device
@@ -214,7 +244,10 @@ function showHomeScreen(cancellable) {
   showScreen('screen-home');
   $('#home-cancel').hidden = !cancellable;
   homeSearchCtl.clear();
-  setTimeout(() => homeSearchCtl.input.focus(), 50);
+  $('#screen-home').classList.remove('typing');
+  // With a keyboard and mouse the cursor goes straight into the box. On a touch
+  // screen it waits for a tap (the on-screen keyboard would cover half the page unasked).
+  if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) setTimeout(() => homeSearchCtl.input.focus(), 50);
 }
 
 async function saveHome(loc) {
@@ -233,6 +266,14 @@ async function saveHome(loc) {
 
 function initHome() {
   homeSearchCtl = attachSearch($('#home-search'), { near: () => null, onPick: saveHome });
+  // On a small screen the logo and box move to the top while typing: the
+  // suggestions then open in the part of the screen the keyboard leaves free.
+  const home = $('#screen-home'), box = homeSearchCtl.input;
+  box.addEventListener('focus', () => {
+    home.classList.toggle('typing', window.matchMedia('(max-width: 759px), (max-height: 620px)').matches);
+    homeSearchCtl.fit();
+  });
+  box.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== box && !box.value.trim()) home.classList.remove('typing'); }, 200));
   // The arrow in the address bar: start from where you are.
   $('#home-locate').onclick = async (e) => {
     const btn = e.currentTarget;
@@ -527,8 +568,30 @@ function setSheet(snap) {
   const panel = $('#panel');
   if (!isMobile()) { panel.style.height = ''; sheet.target = 0; return; }
   sheet.snap = snap;
-  sheet.target = sheetSizes()[snap];
+  // While an address is being typed the sheet is as tall as it goes (see typingSheet); its position is remembered.
+  sheet.target = panel.classList.contains('typing') ? sheetSizes().max : sheetSizes()[snap];
   panel.style.height = `${sheet.target}px`;
+}
+
+/**
+ * Typing someone's address on a phone: the sheet opens all the way with the
+ * address box at its top, so the suggestions open in the part of the screen
+ * the keyboard leaves free. Afterwards it goes back to where it was.
+ */
+function typingSheet(on) {
+  const panel = $('#panel');
+  if (panel.classList.contains('typing') === on) return;
+  panel.classList.toggle('typing', on);
+  setSheet(sheet.snap);
+  if (on) typingBoxToTop();
+  else $('#panel-body').scrollTop = 0;
+}
+/** While typing: the address box at the top of the sheet (again after the screen changes size, as when a keyboard opens). */
+function typingBoxToTop() {
+  const body = $('#panel-body'), box = $('.add-box', body);
+  if (!box || !$('#panel').classList.contains('typing')) return;
+  body.scrollTop += box.getBoundingClientRect().top - body.getBoundingClientRect().top - 6;
+  fitSuggestions?.();
 }
 
 function initSheet() {
@@ -580,7 +643,12 @@ function initSheet() {
     if (e.key === 'ArrowUp') setSheet(sheet.snap === 'peek' ? 'mid' : 'full');
     if (e.key === 'ArrowDown') setSheet(sheet.snap === 'full' ? 'mid' : 'peek');
   });
-  window.addEventListener('resize', () => setSheet(sheet.snap));
+  window.addEventListener('resize', () => {
+    setSheet(sheet.snap);
+    // Typing with the sheet fully open: keep the address box at its top, now and once the sheet has settled.
+    typingBoxToTop();
+    setTimeout(typingBoxToTop, 350);
+  });
 }
 
 // ---------------------------------------------------------------- main screen & panel
@@ -731,10 +799,20 @@ afterRender.people = () => {
     at.addEventListener('change', pick);
     at.addEventListener('click', pick); // tapping the shown time picks it
   }
-  attachSearch($('#add-search'), {
+  const add = attachSearch($('#add-search'), {
     near: () => state.user.home,
     onPick: (r) => addPlace({ ...r, nickname: $('#add-nick').value }),
   });
+  // On a phone the sheet opens all the way for typing (see typingSheet). A list drawn
+  // again (someone added) starts out of that state.
+  typingSheet(false);
+  const stay = () => ['add-input', 'add-nick'].includes(document.activeElement?.id);
+  add.input.addEventListener('focus', () => {
+    if (!isMobile()) return;
+    typingSheet(true);
+    setTimeout(add.fit, 350); // once the sheet has grown
+  });
+  for (const el of [add.input, $('#add-nick')]) el.addEventListener('blur', () => setTimeout(() => { if (!stay()) typingSheet(false); }, 200));
   const nick = $('.edit-inline input');
   if (nick) { nick.focus(); nick.select(); }
 };
@@ -1150,6 +1228,13 @@ function tripRange(s) {
   return lo === hi ? ` · ${fmtTime(hi)} each` : ` · ${hi < 60 ? `${lo}–${hi} min` : `${fmtTime(lo)} – ${fmtTime(hi)}`}`;
 }
 
+/** The address under the meeting place's name: the street and area, without the name said again. */
+function areaLine(s) {
+  const parts = String(s.area || '').split(', ').map((x) => x.trim()).filter(Boolean);
+  if (s.anchor && parts.length && parts[0].toLowerCase() === String(s.anchor.name).trim().toLowerCase()) parts.shift();
+  return parts.slice(0, 2).join(', ');
+}
+
 function renderResults() {
   const s = state.search;
   loadMeetTimes();
@@ -1178,7 +1263,7 @@ function renderResults() {
       <div style="min-width:0">
         <div class="eyebrow">${s.rule === 'total' ? 'Least total travel' : 'Similar travel times'}${tripRange(s)}</div>
         <h2>${esc(s.anchor ? s.anchor.name : s.area ? shortAddr(s.area) : 'Your meeting point')}</h2>
-        ${s.anchor && s.area ? `<div class="footnote">${esc(shortAddr(s.area))}</div>` : ''}
+        ${s.anchor && areaLine(s) ? `<div class="footnote">${esc(areaLine(s))}</div>` : ''}
       </div>
     </div>
     <ul class="group icons">${s.people.map((p, i) => tripRow(p, s.routes?.[i]?.distance ?? s.meeting.dists[i], s.meetTimes?.values[i])).join('')}
@@ -1222,6 +1307,8 @@ function statusHtml(st) {
 }
 
 const hrefOf = (url) => (!url ? '' : /^https?:\/\//i.test(url) ? url : `https://${url}`);
+/** A link from a place's listing or a review, for an href: always a web address, never a script. */
+const linkOf = (url) => esc(hrefOf(String(url || '').trim()));
 const poiById = (id) => state.search?.pois?.find((p) => p.id === id);
 
 // Rows coming into view get their rating (a batch at a time) and their photo.
@@ -1288,7 +1375,11 @@ function groupItems() {
       const sec = times?.[pi]?.[idx];
       if (sec != null) return sec / 60;
       real = false;
-      return travelMinutes(ds[pi], person.mode);
+      // No real time to this place (public transport, or still loading): a guess from the
+      // distance, but never longer than their known trip to the meeting point plus the walk on from there.
+      const guess = travelMinutes(ds[pi], person.mode);
+      const toMeet = s.meetTimes?.values[pi] ?? s.meeting.times[pi];
+      return toMeet != null ? Math.min(guess, (toMeet + (p.fromCenter * 1.3) / SPEEDS.walk) / 60) : guess;
     });
     return { p, ds, worstMin: Math.round(Math.max(...per)), real };
   });
@@ -1541,7 +1632,7 @@ function placeOverview(p, d, r, ds) {
       ${site ? `<li><div class="cell"><span class="k">Website</span><a class="v" href="${esc(site)}" target="_blank" rel="noopener">${esc(site.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''))}</a></div></li>` : ''}
     </ul>
     <div class="actions">
-      <a class="btn btn-tinted" href="${links.osm}" target="_blank" rel="noopener">Open in maps</a>
+      <a class="btn btn-tinted" href="${esc(links.osm)}" target="_blank" rel="noopener">Open in maps</a>
     </div>`;
 }
 
@@ -1557,7 +1648,7 @@ function placeReviews(p, d, r) {
   }).join('')}</div>` : '';
   const reviews = (d.reviews || []).map((rv) => `<li class="review">
       <div class="rv-head"><span class="avatar sm" style="--c:#8e8e93">${rv.avatar ? `<img src="${esc(rv.avatar)}" alt="" loading="lazy">` : esc(initial(rv.user))}</span>
-        <div class="rv-who">${rv.userUrl ? `<a href="${esc(rv.userUrl)}" target="_blank" rel="noopener"><b>${esc(rv.user)}</b></a>` : `<b>${esc(rv.user)}</b>`}<span class="footnote">${esc([rv.when || fmtDate(rv.date), TRIP[rv.tripType]].filter(Boolean).join(' · '))}</span></div></div>
+        <div class="rv-who">${rv.userUrl ? `<a href="${linkOf(rv.userUrl)}" target="_blank" rel="noopener"><b>${esc(rv.user)}</b></a>` : `<b>${esc(rv.user)}</b>`}<span class="footnote">${esc([rv.when || fmtDate(rv.date), TRIP[rv.tripType]].filter(Boolean).join(' · '))}</span></div></div>
       <div class="rv-rating">${rv.ratingImage ? `<img class="bubbles" src="${esc(rv.ratingImage)}" alt="${rv.rating} of 5" width="66" height="13">` : stars(rv.rating)}</div>
       ${rv.title ? `<h4>${esc(rv.title)}</h4>` : ''}
       <p class="rv-text" data-action="rv-more">${esc(rv.text)}</p>
@@ -1570,8 +1661,8 @@ function placeReviews(p, d, r) {
     ${d.subratings?.length ? `<div class="subratings">${d.subratings.map((x) => `<span class="chip">${esc(x.name)} <b>${Number(x.rating).toFixed(1)}</b></span>`).join('')}</div>` : ''}
     ${reviews ? `<ul class="reviews">${reviews}</ul>` : '<div class="empty">No reviews to show here yet.</div>'}
     <div class="actions">
-      ${r?.url ? `<a class="btn btn-tinted" href="${esc(r.url)}" target="_blank" rel="noopener">All reviews on ${d.source === 'google' ? 'Google Maps' : 'Tripadvisor'}</a>` : ''}
-      ${d.writeReview ? `<a class="btn btn-tinted" href="${esc(d.writeReview)}" target="_blank" rel="noopener">Write a review</a>` : ''}
+      ${r?.url ? `<a class="btn btn-tinted" href="${linkOf(r.url)}" target="_blank" rel="noopener">All reviews on ${d.source === 'google' ? 'Google Maps' : 'Tripadvisor'}</a>` : ''}
+      ${d.writeReview ? `<a class="btn btn-tinted" href="${linkOf(d.writeReview)}" target="_blank" rel="noopener">Write a review</a>` : ''}
     </div>
     ${from ? `<p class="footnote attrib">${esc(from)}</p>` : ''}`;
 }
@@ -1634,10 +1725,10 @@ function openLightbox(photos, start) {
       <figure><img src="${esc(ph.url)}" alt="${esc(ph.caption || '')}"><figcaption>${[
         esc(ph.caption || ''),
         // Who took it, linked to their profile when there is one (Google asks for this).
-        ph.by ? `by ${ph.byUrl ? `<a href="${esc(ph.byUrl)}" target="_blank" rel="noopener">${esc(ph.by)}</a>` : esc(ph.by)}` : '',
+        ph.by ? `by ${ph.byUrl ? `<a href="${linkOf(ph.byUrl)}" target="_blank" rel="noopener">${esc(ph.by)}</a>` : esc(ph.by)}` : '',
         esc(ph.credit || ''),
       ].filter(Boolean).join(' · ')}
-      ${ph.link ? ` · <a href="${esc(ph.link)}" target="_blank" rel="noopener">Licence &amp; source</a>` : ''}<span class="lb-count">${i + 1} / ${photos.length}</span></figcaption></figure>`;
+      ${ph.link ? ` · <a href="${linkOf(ph.link)}" target="_blank" rel="noopener">Licence &amp; source</a>` : ''}<span class="lb-count">${i + 1} / ${photos.length}</span></figcaption></figure>`;
   };
   const close = () => { box.remove(); document.removeEventListener('keydown', onKey); };
   const step = (k) => { i = (i + k + photos.length) % photos.length; show(); };
@@ -1784,7 +1875,7 @@ function dirRow(person, i, d) {
 function itinerary(person, i, r) {
   const p = state.search.place;
   const links = navLinks(person.mode, person, p);
-  const handoff = `<div class="handoff"><a class="btn btn-tinted btn-sm" href="${links.google}" target="_blank" rel="noopener">Google Maps</a><a class="btn btn-tinted btn-sm" href="${links.apple}" target="_blank" rel="noopener">Apple Maps</a></div>`;
+  const handoff = `<div class="handoff"><a class="btn btn-tinted btn-sm" href="${esc(links.google)}" target="_blank" rel="noopener">Google Maps</a><a class="btn btn-tinted btn-sm" href="${esc(links.apple)}" target="_blank" rel="noopener">Apple Maps</a></div>`;
   if (r.status !== 'ok') return `<div class="itin">${handoff}</div>`;
   if (!r.data.options) {
     return `<div class="itin"><p class="footnote">${fmtDist(r.data.distance)} · about ${mins(r.data.duration)}${person.mode === 'drive' ? ' without traffic' : ''}.</p>${handoff}</div>`;
@@ -1829,13 +1920,13 @@ function renderShare() {
     <button class="btn btn-primary btn-block btn-lg" data-action="native-share">Share…</button>
     <div class="share-grid">
       <button class="btn btn-tinted" data-action="copy">Copy</button>
-      <a class="btn btn-tinted" href="${msg.whatsapp}" target="_blank" rel="noopener" data-share="whatsapp">WhatsApp</a>
-      <a class="btn btn-tinted" href="${msg.sms}" data-share="sms">Messages</a>
-      <a class="btn btn-tinted" href="${msg.email}" data-share="email">Email</a>
-      <a class="btn btn-tinted" href="${msg.telegram}" target="_blank" rel="noopener" data-share="telegram">Telegram</a>
+      <a class="btn btn-tinted" href="${esc(msg.whatsapp)}" target="_blank" rel="noopener" data-share="whatsapp">WhatsApp</a>
+      <a class="btn btn-tinted" href="${esc(msg.sms)}" data-share="sms">Messages</a>
+      <a class="btn btn-tinted" href="${esc(msg.email)}" data-share="email">Email</a>
+      <a class="btn btn-tinted" href="${esc(msg.telegram)}" target="_blank" rel="noopener" data-share="telegram">Telegram</a>
       <button class="btn btn-tinted" data-action="calendar">Calendar</button>
-      <a class="btn btn-tinted" href="${links.google}" target="_blank" rel="noopener">Google Maps</a>
-      <a class="btn btn-tinted" href="${links.apple}" target="_blank" rel="noopener">Apple Maps</a>
+      <a class="btn btn-tinted" href="${esc(links.google)}" target="_blank" rel="noopener">Google Maps</a>
+      <a class="btn btn-tinted" href="${esc(links.apple)}" target="_blank" rel="noopener">Apple Maps</a>
     </div>`;
 }
 

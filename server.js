@@ -89,14 +89,29 @@ class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
 
+/**
+ * A text body, compressed if the browser takes it and it is worth it: routes
+ * and timetable answers are tens of kilobytes of coordinates, a fraction of
+ * that compressed (it matters on a phone). → { body, encoding }
+ */
+export function encodeBody(text, acceptEncoding = '') {
+  if (text.length < 1024) return { body: text, encoding: null };
+  if (/\bbr\b/.test(acceptEncoding)) return { body: zlib.brotliCompressSync(text, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 4 } }), encoding: 'br' };
+  if (/\bgzip\b/.test(acceptEncoding)) return { body: zlib.gzipSync(text, { level: 6 }), encoding: 'gzip' };
+  return { body: text, encoding: null };
+}
+
 function send(res, status, body, headers = {}) {
   const payload = body === undefined ? '' : JSON.stringify(body);
+  const { body: out, encoding } = encodeBody(payload, res.acceptEncoding);
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
+    Vary: 'Accept-Encoding',
+    ...(encoding ? { 'Content-Encoding': encoding } : {}),
     ...headers,
   });
-  res.end(payload);
+  res.end(out);
 }
 
 function readBody(req) {
@@ -536,11 +551,20 @@ function serveStatic(req, res, pathname) {
     if (stat?.isFile()) {
       const ext = path.extname(file).toLowerCase();
       const vendor = prefix.startsWith('/vendor/'); // pinned versions: safe to keep a day
+      // The app's own files are checked with the server every time (a quick
+      // "not changed" when they are the same), so a new version is used at
+      // once and whole: never yesterday's code with today's page.
+      const etag = `W/"${stat.size.toString(36)}-${Math.round(stat.mtimeMs).toString(36)}"`;
       const headers = {
         'Content-Type': MIME[ext] || 'application/octet-stream',
-        'Cache-Control': ext === '.html' ? 'no-cache' : vendor ? 'public, max-age=86400' : 'public, max-age=300',
+        'Cache-Control': vendor ? 'public, max-age=86400' : 'no-cache',
+        ETag: etag,
         Vary: 'Accept-Encoding',
       };
+      if (String(req.headers['if-none-match'] || '').split(',').some((t) => t.trim() === etag)) {
+        res.writeHead(304, headers);
+        return res.end();
+      }
       const accept = String(req.headers['accept-encoding'] || '');
       const encoding = COMPRESSIBLE.has(ext) && stat.size > 1024 ? (/\bbr\b/.test(accept) ? 'br' : /\bgzip\b/.test(accept) ? 'gzip' : null) : null;
       if (encoding) {
@@ -564,6 +588,7 @@ function serveStatic(req, res, pathname) {
 // ---------------------------------------------------------------- server
 
 async function handle(req, res) {
+  res.acceptEncoding = String(req.headers['accept-encoding'] || '');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   let pathname;

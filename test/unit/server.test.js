@@ -7,7 +7,8 @@ import os from 'node:os';
 import path from 'node:path';
 
 process.env.DATA_FILE = path.join(os.tmpdir(), `meet-server-test-${process.pid}.json`);
-const { server, clientOf } = await import('../../server.js');
+const { server, clientOf, encodeBody } = await import('../../server.js');
+import zlib from 'node:zlib';
 
 let port;
 before(async () => { await new Promise((r) => server.listen(0, '127.0.0.1', r)); port = server.address().port; });
@@ -19,7 +20,7 @@ function request(pathAsIs, { method = 'GET', headers = {}, body } = {}) {
     const req = http.request({ host: '127.0.0.1', port, path: pathAsIs, method, headers }, (res) => {
       const chunks = [];
       res.on('data', (c) => chunks.push(c));
-      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, text: Buffer.concat(chunks).toString('utf8') }));
+      res.on('end', () => { const raw = Buffer.concat(chunks); resolve({ status: res.statusCode, headers: res.headers, raw, text: raw.toString('utf8') }); });
     });
     req.on('error', reject);
     req.setTimeout(5000, () => req.destroy(new Error('timeout')));
@@ -80,4 +81,43 @@ test('visitors are told apart behind a hosting proxy', () => {
   // A header from a visitor connecting directly is not believed.
   assert.equal(clientOf(req('203.0.113.9', '1.2.3.4')), '203.0.113.9');
   assert.equal(clientOf(req(undefined)), 'unknown');
+});
+
+test('the app\'s files are checked every time and sent again only when changed; libraries are kept a day', async () => {
+  const first = await request('/js/app.js');
+  assert.equal(first.headers['cache-control'], 'no-cache');
+  assert.ok(first.headers.etag);
+  const again = await request('/js/app.js', { headers: { 'If-None-Match': first.headers.etag } });
+  assert.equal(again.status, 304);
+  assert.equal(again.text, '');
+  assert.equal((await request('/js/app.js', { headers: { 'If-None-Match': '"something-else"' } })).status, 200);
+  for (const p of ['/', '/css/styles.css', '/manifest.webmanifest', '/icon-192.png']) {
+    const r = await request(p);
+    assert.equal(r.status, 200, p);
+    assert.equal(r.headers['cache-control'], 'no-cache', p);
+  }
+  assert.match((await request('/vendor/leaflet/leaflet.js')).headers['cache-control'], /max-age=86400/);
+});
+
+test('text is sent compressed to browsers that take it', async () => {
+  const br = await request('/js/app.js', { headers: { 'Accept-Encoding': 'gzip, deflate, br' } });
+  assert.equal(br.headers['content-encoding'], 'br');
+  assert.match(zlib.brotliDecompressSync(br.raw).toString('utf8'), /findPlaces/);
+  const gz = await request('/js/app.js', { headers: { 'Accept-Encoding': 'gzip' } });
+  assert.equal(gz.headers['content-encoding'], 'gzip');
+  assert.match(zlib.gunzipSync(gz.raw).toString('utf8'), /findPlaces/);
+  assert.equal((await request('/js/app.js')).headers['content-encoding'], undefined);
+  // Answers from the server's own endpoints too, when they are big enough to be worth it.
+  const big = JSON.stringify({ geometry: Array.from({ length: 2000 }, (_, i) => [51.5 + i * 1e-5, -0.1 - i * 1e-5]) });
+  const a = encodeBody(big, 'gzip, br');
+  assert.equal(a.encoding, 'br');
+  assert.ok(a.body.length < big.length / 3, `compressed ${big.length} → ${a.body.length}`);
+  assert.equal(zlib.brotliDecompressSync(a.body).toString('utf8'), big);
+  assert.equal(encodeBody(big, 'gzip').encoding, 'gzip');
+  assert.deepEqual(encodeBody(big, ''), { body: big, encoding: null });
+  assert.deepEqual(encodeBody('{"small":true}', 'br'), { body: '{"small":true}', encoding: null });
+  // A small answer is sent as it is.
+  const config = await request('/api/config', { headers: { 'Accept-Encoding': 'br' } });
+  assert.equal(config.headers['content-encoding'], undefined);
+  assert.equal(JSON.parse(config.text).google, false);
 });

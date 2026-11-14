@@ -134,6 +134,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
   background: var(--material-strong); -webkit-backdrop-filter: saturate(180%) blur(24px); backdrop-filter: saturate(180%) blur(24px);
   border-radius: 14px; box-shadow: var(--shadow-2); max-height: 300px; overflow: auto;
 }
+.suggestions.up { top: auto; bottom: calc(100% + 6px); } /* above the box when there is no room below (a keyboard on a phone) */
 .suggestions li { padding: 9px 12px; border-radius: 10px; cursor: pointer; }
 .suggestions li[aria-selected=true], .suggestions li:hover { background: var(--fill); }
 .s-title { font-weight: 600; font-size: 15px; }
@@ -155,6 +156,10 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .field-btn.busy svg { animation: breathe 1s ease-in-out infinite; }
 @keyframes breathe { 50% { transform: scale(1.25); opacity: 0.5; } }
 .intro > .btn-plain { margin-top: -18px; }
+/* Typing on a small screen: logo and box at the top, the suggestions in the space a keyboard leaves free. */
+.screen-centered.typing { align-items: start; }
+.screen-centered.typing .intro { margin: calc(4px + env(safe-area-inset-top, 0px)) 0 0; gap: 14px; }
+.screen-centered.typing .wordmark-xl { font-size: 28px; }
 
 /* ---------------------------------------------------------------- main layout */
 #map { position: absolute; inset: 0; background: var(--bg); }
@@ -314,6 +319,9 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .add-box { background: var(--card); border-radius: 14px; padding: 10px; display: grid; gap: 8px; margin-bottom: 8px; }
 .add-box input { background-color: var(--fill); }
 .cta { position: sticky; bottom: -16px; padding: 12px 0 4px; margin-top: 10px; background: linear-gradient(transparent, var(--material) 35%); }
+/* Typing an address on a phone: the sheet is fully open with the box at its top (room to scroll it there, no button in the way). */
+.panel.typing .panel-content { padding-bottom: 900px; }
+.panel.typing .cta { display: none; }
 
 /* results */
 .result-head { display: flex; align-items: center; gap: 14px; margin: 2px 4px 14px; }
@@ -531,14 +539,14 @@ input.leave-opt { flex: 1; min-width: 0; width: auto; padding: 8px 10px; }
   max-width: 120px; overflow: hidden; text-overflow: ellipsis; vertical-align: middle;
 }
 .walk-chip { display: inline-flex; align-items: center; gap: 1px; color: var(--text-2); font-size: 12px; font-weight: 600; }
-.itin { padding: 2px 14px 14px 62px; }
+.itin { padding: 2px 14px 14px 52px; }
 .itin > .footnote { margin: 0 0 10px; }
 .opt-row { display: flex; gap: 6px; overflow-x: auto; margin: 0 0 10px; scrollbar-width: none; }
 .opt-row .chip { border: 0; background: var(--fill); color: var(--text); border-radius: 999px; padding: 5px 11px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
 .opt-row .chip.active { background: var(--accent); color: #fff; }
 .legs { list-style: none; margin: 0 0 12px; padding: 0; }
-.leg { display: grid; grid-template-columns: 52px 14px 1fr; gap: 0 8px; position: relative; padding-bottom: 12px; font-size: 14px; }
-.leg .t { font-size: 12.5px; font-weight: 600; color: var(--text-2); font-variant-numeric: tabular-nums; padding-top: 1px; }
+.leg { display: grid; grid-template-columns: 62px 14px 1fr; gap: 0 8px; position: relative; padding-bottom: 12px; font-size: 14px; }
+.leg .t { font-size: 12.5px; font-weight: 600; color: var(--text-2); font-variant-numeric: tabular-nums; padding-top: 1px; white-space: nowrap; } /* "12:41 PM" on one line */
 .leg .rail { position: relative; }
 .leg .rail::before { content: ""; position: absolute; left: 50%; top: 4px; bottom: -8px; transform: translateX(-50%); width: 0; border-left: 3px dotted var(--text-3); }
 .leg.ride .rail::before { border-left: 4px solid var(--line); border-radius: 2px; }

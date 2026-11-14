@@ -62,7 +62,8 @@ test('public transport: options, line names and colours, walking legs, geometry'
   assert.equal(r.mode, 'transit');
   assert.ok(r.options.length >= 1);
   const ends = r.options.map((o) => Date.parse(o.end));
-  assert.deepEqual(ends, [...ends].sort((a, b) => a - b), 'earliest arrival first');
+  assert.deepEqual(ends.slice(1), ends.slice(1).sort((a, b) => a - b), 'by arrival, earliest first');
+  assert.ok(ends[0] - Math.min(...ends) <= 180000, 'the first arrives within three minutes of the earliest');
   const best = r.options[0];
   assert.equal(r.duration, best.duration);
   const rides = best.legs.filter((l) => !isWalkLeg(l));
@@ -80,7 +81,30 @@ test('public transport: options, line names and colours, walking legs, geometry'
 test('arrive-by puts the latest departure first', () => {
   const r = normalizeTransit(fixture('transitous-plan.json'), { arriveBy: true });
   const starts = r.options.map((o) => Date.parse(o.start));
-  assert.deepEqual(starts, [...starts].sort((a, b) => b - a));
+  assert.deepEqual(starts.slice(1), starts.slice(1).sort((a, b) => b - a));
+  assert.ok(Math.max(...starts) - starts[0] <= 180000);
+});
+
+test('journeys arriving within a few minutes of each other: the simplest comes first', async () => {
+  const { rankItineraries } = await import('../../public/js/directions.js');
+  const leg = (mode) => ({ mode });
+  const at = (hhmm) => `2026-11-14T${hhmm}:00Z`;
+  const busHop = { start: at('12:35'), end: at('12:50'), duration: 900, transfers: 0, legs: [leg('WALK'), leg('BUS'), leg('WALK')] }; // walk 13 min, one stop on a bus
+  const walk = { start: at('12:38'), end: at('12:51'), duration: 780, transfers: 0, legs: [leg('WALK')] };
+  const later = { start: at('12:42'), end: at('12:58'), duration: 960, transfers: 0, legs: [leg('WALK')] };
+  assert.deepEqual(rankItineraries([busHop, walk, later]), [walk, busHop, later], 'walking all the way, a minute later, beats the bus hop');
+  // More than three minutes later is too much to give up.
+  const slowWalk = { ...walk, end: at('12:55') };
+  assert.deepEqual(rankItineraries([slowWalk, busHop]), [busHop, slowWalk]);
+  // The same number of vehicles: the earliest arrival stays first.
+  const train = { start: at('12:36'), end: at('12:51'), duration: 900, transfers: 0, legs: [leg('WALK'), leg('RAIL'), leg('WALK')] };
+  assert.deepEqual(rankItineraries([train, busHop]), [busHop, train]);
+  // Arriving by a time: the latest departure, with the same rule.
+  const direct = { start: at('12:40'), end: at('12:58'), duration: 1080, transfers: 0, legs: [leg('WALK'), leg('RAIL'), leg('WALK')] };
+  const twoBuses = { start: at('12:42'), end: at('12:59'), duration: 1020, transfers: 1, legs: [leg('WALK'), leg('BUS'), leg('BUS'), leg('WALK')] };
+  assert.deepEqual(rankItineraries([direct, twoBuses], { arriveBy: true }), [direct, twoBuses]);
+  assert.deepEqual(rankItineraries([]), []);
+  assert.deepEqual(rankItineraries([walk]), [walk]);
 });
 
 test('no journeys is a clear 404', () => {

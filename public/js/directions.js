@@ -180,16 +180,34 @@ function normalizeItinerary(it) {
 }
 
 /**
+ * The order journeys are offered in: by arrival, earliest first (when leaving
+ * at a time), or by departure, latest first (when arriving by a time); fewer
+ * changes break ties. First of all comes the simplest of those within three
+ * minutes of the best, the one with the fewest vehicles: "walk 13 minutes,
+ * then one stop on a bus" should not come before walking all the way because
+ * it arrives a minute sooner.
+ */
+export function rankItineraries(options, { arriveBy = false } = {}) {
+  const t = (s) => (s ? Date.parse(s) : 0);
+  const off = arriveBy ? (o) => -t(o.start) : (o) => t(o.end); // smaller is better
+  const rides = (o) => o.legs.filter((l) => !isWalkLeg(l)).length;
+  const list = [...options].sort((a, b) => off(a) - off(b) || a.transfers - b.transfers || a.duration - b.duration);
+  if (list.length > 1) {
+    const pick = list.filter((o) => off(o) - off(list[0]) <= 180000).reduce((a, b) => (rides(b) < rides(a) ? b : a));
+    if (pick !== list[0]) { list.splice(list.indexOf(pick), 1); list.unshift(pick); }
+  }
+  return list;
+}
+
+/**
  * Transitous plan → { mode: 'transit', options: [itinerary, ...] } with the
- * best option first: earliest arrival when leaving at a time, latest
- * departure when arriving by a time; fewer changes break ties.
+ * best option first (see rankItineraries).
  */
 export function normalizeTransit(json, { arriveBy = false } = {}) {
   let options = (json?.itineraries || []).map(normalizeItinerary);
   if (!options.length && json?.direct?.length) options = json.direct.map(normalizeItinerary);
   if (!options.length) throw Object.assign(new Error('No public transport route found'), { status: 404 });
-  const t = (s) => (s ? Date.parse(s) : 0);
-  options.sort((a, b) => (arriveBy ? t(b.start) - t(a.start) : t(a.end) - t(b.end)) || a.transfers - b.transfers || a.duration - b.duration);
+  options = rankItineraries(options, { arriveBy });
   const best = options[0];
   return {
     mode: 'transit', provider: 'transitous',
