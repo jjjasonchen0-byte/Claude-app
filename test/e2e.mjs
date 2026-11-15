@@ -121,6 +121,20 @@ await ctx.route('**/api/traveltimes?**', (r) => {
   const t = normalizeOsrmTable(fx('osrm-table.json'));
   return r.fulfill({ json: { durations: Array.from({ length: n }, (_, i) => Array.from({ length: m }, (_, j) => t.durations[i % 2][j % 2] + j * 30)), distances: [] } });
 });
+// Walking, cycling and driving times and routes are asked of the routing service
+// straight from the browser: the same stand-in answers, in the service's own format.
+let routingAsked = 0;
+await ctx.route('https://routing.openstreetmap.de/**', (r) => {
+  routingAsked++;
+  const u = new URL(r.request().url());
+  const cors = { 'access-control-allow-origin': '*' };
+  if (u.pathname.includes('/table/')) {
+    const n = u.searchParams.get('sources').split(';').length, m = u.searchParams.get('destinations').split(';').length;
+    const t = fx('osrm-table.json');
+    return r.fulfill({ headers: cors, json: { code: 'Ok', durations: Array.from({ length: n }, (_, i) => Array.from({ length: m }, (_, j) => t.durations[i % 2][j % 2] + j * 30)) } });
+  }
+  return r.fulfill({ headers: cors, json: fx('osrm-route.json') });
+});
 await ctx.route(/overpass/, async (r) => {
   const q = new URLSearchParams(r.request().postData()).get('data');
   await new Promise((res) => setTimeout(res, 150));
@@ -301,6 +315,7 @@ try {
   await page.waitForTimeout(500);
   await shot('13-mobile-people');
 
+  assert.ok(routingAsked > 0, 'walking, cycling and driving times came straight from the routing service');
   assert.deepEqual(errors, [], `page errors: ${errors.join('\n')}`);
   console.log('E2E passed ✔');
 } catch (err) {

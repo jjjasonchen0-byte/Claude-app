@@ -463,7 +463,8 @@ function addFreeBasemap(want) {
 }
 // basemap:end
 
-const ROUTES_CREDIT = `Routes <a href="${ATTRIBUTION.routing.url}" target="_blank" rel="noopener">FOSSGIS OSRM</a> · Public transport <a href="${ATTRIBUTION.transit.url}" target="_blank" rel="noopener">Transitous</a>`;
+// (The routing service asks apps to credit it and to link to "fix the map".)
+const ROUTES_CREDIT = `Routes <a href="${ATTRIBUTION.routing.url}" target="_blank" rel="noopener">FOSSGIS OSRM</a> (<a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener">fix the map</a>) · Public transport <a href="${ATTRIBUTION.transit.url}" target="_blank" rel="noopener">Transitous</a>`;
 
 function initMap() {
   map = L.map('map', { zoomControl: false, worldCopyJump: true });

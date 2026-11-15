@@ -3696,6 +3696,7 @@ __m["hours"] = { DAY_NAMES, parseHours, openStatus, weekTable };
 // server first (which caches, trims responses and identifies the app as the
 // providers ask); without a server it calls the providers directly.
 
+const { simplify } = __m["geo"];
 const MODES = [
   { id: 'transit', label: 'Transit' },
   { id: 'walk', label: 'Walk' },
@@ -3726,7 +3727,7 @@ const lonlat = (p) => `${Number(p.lon).toFixed(6)},${Number(p.lat).toFixed(6)}`;
 /** A route, optionally through a `via` point, optionally with other good routes. */
 function osrmRouteUrl(mode, from, to, { alternatives = false, via = null } = {}) {
   const pts = [from, ...(via ? [via] : []), to].map(lonlat).join(';');
-  return `${OSRM}/${OSRM_PROFILE[mode]}/route/v1/driving/${pts}?overview=full&geometries=geojson&steps=false${alternatives && !via ? '&alternatives=2' : ''}`;
+  return `${OSRM}/${OSRM_PROFILE[mode]}/route/v1/driving/${pts}?overview=full&geometries=polyline&steps=false${alternatives && !via ? '&alternatives=2' : ''}`;
 }
 
 function osrmTableUrl(mode, sources, destinations) {
@@ -3794,7 +3795,8 @@ function decodePolyline(str, precision = 5) {
   return out;
 }
 
-const coords = (g) => (g?.coordinates || []).map(([lon, lat]) => [lat, lon]);
+// A route's line: an encoded polyline (what the app asks for: a quarter of the size), or GeoJSON.
+const coords = (g) => (typeof g === 'string' ? decodePolyline(g, 5) : (g?.coordinates || []).map(([lon, lat]) => [lat, lon]));
 
 /**
  * OSRM route → { mode, duration (s), distance (m), geometry: [[lat, lon]],
@@ -3972,17 +3974,92 @@ function usableTable(t) {
   return t;
 }
 
-// Without a Meet server the browser asks the routing service itself, and its
-// rule is one request a second (more are refused): these wait their turn.
-const ROUTING_GAP_MS = 1100;
+// The free routing service (FOSSGIS) takes one request a second from each
+// address on the internet and refuses more. The Meet server's address is
+// often shared with other sites on the same host, which use that allowance
+// up, so the service is asked straight from this browser first, a little over
+// a second apart, and the Meet server is the other way (see fromRoutingService).
+const routingPace = { gapMs: 1100, slowMs: 2500, prefer: 'direct' }; // (`prefer` changes as described below; tests change the rest)
 let routingFreeAt = 0;
 function routingTurn(signal) {
   const now = Date.now(), at = Math.max(now, routingFreeAt);
-  routingFreeAt = at + ROUTING_GAP_MS;
+  routingFreeAt = at + routingPace.gapMs;
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) { reject(new DOMException('Aborted', 'AbortError')); return; }
     const timer = setTimeout(resolve, at - now);
     signal?.addEventListener('abort', () => { clearTimeout(timer); reject(new DOMException('Aborted', 'AbortError')); }, { once: true });
   });
+}
+
+/** The routing service's own "there is no way between these" (sent as an error status): an answer, not a failure. */
+function routingAnswer(err) {
+  if (['NoRoute', 'NoSegment', 'NoTable'].includes(err?.data?.code)) return Object.assign(new Error('No route found'), { status: 404, final: true });
+  return err;
+}
+
+const SLOW = Symbol('slow');
+/**
+ * An answer from the free routing service, by two ways: straight from this
+ * browser (`direct(signal)`), or through the Meet server (`serverPath`),
+ * which asks from its own address and keeps answers for a day. The way that
+ * answered well last is tried first: the browser's own to begin with. The
+ * other way is asked at once when the first is refused or out of reach, and
+ * as well when the first is slow (now and then the service holds a request
+ * back for eight seconds): then the first good answer is used, and its way
+ * goes first from then on.
+ */
+async function fromRoutingService(serverPath, direct, signal) {
+  const stop = new AbortController();
+  const onAbort = () => stop.abort();
+  if (signal?.aborted) stop.abort();
+  signal?.addEventListener('abort', onAbort);
+  // Each way: `sent` settles when the request goes out, `answer` with its result.
+  const ways = {
+    direct() {
+      const sent = routingTurn(stop.signal);
+      return { sent, answer: sent.then(() => direct(stop.signal)).catch((err) => { throw routingAnswer(err); }) };
+    },
+    server() {
+      const answer = getJson(serverPath, { signal: stop.signal, credentials: 'same-origin' })
+        .catch((err) => { if (err.status === 404 && err.data?.error) err.final = true; throw err; }); // "No route found", said by the server
+      return { sent: Promise.resolve(), answer };
+    },
+  };
+  const order = routingPace.prefer === 'server' ? ['server', 'direct'] : ['direct', 'server'];
+  // Of two failures, the one that says something: a message from the Meet server, else an answer with a status.
+  const telling = (x, y) => (x?.data?.error ? x : y?.data?.error ? y : x?.status ? x : y?.status ? y : x);
+  let timer;
+  try {
+    const first = ways[order[0]]();
+    first.answer.catch(() => {}); // looked at below
+    // "Slow" counts from when the request is sent, not while it waits its turn.
+    const slow = first.sent.then(() => new Promise((resolve) => { timer = setTimeout(() => resolve(SLOW), routingPace.slowMs); }), () => new Promise(() => {}));
+    let early;
+    try {
+      early = await Promise.race([first.answer, slow]);
+    } catch (err) {
+      if (signal?.aborted || err.final) throw err;
+      const other = await ways[order[1]]().answer.catch((otherErr) => { throw signal?.aborted || otherErr.final ? otherErr : telling(err, otherErr); });
+      routingPace.prefer = order[1];
+      return other;
+    }
+    if (early !== SLOW) return early;
+    const second = ways[order[1]]();
+    return await new Promise((resolve, reject) => {
+      let failure = null, done = false;
+      const failed = (err) => {
+        if (done) return;
+        if (err?.final || signal?.aborted) { done = true; return reject(err); }
+        if (failure) { done = true; reject(telling(failure, err)); } else failure = err;
+      };
+      first.answer.then((v) => { if (!done) { done = true; resolve(v); } }, failed);
+      second.answer.then((v) => { if (!done) { done = true; routingPace.prefer = order[1]; resolve(v); } }, failed);
+    });
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+    stop.abort(); // the copy still running, if any
+  }
 }
 
 /** Ask the Meet server; if there is no server (404 / network error), call the provider directly. */
@@ -3995,7 +4072,15 @@ async function viaServerOr(path, direct, signal) {
     // only a missing server (a bare 404 or 405, or no connection) sends the request to the provider.
     if (err.status && (err.data?.error || (err.status !== 404 && err.status !== 405))) throw err;
   }
-  return direct();
+  return direct(signal);
+}
+
+/** A route straight from the routing service, slimmed down as the Meet server would. */
+async function routeDirect(mode, from, to, { alt, viaPt }, signal) {
+  const r = normalizeOsrm(await getJson(osrmRouteUrl(mode, from, to, { alternatives: alt, via: viaPt }), { signal }), mode);
+  r.geometry = simplify(r.geometry, 2);
+  for (const a of r.alternatives) a.geometry = simplify(a.geometry, 2);
+  return r;
 }
 
 /**
@@ -4014,11 +4099,16 @@ function getDirections(mode, from, to, { time, arriveBy = false, alternatives = 
   if (arriveBy) q.set('arriveBy', '1');
   if (alt) q.set('alt', '1');
   if (viaPt) q.set('via', ll(viaPt));
-  return cached(key, signal, () => viaServerOr(`/api/directions?${q}`, async () => {
-    if (mode === 'transit') return normalizeTransit(await getJson(transitUrl(from, to, { time, arriveBy }), { signal }), { arriveBy });
-    await routingTurn(signal);
-    return normalizeOsrm(await getJson(osrmRouteUrl(mode, from, to, { alternatives: alt, via: viaPt }), { signal }), mode);
-  }, signal).then(usableRoute));
+  return cached(key, signal, () => {
+    // Walking, cycling and driving from the free routing service: this browser first.
+    // With Google's map the Meet server answers (from Google); public transport always goes through it.
+    if (road && !google) return fromRoutingService(`/api/directions?${q}`, (sig) => routeDirect(mode, from, to, { alt, viaPt }, sig), signal).then(usableRoute);
+    return viaServerOr(`/api/directions?${q}`, async (sig) => {
+      if (mode === 'transit') return normalizeTransit(await getJson(transitUrl(from, to, { time, arriveBy }), { signal: sig }), { arriveBy });
+      await routingTurn(sig);
+      return routeDirect(mode, from, to, { alt, viaPt }, sig);
+    }, signal).then(usableRoute);
+  });
 }
 
 /**
@@ -4056,10 +4146,8 @@ function getTravelTimes(mode, sources, destinations, { signal } = {}) {
   }
   const key = ['table', mode, sources.map(ll).join(';'), destinations.map(ll).join(';')].join('|');
   const q = new URLSearchParams({ mode, from: sources.map(ll).join(';'), to: destinations.map(ll).join(';') });
-  return cached(key, signal, () => viaServerOr(`/api/traveltimes?${q}`, async () => {
-    await routingTurn(signal);
-    return normalizeOsrmTable(await getJson(osrmTableUrl(mode, sources, destinations), { signal }));
-  }, signal).then(usableTable));
+  return cached(key, signal, () => fromRoutingService(`/api/traveltimes?${q}`,
+    async (sig) => normalizeOsrmTable(await getJson(osrmTableUrl(mode, sources, destinations), { signal: sig })), signal).then(usableTable));
 }
 
 /**
@@ -4095,7 +4183,7 @@ function navLinks(mode, from, to) {
   };
 }
 
-__m["directions"] = { MODES, ATTRIBUTION, useGoogle, usingGoogle, osrmRouteUrl, osrmTableUrl, transitUrl, transitReachUrl, reduceReach, decodePolyline, normalizeOsrm, normalizeOsrmTable, vehicleName, isWalkLeg, rankItineraries, normalizeTransit, getDirections, getTransitReach, getTravelTimes, getCheckTimes, navLinks };
+__m["directions"] = { MODES, ATTRIBUTION, useGoogle, usingGoogle, osrmRouteUrl, osrmTableUrl, transitUrl, transitReachUrl, reduceReach, decodePolyline, normalizeOsrm, normalizeOsrmTable, vehicleName, isWalkLeg, rankItineraries, normalizeTransit, routingPace, getDirections, getTransitReach, getTravelTimes, getCheckTimes, navLinks };
 })();
 // ---- rated
 (() => {
@@ -5432,7 +5520,8 @@ const isDark = () => state.settings.theme === 'dark' || (state.settings.theme ==
 
 function addBasemap() { if (!baseLayer) baseLayer = __m.demo.addBasemap(map) || true; }
 
-const ROUTES_CREDIT = `Routes <a href="${ATTRIBUTION.routing.url}" target="_blank" rel="noopener">FOSSGIS OSRM</a> · Public transport <a href="${ATTRIBUTION.transit.url}" target="_blank" rel="noopener">Transitous</a>`;
+// (The routing service asks apps to credit it and to link to "fix the map".)
+const ROUTES_CREDIT = `Routes <a href="${ATTRIBUTION.routing.url}" target="_blank" rel="noopener">FOSSGIS OSRM</a> (<a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener">fix the map</a>) · Public transport <a href="${ATTRIBUTION.transit.url}" target="_blank" rel="noopener">Transitous</a>`;
 
 function initMap() {
   map = L.map('map', { zoomControl: false, zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 80, minZoom: 11.5, maxZoom: 19, maxBounds: L.latLngBounds(__m.demo.getBounds()).pad(0.55), maxBoundsViscosity: 0.8 });
