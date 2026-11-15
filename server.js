@@ -421,6 +421,14 @@ route('GET', '/api/gmap/:style/viewport', async (req, res, { style }) => {
 
 // ---------------------------------------------------------------- Google: a place's photos and reviews
 
+const warned = new Set();
+/** Log a message once (a setting that is wrong stays wrong: once is enough to find it in the log). */
+function warnOnce(message) {
+  if (warned.has(message) || warned.size > 50) return;
+  warned.add(message);
+  console.warn(message);
+}
+
 /**
  * Rating, reviews and photos from Google for a place from OpenStreetMap,
  * when the page shows Google's map (g=1). The place is found by name near
@@ -455,7 +463,10 @@ route('GET', '/api/gplaces/details', async (req, res) => {
     place = normalizeGooglePlace(json, { photoUrl: (n, w) => `/api/gplaces/photo?${new URLSearchParams({ name: n, w })}`, maxPhotos: Math.min(6, google.left('photos')) });
   } catch (err) {
     if (err instanceof HttpError) throw err;
-    throw new HttpError(err.limit ? 429 : 502, 'Google place details unavailable');
+    if (err.limit) throw new HttpError(429, 'Google place details are paused until tomorrow');
+    // Usually a setting: "Places API (New)" not switched on for the project, or not allowed for this key.
+    warnOnce(`Google place details: ${err.message}`);
+    throw new HttpError(err.google === 403 || err.google === 400 ? 503 : 502, 'Google place details unavailable');
   }
   send(res, 200, { place }, { 'Cache-Control': 'private, max-age=600' });
 });

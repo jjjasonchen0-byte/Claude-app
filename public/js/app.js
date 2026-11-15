@@ -1497,11 +1497,16 @@ function openPlace(id) {
  * the server offers a browser key for it, otherwise Google's Places API
  * (on Google's map), Tripadvisor and free Wikimedia photos.
  */
+let kitFailures = 0; // times in a row Google's place card could not load
 function loadDetails(p) {
   if (p.id === 'meet' || p.details || p.kit) return;
   if (placesKitKey) {
     const again = () => { if (state.view === 'place' && state.search?.place === p) render({ keepScroll: true }); };
     const fallback = () => { p.kit?.el?.remove(); p.kit = { status: 'none' }; loadOtherDetails(p); again(); };
+    // The card not loading at all (the Places UI Kit not switched on for the key, or the key
+    // not allowed on this site) is not about this place: after two in a row it is left alone
+    // for the rest of the visit, so every place doesn't wait on it.
+    const failed = () => { if (++kitFailures >= 2) placesKitKey = null; fallback(); };
     p.kit = { status: 'loading' };
     loadPlacesKit(placesKitKey)
       .then(() => findPlaceId(p))
@@ -1510,11 +1515,11 @@ function loadDetails(p) {
         p.kit = {
           status: 'ok', id,
           // Checked once loaded: another place with a similar name nearby is not this one.
-          el: placeCard(id, { dark: isDark(), onLoad: (place) => { if (!samePlace(p, place)) fallback(); }, onError: fallback }),
+          el: placeCard(id, { dark: isDark(), onLoad: (place) => { kitFailures = 0; if (!samePlace(p, place)) fallback(); }, onError: failed }),
         };
         again();
       })
-      .catch(fallback);
+      .catch(failed);
     return;
   }
   loadOtherDetails(p);

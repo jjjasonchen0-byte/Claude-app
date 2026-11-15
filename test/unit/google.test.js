@@ -272,3 +272,25 @@ test('server: a place is matched on Google (free search), checked, and its photo
     fs.rmSync(process.env.DATA_FILE, { force: true });
   }
 });
+
+test('a request Google refuses outright (an API not switched on, a key not allowed) is not counted against the day, and says what Google said', async () => {
+  let ok = false;
+  const fetchImpl = async () => (ok
+    ? new Response(JSON.stringify({ id: 'abc', displayName: { text: 'Cafe' } }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    : new Response(JSON.stringify({ error: { code: 403, message: 'Places API (New) has not been used in project 1 before or it is disabled.', status: 'PERMISSION_DENIED' } }), { status: 403, headers: { 'Content-Type': 'application/json' } }));
+  const g = createGoogle({ apiKey: 'k3y', fetchImpl, limits: { places: 2, routes: 2, elements: 4, photos: 2 } });
+  for (let i = 0; i < 5; i++) {
+    await assert.rejects(g.place('abc'), (err) => err.google === 403 && err.status === 502 && /disabled/.test(err.message));
+  }
+  assert.equal(g.usage().used.places, 0, 'five refusals, none counted');
+  await assert.rejects(g.route('walk', { lat: 1, lon: 2 }, { lat: 1.1, lon: 2.1 }), (err) => err.google === 403);
+  await assert.rejects(g.matrix('walk', [{ lat: 1, lon: 2 }], [{ lat: 1.1, lon: 2.1 }, { lat: 1.2, lon: 2.2 }]), (err) => err.google === 403);
+  await assert.rejects(g.photo('places/abc/photos/def'), (err) => err.google === 403);
+  assert.deepEqual(g.usage().used, { routes: 0, elements: 0, tiles: 0, places: 0, photos: 0 });
+  // Once it works, each answer counts, and the cap still holds.
+  ok = true;
+  await g.place('abc');
+  await g.place('abc');
+  assert.equal(g.usage().used.places, 2);
+  await assert.rejects(g.place('abc'), (err) => err.limit === true);
+});

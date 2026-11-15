@@ -83,17 +83,24 @@ export async function thumbFor(p) {
  * Everything for the place page: { photos: [{ url, caption, by, credit }],
  * reviews, rating, …, source }. Tripadvisor when available, then free photos.
  */
+let googleDetailsFailed = 0; // times in a row Google's place details could not be had at all
 export async function detailsFor(p) {
-  if (usingGoogle() && p.id !== 'meet') {
+  // (Failing twice in a row for reasons that aren't about the place, such as the Places API
+  // not being switched on for the server's key, they are left alone for the rest of the visit.)
+  if (usingGoogle() && p.id !== 'meet' && googleDetailsFailed < 2) {
     try {
       const q = new URLSearchParams({ g: '1', key: p.id, name: p.name, at: `${p.lat.toFixed(6)},${p.lon.toFixed(6)}` });
       const { place } = await getJson(`/api/gplaces/details?${q}`);
+      googleDetailsFailed = 0;
       if (place) {
         // Few or no photos on Google: add free ones.
         if (place.photos.length < 3) place.photos = [...place.photos, ...(await freeGallery(p).catch(() => []))];
         return place;
       }
-    } catch { /* not on Google, or not today: Tripadvisor and free photos below */ }
+    } catch (err) {
+      // Not on Google (404) is an answer; anything else counts against Google for this visit.
+      googleDetailsFailed = err.status === 404 ? 0 : googleDetailsFailed + 1;
+    }
   }
   let details = null;
   if (p.rating?.id) {
