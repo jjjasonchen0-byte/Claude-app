@@ -183,42 +183,12 @@ function rateLimit(req, max = VISITOR_LIMIT, windowMs = RATE_WINDOW_MS) {
   if (++v.n > max) throw new HttpError(429, 'Too many requests — try again in a few minutes');
 }
 
-/**
- * GET JSON. With `hedgeAfterMs` (a list of delays), a request that has not
- * answered by each delay is sent once more, and the first answer wins: the
- * public routing server usually replies in under a second but now and then
- * stalls for ten.
- */
-async function fetchJson(url, { hedgeAfterMs = [] } = {}) {
-  const ctrls = [];
-  const once = async () => {
-    const ctrl = new AbortController();
-    ctrls.push(ctrl);
-    const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' }, signal: AbortSignal.any([ctrl.signal, AbortSignal.timeout(20000)]) });
-    let data = null;
-    try { data = await res.json(); } catch { /* not JSON */ }
-    return { res, data };
-  };
-  const timers = [];
-  try {
-    return await new Promise((resolve, reject) => {
-      let pending = 0, failed = null, launched = 0;
-      const total = 1 + hedgeAfterMs.length;
-      const launch = () => {
-        launched++; pending++;
-        once().then(resolve, (err) => {
-          failed = err;
-          if (--pending === 0 && launched === total) reject(failed);
-          else if (pending === 0) { for (const t of timers) clearTimeout(t); launch(); } // failed fast: try the next copy now
-        });
-      };
-      launch();
-      for (const ms of hedgeAfterMs) timers.push(setTimeout(() => { if (launched < total) launch(); }, ms));
-    });
-  } finally {
-    for (const t of timers) clearTimeout(t);
-    for (const c of ctrls) c.abort(); // stop the slower copies
-  }
+/** GET JSON (20 seconds at most). → { res, data } */
+async function fetchJson(url) {
+  const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' }, signal: AbortSignal.timeout(20000) });
+  let data = null;
+  try { data = await res.json(); } catch { /* not JSON */ }
+  return { res, data };
 }
 
 /** One public transport request from today's budget (Transitous is a volunteer service). */
@@ -229,16 +199,51 @@ function spendTransit() {
   transitCount++;
 }
 
-async function upstream(url, ttlMs, { transit = false } = {}) {
+// The free routing server (FOSSGIS) takes one request a second: its usage
+// policy says so, and it refuses more (429), which used to leave travel times
+// as guesses whenever a search asked for several things at once. So requests
+// to it take turns here, whoever they are for: one starts at most every
+// ROUTING_GAP_MS, in the order they were asked, and none is sent twice.
+const ROUTING_GAP_MS = process.env.ROUTING_GAP_MS && Number(process.env.ROUTING_GAP_MS) >= 0 ? Number(process.env.ROUTING_GAP_MS) : 1100;
+const ROUTING_MAX_WAIT_MS = 20000;
+let routingFreeAt = 0;
+/** Wait for a turn with the routing server (refused at once if the queue is already 20 seconds long). */
+function routingTurn() {
+  const now = Date.now();
+  const at = Math.max(now, routingFreeAt);
+  if (at - now > ROUTING_MAX_WAIT_MS) throw new HttpError(503, 'Directions are busy right now. Try again in a moment.');
+  routingFreeAt = at + ROUTING_GAP_MS;
+  return new Promise((resolve) => setTimeout(resolve, at - now));
+}
+
+const inFlight = new Map(); // url → the request under way: the same question asked twice at once is sent once
+
+/** An answer from a routing or timetable service: kept for `ttlMs`, asked for once however many want it. */
+function upstream(url, ttlMs, opts) {
   const hit = upstreamCache.get(url);
-  if (hit && Date.now() - hit.at < hit.ttl) return hit.data;
+  if (hit && Date.now() - hit.at < hit.ttl) return Promise.resolve(hit.data);
+  let asking = inFlight.get(url);
+  if (!asking) {
+    asking = ask(url, ttlMs, opts).finally(() => inFlight.delete(url));
+    inFlight.set(url, asking);
+  }
+  return asking;
+}
+
+async function ask(url, ttlMs, { transit = false } = {}) {
+  // Transitous is a volunteer service with a daily budget; the routing server takes turns.
   if (transit) spendTransit();
   let res, data;
-  try {
-    // Transitous is a volunteer service with a daily budget: never sent twice.
-    ({ res, data } = await fetchJson(url, { hedgeAfterMs: transit ? [] : [1000, 3500] }));
-  } catch {
-    throw new HttpError(502, 'The directions service could not be reached');
+  for (let attempt = 0; ; attempt++) {
+    if (!transit) await routingTurn();
+    try {
+      ({ res, data } = await fetchJson(url));
+    } catch {
+      throw new HttpError(502, 'The directions service could not be reached');
+    }
+    // Refused for asking too fast all the same (others share this server's address): once more, after a pause.
+    if (res.status === 429 && !transit && attempt === 0) { routingFreeAt = Math.max(routingFreeAt, Date.now() + 2 * ROUTING_GAP_MS); continue; }
+    break;
   }
   if (!res.ok && !data) throw new HttpError(502, `The directions service answered ${res.status}`);
   // A busy or failing service is not an answer: nothing is kept, so the next try asks again.

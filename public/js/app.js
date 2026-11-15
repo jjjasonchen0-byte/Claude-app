@@ -1057,7 +1057,9 @@ async function findPlaces({ replay = false } = {}) {
       .catch(() => {});
     // Someone whose times could not be checked a moment ago (their routing service
     // did not answer) is not waited on for long again: their route is a straight line.
-    const routeWait = (i) => (meeting.approx || meeting.real?.[i] === false ? 4000 : 10000);
+    // (The free routing service is asked one route a second, so with it a bigger group waits a little longer.)
+    const inTurn = usingGoogle() ? 0 : 1200 * people.filter((p) => p.mode !== 'transit').length;
+    const routeWait = (i) => (meeting.approx || meeting.real?.[i] === false ? 4000 : 10000) + inTurn;
     const routesP = search.routes ? Promise.resolve(search.routes)
       : anchorP.then((m) => Promise.all(people.map((p, i) => withTimeout(getDirections(p.mode, p, m, { signal: ctrl.signal, ...at }), routeWait(i)).catch(() => null))));
     status('Finding everyone’s routes…');

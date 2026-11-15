@@ -285,6 +285,19 @@ function usableTable(t) {
   return t;
 }
 
+// Without a Meet server the browser asks the routing service itself, and its
+// rule is one request a second (more are refused): these wait their turn.
+const ROUTING_GAP_MS = 1100;
+let routingFreeAt = 0;
+function routingTurn(signal) {
+  const now = Date.now(), at = Math.max(now, routingFreeAt);
+  routingFreeAt = at + ROUTING_GAP_MS;
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, at - now);
+    signal?.addEventListener('abort', () => { clearTimeout(timer); reject(new DOMException('Aborted', 'AbortError')); }, { once: true });
+  });
+}
+
 /** Ask the Meet server; if there is no server (404 / network error), call the provider directly. */
 async function viaServerOr(path, direct, signal) {
   try {
@@ -316,6 +329,7 @@ export function getDirections(mode, from, to, { time, arriveBy = false, alternat
   if (viaPt) q.set('via', ll(viaPt));
   return cached(key, signal, () => viaServerOr(`/api/directions?${q}`, async () => {
     if (mode === 'transit') return normalizeTransit(await getJson(transitUrl(from, to, { time, arriveBy }), { signal }), { arriveBy });
+    await routingTurn(signal);
     return normalizeOsrm(await getJson(osrmRouteUrl(mode, from, to, { alternatives: alt, via: viaPt }), { signal }), mode);
   }, signal).then(usableRoute));
 }
@@ -355,7 +369,10 @@ export function getTravelTimes(mode, sources, destinations, { signal } = {}) {
   }
   const key = ['table', mode, sources.map(ll).join(';'), destinations.map(ll).join(';')].join('|');
   const q = new URLSearchParams({ mode, from: sources.map(ll).join(';'), to: destinations.map(ll).join(';') });
-  return cached(key, signal, () => viaServerOr(`/api/traveltimes?${q}`, async () => normalizeOsrmTable(await getJson(osrmTableUrl(mode, sources, destinations), { signal })), signal).then(usableTable));
+  return cached(key, signal, () => viaServerOr(`/api/traveltimes?${q}`, async () => {
+    await routingTurn(signal);
+    return normalizeOsrmTable(await getJson(osrmTableUrl(mode, sources, destinations), { signal }));
+  }, signal).then(usableTable));
 }
 
 /**

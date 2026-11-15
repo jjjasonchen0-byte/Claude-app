@@ -125,6 +125,7 @@ test('request URLs ask for only what the app needs', () => {
 test('server relays directions with caching, a daily transit cap and validation', async () => {
   process.env.DATA_FILE = path.join(os.tmpdir(), `meet-dir-test-${Date.now()}.json`);
   process.env.TRANSIT_DAILY_LIMIT = '2';
+  process.env.ROUTING_GAP_MS = '10'; // (the wait between requests to the routing service, kept short for the test)
   const calls = [];
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (url, init) => {
@@ -181,37 +182,57 @@ test('server relays directions with caching, a daily transit cap and validation'
   }
 });
 
-test('server: a stalled routing request is sent again and the first answer wins; transit never is', async () => {
-  process.env.DATA_FILE = path.join(os.tmpdir(), `meet-hedge-test-${Date.now()}.json`);
-  const sent = [];
+test('server: requests to the free routing service take turns (one at a time, a gap between them), none is sent twice', async () => {
+  process.env.DATA_FILE = path.join(os.tmpdir(), `meet-turns-test-${Date.now()}.json`);
+  process.env.ROUTING_GAP_MS = '150';
+  const sent = []; // { url, at }
+  const refuseOnce = new Set();
   const realFetch = globalThis.fetch;
-  globalThis.fetch = async (url, init) => {
+  globalThis.fetch = async (url) => {
     const u = String(url);
-    sent.push(u);
-    const n = sent.filter((x) => x === u).length;
-    const body = u.includes('transitous') ? fixture('transitous-plan.json') : fixture('osrm-route.json');
-    // The first two copies of a road request stall (until aborted); the third answers.
-    if (!u.includes('transitous') && n <= 2) {
-      await new Promise((resolve, reject) => init.signal.addEventListener('abort', () => reject(new Error('aborted'))));
-    }
-    if (u.includes('transitous')) await new Promise((r) => setTimeout(r, 1300));
+    sent.push({ url: u, at: Date.now() });
+    // One address is refused the first time, as the service does when asked too fast.
+    if (u.includes('51.6000') && !refuseOnce.has(u)) { refuseOnce.add(u); return new Response('Too Many Requests', { status: 429 }); }
+    const body = u.includes('transitous') ? fixture('transitous-plan.json') : u.includes('/table/') ? fixture('osrm-table.json') : fixture('osrm-route.json');
     return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
   };
-  const { server } = await import(`../../server.js?hedge-${Date.now()}`);
+  const { server } = await import(`../../server.js?turns-${Date.now()}`);
   await new Promise((r) => server.listen(0, r));
   const base = `http://localhost:${server.address().port}`;
+  const get = (p) => realFetch(base + p).then((r) => r.status);
   try {
-    const t0 = Date.now();
-    const res = await realFetch(`${base}/api/directions?mode=bike&from=51.52,-0.15&to=51.50,-0.12`);
-    const took = Date.now() - t0;
-    assert.equal(res.status, 200);
-    assert.equal(sent.filter((u) => u.includes('routed-bike')).length, 3, 'sent at 0 s, 1 s and 3.5 s');
-    assert.ok(took >= 3400 && took < 5000, `answered after ${took} ms instead of stalling`);
-    const tr = await realFetch(`${base}/api/directions?mode=transit&from=51.52,-0.15&to=51.50,-0.12`);
-    assert.equal(tr.status, 200);
-    assert.equal(sent.filter((u) => u.includes('transitous')).length, 1, 'public transport is asked once, even when slow');
+    // A search asks for several things at once: a table for each way of travelling, a route each, the same route twice.
+    const statuses = await Promise.all([
+      get('/api/traveltimes?mode=walk&from=51.52,-0.15&to=51.50,-0.12;51.51,-0.13'),
+      get('/api/traveltimes?mode=bike&from=51.52,-0.15&to=51.50,-0.12;51.51,-0.13'),
+      get('/api/directions?mode=drive&from=51.52,-0.15&to=51.50,-0.12'),
+      get('/api/directions?mode=drive&from=51.52,-0.15&to=51.50,-0.12'),
+      get('/api/directions?mode=walk&from=51.53,-0.15&to=51.50,-0.12'),
+      get('/api/directions?mode=transit&from=51.52,-0.15&to=51.50,-0.12'),
+    ]);
+    assert.deepEqual(statuses, [200, 200, 200, 200, 200, 200]);
+    const road = sent.filter((x) => x.url.includes('routing.openstreetmap.de'));
+    assert.equal(road.length, 4, 'four different questions, each sent once (the repeated one shared)');
+    const gaps = road.slice(1).map((x, i) => x.at - road[i].at);
+    assert.ok(gaps.every((g) => g >= 140), `at least the gap between requests: ${gaps}`);
+    assert.deepEqual(road.map((x) => /routed-(\w+)/.exec(x.url)[1]).sort(), ['bike', 'car', 'foot', 'foot']);
+    const transit = sent.find((x) => x.url.includes('transitous'));
+    assert.ok(transit.at - road[0].at < 140, 'the timetable service is another service: it does not wait in this queue');
+
+    // Refused for asking too fast all the same: asked once more after a pause, and the answer is used.
+    const before = sent.length;
+    assert.equal(await get('/api/directions?mode=bike&from=51.6000,-0.15&to=51.50,-0.12'), 200);
+    const again = sent.slice(before);
+    assert.equal(again.length, 2);
+    assert.ok(again[1].at - again[0].at >= 280, `a pause before asking again: ${again[1].at - again[0].at} ms`);
+
+    // An answer already given is not asked for again.
+    const n = sent.length;
+    assert.equal(await get('/api/directions?mode=drive&from=51.52,-0.15&to=51.50,-0.12'), 200);
+    assert.equal(sent.length, n);
   } finally {
     globalThis.fetch = realFetch;
+    delete process.env.ROUTING_GAP_MS;
     await new Promise((r) => server.close(r));
     fs.rmSync(process.env.DATA_FILE, { force: true });
   }
