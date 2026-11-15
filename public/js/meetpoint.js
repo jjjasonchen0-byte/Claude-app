@@ -160,6 +160,23 @@ async function onFoot(spot, from, { travelTimes, signal, down }) {
 }
 
 /**
+ * Stops spread over the area they cover: the area is cut into n × n parts and
+ * the best stop of each part (lowest `cost`, then the bigger station) is kept.
+ */
+function spreadOver(rows, cost, n = 6) {
+  let s = Infinity, w = Infinity, north = -Infinity, e = -Infinity;
+  for (const r of rows) { s = Math.min(s, r.lat); north = Math.max(north, r.lat); w = Math.min(w, r.lon); e = Math.max(e, r.lon); }
+  const cell = (v, lo, hi) => Math.min(n - 1, Math.floor(((v - lo) / Math.max(hi - lo, 1e-9)) * n));
+  const best = new Map();
+  for (const r of rows) {
+    const k = cell(r.lat, s, north) * n + cell(r.lon, w, e);
+    const old = best.get(k), c = cost(r);
+    if (!old || c < old.c || (c === old.c && r.imp > old.r.imp)) best.set(k, { r, c });
+  }
+  return [...best.values()].map((x) => x.r);
+}
+
+/**
  * Public transport riders: real travel times from each rider to every stop in
  * the area (one request each, leaving at `time`), so the meeting point is
  * picked among stops everyone can reach, by real times. Others' times to the
@@ -195,15 +212,44 @@ async function viaStops(people, { rule, transitReach, travelTimes, directions, t
   });
   const others = people.map((p, i) => (p.mode === 'transit' ? -1 : i)).filter((i) => i >= 0);
   if (others.length) {
-    // Walkers, cyclists and drivers: real times to the 60 most promising stops.
-    const pre = makeScore(rule, rows);
-    rows = rows.map((r) => ({ ...r, score: pre(r.times) })).sort((a, b) => a.score - b.score).slice(0, 60);
-    const measured = await evaluate(others.map((i) => people[i]), rows.map((r) => ({ lat: r.lat, lon: r.lon })), { travelTimes, signal, down });
-    others.forEach((pi, k) => rows.forEach((r, j) => {
-      r.times[pi] = measured[j].times[k];
-      r.dists[pi] = measured[j].dists[k] ?? r.dists[pi];
-      r.approx ||= measured[j].approx;
-    }));
+    // Walkers, cyclists and drivers start with a guess from distance, and the
+    // guess can be far out (a long drive on a motorway takes about half of
+    // it), which would send the search to the wrong part of the map. So their
+    // real times are asked for in two steps. First for stops spread over the
+    // whole area (in each part of it, the stop the riders reach soonest): that
+    // shows how real times compare with the guesses around there, and every
+    // other stop's guess is corrected by its nearest measured stop. Then for
+    // the most promising stops by the corrected times. The meeting point is
+    // chosen among the stops measured.
+    const measure = async (list) => {
+      const m = await evaluate(others.map((i) => people[i]), list.map((r) => ({ lat: r.lat, lon: r.lon })), { travelTimes, signal, down });
+      others.forEach((pi, k) => list.forEach((r, j) => {
+        (r.guess ||= {})[pi] = r.times[pi];
+        r.times[pi] = m[j].times[k];
+        r.dists[pi] = m[j].dists[k] ?? r.dists[pi];
+        r.approx ||= m[j].approx;
+      }));
+      for (const r of list) r.measured = true;
+    };
+    if (rows.length <= 60) {
+      await measure(rows);
+    } else {
+      const first = spreadOver(rows, (r) => Math.max(...riders.map((i) => r.times[i])));
+      await measure(first);
+      for (const r of rows) {
+        if (r.measured) continue;
+        let near = first[0], nd = Infinity;
+        for (const f of first) { const d = haversine(r.lat, r.lon, f.lat, f.lon); if (d < nd) { nd = d; near = f; } }
+        for (const pi of others) {
+          const guess = near.guess[pi], real = near.times[pi];
+          if (guess > 0 && Number.isFinite(real)) r.times[pi] *= real / guess;
+        }
+      }
+      const pre = makeScore(rule, rows);
+      const second = rows.filter((r) => !r.measured).map((r) => ({ r, s: pre(r.times) })).sort((a, b) => a.s - b.s).slice(0, 60).map((x) => x.r);
+      if (second.length) await measure(second);
+      rows = rows.filter((r) => r.measured);
+    }
   }
   // Similar (or least total) times, and between spots about as good, the bigger station.
   const topImp = Math.max(1, ...rows.map((r) => r.imp));

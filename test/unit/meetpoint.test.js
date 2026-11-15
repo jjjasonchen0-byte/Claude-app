@@ -255,3 +255,39 @@ test('when the timetables give no answer in time, the search does not wait for t
   await findMeetingPoint(people, { travelTimes, directions, transitReach: async () => { throw new Error('not available'); } });
   assert.ok(asked > 0);
 });
+
+test('riders with far-off drivers: a long motorway drive (half the time its distance suggests) does not pull the spot towards the driver', async () => {
+  // Two riders in the north of a big city, a driver far to the south and one in the south-east.
+  const group = [
+    { lat: -33.75, lon: 150.70, mode: 'transit' }, { lat: -33.70, lon: 151.10, mode: 'transit' },
+    { lat: -34.43, lon: 150.89, mode: 'drive' }, { lat: -34.05, lon: 151.15, mode: 'drive' },
+  ];
+  const transitSecs = (p, lat, lon) => 300 + (haversine(p.lat, p.lon, lat, lon) * 1.3) / 12; // trains: about 43 km/h door to door
+  const driveSecs = (p, lat, lon) => (haversine(p.lat, p.lon, lat, lon) * ROAD) / 22; // motorways: about 80 km/h
+  const stops = [];
+  const transitReach = async (p, { box, max }) => {
+    const cells = [];
+    for (let lat = box.s; lat <= box.n; lat += 0.02) {
+      for (let lon = box.w; lon <= box.e; lon += 0.024) {
+        const sec = transitSecs(p, lat, lon);
+        if (sec / 60 <= max) cells.push([Math.round(lat * 1e5) / 1e5, Math.round(lon * 1e5) / 1e5, Math.round(sec / 60), 5]);
+      }
+    }
+    if (p === group[0]) stops.push(...cells);
+    return { cells };
+  };
+  const calls = [];
+  const travelTimes = async (mode, sources, destinations) => {
+    calls.push({ mode, m: destinations.length });
+    const distances = sources.map((s) => destinations.map((d) => haversine(s.lat, s.lon, d.lat, d.lon) * ROAD));
+    return { distances, durations: distances.map((row) => row.map((m) => m / (mode === 'drive' ? 22 : SPEEDS[mode]))), destinations: destinations.map((d) => [d.lat, d.lon]) };
+  };
+  const r = await findMeetingPoint(group, { travelTimes, transitReach });
+  // The best stop there is, by the real times.
+  const rows = stops.map(([lat, lon]) => ({ times: group.map((p) => (p.mode === 'transit' ? Math.round(transitSecs(p, lat, lon) / 60) * 60 : driveSecs(p, lat, lon))) }));
+  const bestLongest = Math.min(...rows.map((x) => Math.max(...x.times)));
+  const mins = r.times.map((t) => Math.round(t / 60));
+  assert.ok(Math.max(...r.times) <= bestLongest + 4 * 60, `longest trip ${Math.max(...mins)} min (best possible ${Math.round(bestLongest / 60)}): ${mins}`);
+  assert.ok(Math.max(...r.times) - Math.min(...r.times) <= 35 * 60, `trips ${mins} are far apart`);
+  assert.ok(calls.length <= 2 && calls.every((c) => c.m <= 80), `two requests of travel times at most: ${JSON.stringify(calls)}`);
+});

@@ -46,6 +46,8 @@ Requires Node 20.3+. Dependencies are Leaflet and MapLibre (for the map), served
 | `GOOGLE_DAILY_PLACES`, `GOOGLE_DAILY_PHOTOS` | Most Google place pages (rating and reviews) and place photos per day (defaults 32 and 32: inside Google's free 1,000 a month each) |
 | `GOOGLE_TRAFFIC` | `1` for driving times with live traffic (a pricier Google tier) |
 | `GOOGLE_MAP_REGION` | Two-letter country code for Google's map (borders and names as seen there; default `US`) |
+| `RATE_LIMIT` | Most requests one visitor may make in ten minutes (default 600; a search is 20 to 40). Everyone together may make eight times that |
+| `TRUST_PROXY` | `1` if the server sits behind a proxy other than Render's, so visitors are told apart by the address the proxy reports (`X-Forwarded-For`) instead of all counting as the proxy. On Render this is automatic |
 | `PORT`, `DATA_FILE` | Port, and where the server keeps its place-matching file |
 
 ### Put it online (for your phone)
@@ -164,7 +166,7 @@ The Sydney data comes from OpenStreetMap via [OpenFreeMap](https://openfreemap.o
 
 | File | What it does |
 | --- | --- |
-| `server.js` | Static hosting (compressed) and relays for directions, ratings and Google's map tiles, so keys stay on the server. No accounts |
+| `server.js` | Static hosting (compressed; the app's own files are checked on every visit, so a new version is used at once) and relays for directions, ratings and Google's map tiles, so keys stay on the server. Every request gets an answer, whatever it is: nothing a visitor sends can take the server down. No accounts |
 | `lib/tripadvisor.js` | Tripadvisor Terra client: matches places by name and distance, keeps the allowlist up to date, batches rating lookups, and enforces the daily limit |
 | `public/js/placeskit.js` | Google's place card (Places UI Kit): loads Google's library, finds the place's ID for free and checks the loaded place is the same one |
 | `lib/google.js` | Google client (optional): Routes API directions and travel-time checks turned into the app's route format, Map Tiles API sessions and tiles in quiet light and dark styles, Places API photos, ratings and reviews for a place page, and the daily caps |
@@ -192,7 +194,7 @@ MIT, see [LICENSE](LICENSE).
 ## Tests
 
 ```bash
-npm test                                   # unit tests: meeting point, places, opening hours, matching, photos, Tripadvisor, directions
+npm test                                   # unit tests: meeting point, places, opening hours, matching, photos, directions, saved data, address lookups, the server (odd and hostile requests included), older browsers
 NODE_PATH=$(npm root -g) npm run test:e2e  # full browser walkthrough (Playwright; map services mocked)
 NODE_PATH=$(npm root -g) npm run test:build  # builds the test version and checks it starts and finds a place
 ```

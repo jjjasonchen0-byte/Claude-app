@@ -290,3 +290,33 @@ test('browser: a request cancelled by the search that started it is asked again 
     assert.equal(calls.length, 2);
   });
 });
+
+test('browser: a big group or a long list of places is asked for in several requests and comes back as one table', async () => {
+  const { getTravelTimes } = await import('../../public/js/directions.js');
+  const sources = Array.from({ length: 14 }, (_, i) => ({ lat: 15 + i * 0.01, lon: 20 }));
+  const destinations = Array.from({ length: 100 }, (_, j) => ({ lat: 15, lon: 21 + j * 0.001 }));
+  // The stand-in server answers with source and destination numbers, so the pieces can be checked once put together.
+  const answer = (url) => {
+    const q = new URL(url, 'http://x').searchParams;
+    const from = q.get('from').split(';').map((s) => Math.round((Number(s.split(',')[0]) - 15) * 100));
+    const to = q.get('to').split(';').map((s) => Math.round((Number(s.split(',')[1]) - 21) * 1000));
+    return [200, { durations: from.map((i) => to.map((j) => i * 1000 + j)), distances: from.map((i) => to.map((j) => (i * 1000 + j) * 2)), destinations: to.map((j) => [15, 21 + j * 0.001]) }];
+  };
+  await withFetch(answer, async (calls) => {
+    const t = await getTravelTimes('walk', sources, destinations);
+    assert.equal(calls.length, 4, '2 groups of people × 2 groups of places');
+    assert.equal(t.durations.length, 14);
+    assert.ok(t.durations.every((row) => row.length === 100));
+    assert.equal(t.durations[13][99], 13099);
+    assert.equal(t.durations[0][80], 80);
+    assert.equal(t.distances[12][5], 24010);
+    assert.equal(t.destinations.length, 100);
+    // The first piece again: already answered, nothing is asked.
+    await getTravelTimes('walk', sources.slice(0, 12), destinations.slice(0, 80));
+    assert.equal(calls.length, 4);
+    // Within the limits: one request, as before.
+    const small = await getTravelTimes('walk', sources.slice(1, 13), destinations.slice(1, 81));
+    assert.equal(calls.length, 5);
+    assert.equal(small.durations[0][0], 1001);
+  });
+});

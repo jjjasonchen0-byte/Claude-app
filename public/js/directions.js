@@ -332,9 +332,27 @@ export function getTransitReach(from, { box, max = 60, time, signal } = {}) {
     .then((r) => { if (!Array.isArray(r.cells)) throw unusable('Public transport times'); return r; }));
 }
 
+// One request carries at most this many starting points and destinations (the
+// Meet server's limits, which keep it inside the routing service's own).
+const MAX_SOURCES = 12, MAX_DESTINATIONS = 80;
+const chunks = (list, n) => Array.from({ length: Math.ceil(list.length / n) }, (_, i) => list.slice(i * n, (i + 1) * n));
+
 /** Travel times from each source to each destination (walk, bike or drive only). */
 export function getTravelTimes(mode, sources, destinations, { signal } = {}) {
   if (mode === 'transit') return Promise.reject(Object.assign(new Error('Not available for public transport'), { status: 400 }));
+  // A big group or a long list of places: several requests, put together as one table.
+  if (sources.length > MAX_SOURCES || destinations.length > MAX_DESTINATIONS) {
+    const parts = chunks(sources, MAX_SOURCES).map((ss) => Promise.all(chunks(destinations, MAX_DESTINATIONS).map((dd) => getTravelTimes(mode, ss, dd, { signal }))));
+    return Promise.all(parts).then((rows) => {
+      const across = (tables, key, n) => Array.from({ length: n }, (_, i) => tables.flatMap((t) => t[key]?.[i] || []));
+      const size = (k) => chunks(sources, MAX_SOURCES)[k].length;
+      return {
+        durations: rows.flatMap((tables, k) => across(tables, 'durations', size(k))),
+        distances: rows.flatMap((tables, k) => across(tables, 'distances', size(k))),
+        destinations: rows[0].flatMap((t) => t.destinations || []),
+      };
+    });
+  }
   const key = ['table', mode, sources.map(ll).join(';'), destinations.map(ll).join(';')].join('|');
   const q = new URLSearchParams({ mode, from: sources.map(ll).join(';'), to: destinations.map(ll).join(';') });
   return cached(key, signal, () => viaServerOr(`/api/traveltimes?${q}`, async () => normalizeOsrmTable(await getJson(osrmTableUrl(mode, sources, destinations), { signal })), signal).then(usableTable));
