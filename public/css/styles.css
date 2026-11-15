@@ -565,6 +565,10 @@ input.leave-opt { flex: 1; min-width: 0; width: auto; padding: 8px 10px; }
 /* ---------------------------------------------------------------- per-person travel mode */
 .title-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .title-row .cell-title { flex: 0 1 auto; min-width: 0; }
+/* In the people list the buttons leave little room on a phone: the name comes first, and the
+   way of travelling moves to a line of its own when the two don't fit side by side. */
+.person .title-row { flex-wrap: wrap; row-gap: 3px; }
+.person .title-row .cell-title { max-width: 100%; }
 .mode-pill {
   flex: none; display: inline-flex; align-items: center; gap: 4px; border: 0; border-radius: 999px; padding: 3px 8px 3px 7px;
   background: var(--accent-tint); color: var(--accent); font-size: 12px; font-weight: 600; line-height: 1.2; white-space: nowrap;
