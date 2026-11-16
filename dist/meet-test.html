@@ -2690,12 +2690,6 @@ const THEMES = {
   light: { dim: 'rgba(255,255,255,0.24)', blend: 'source-over', shade: -0.08, front: (hex) => shade(hex, -0.42), traveller: '#ffffff' },
 };
 const FLOOD = { minorW: 1.05, majorW: 1.7, alpha: 0.88 };
-// The floods grow a little fainter the further they reach from where each person starts (by
-// travel time, as a share of their trip to the meeting point): by `by` at the meeting point,
-// barely to be seen, in bands too fine to show as steps.
-const FADE = { by: 0.22, bands: 6 };
-/** A flood's paths: minor streets in bands 0…bands-1 outwards, then major streets the same. */
-const newPaths = () => Array.from({ length: 2 * FADE.bands }, () => new Path2D());
 // The front: its colour over the newest … oldest third of it, which is this
 // much of each person's trip long; and its glow, drawn small and scaled up
 // (so soft, and cheap to draw).
@@ -2933,13 +2927,10 @@ class FloodAnimation {
    * `owner` (per street: who gets there first), each street is drawn only
    * for that person, so the floods meet instead of piling up.
    */
-  showFloods(list, owner = null, reach = null) {
+  showFloods(list, owner = null) {
     this.owner = owner;
     const th = this.theme;
-    this.shown = list.map((i) => ({
-      i, fl: this.flood(i), color: shade(this.people[i].color, th.shade), front: th.front(this.people[i].color),
-      reach: reach?.get(i) || 0, c: 0, s: 0, e: 0, p0: 0, active: [], band: 1, frozen: false,
-    })).filter((f) => f.fl);
+    this.shown = list.map((i) => ({ i, fl: this.flood(i), color: shade(this.people[i].color, th.shade), front: th.front(this.people[i].color), c: 0, s: 0, e: 0, p0: 0, active: [], band: 1, frozen: false })).filter((f) => f.fl);
     const { fill, top, dpr, size } = this;
     fill.setTransform(dpr, 0, 0, dpr, 0, 0);
     fill.clearRect(0, 0, size.x, size.y);
@@ -2949,18 +2940,12 @@ class FloodAnimation {
 
   /** Add the pieces of street in byEnd[from…to) to paths, whole or up to time `upTo`. */
   trace(f, from, to, paths, v, upTo = Infinity) {
-    const { fl } = f, own = this.owner;
+    const { fl } = f, net = this.net, own = this.owner;
     for (let j = from; j < to; j++) {
       const q = fl.byEnd[j];
       if (own && own[fl.edge[q]] !== f.i) continue;
-      this.piece(fl, q, upTo, this.pathFor(f, paths, q), v);
+      this.piece(fl, q, upTo, paths[net.major[fl.edge[q]]], v);
     }
-  }
-
-  /** The path a piece of street goes in: a minor or major street, and how far out it is (see FADE). */
-  pathFor(f, paths, q) {
-    const out = f.reach > 0 ? Math.min(FADE.bands - 1, Math.floor((f.fl.t0[q] / f.reach) * FADE.bands)) : 0;
-    return paths[this.net.major[f.fl.edge[q]] * FADE.bands + out];
   }
 
   piece(fl, q, upTo, path, v) {
@@ -2975,13 +2960,11 @@ class FloodAnimation {
 
   strokeFlood(ctx, f, paths, alpha = FLOOD.alpha) {
     ctx.globalCompositeOperation = this.theme.blend;
+    ctx.globalAlpha = alpha;
     ctx.strokeStyle = f.color;
     ctx.lineCap = 'butt';
-    for (let k = 0; k < FADE.bands; k++) {
-      ctx.globalAlpha = alpha * (1 - (FADE.by * (k + 0.5)) / FADE.bands);
-      ctx.lineWidth = FLOOD.minorW; ctx.stroke(paths[k]);
-      ctx.lineWidth = FLOOD.majorW; ctx.stroke(paths[FADE.bands + k]);
-    }
+    ctx.lineWidth = FLOOD.minorW; ctx.stroke(paths[0]);
+    ctx.lineWidth = FLOOD.majorW; ctx.stroke(paths[1]);
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
   }
@@ -2998,7 +2981,7 @@ class FloodAnimation {
     const from = f.e;
     while (f.e < fl.count && fl.t1[fl.byEnd[f.e]] <= c) f.e++;
     if (f.e > from) {
-      const v = this.view(), paths = newPaths();
+      const v = this.view(), paths = [new Path2D(), new Path2D()];
       this.fill.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
       this.trace(f, from, f.e, paths, v);
       this.strokeFlood(this.fill, f, paths);
@@ -3020,9 +3003,10 @@ class FloodAnimation {
     for (const f of this.shown) {
       if (f.frozen) continue;
       const { fl } = f;
-      const colour = newPaths();
+      const colour = [new Path2D(), new Path2D()];
       const white = FRONT.map(() => new Path2D());
       const glow = new Path2D();
+      const net = this.net;
       for (let j = f.s; j < f.e; j++) {
         const q = fl.byEnd[j];
         if (own && own[fl.edge[q]] !== f.i) continue;
@@ -3037,7 +3021,7 @@ class FloodAnimation {
         if (fl.t1[q] <= f.c) continue;
         f.active[w++] = q;
         if (own && own[fl.edge[q]] !== f.i) continue;
-        this.piece(fl, q, f.c, this.pathFor(f, colour, q), v);
+        this.piece(fl, q, f.c, colour[net.major[fl.edge[q]]], v);
         this.piece(fl, q, f.c, white[0], v);
         this.piece(fl, q, f.c, glow, v);
       }
@@ -3084,7 +3068,7 @@ class FloodAnimation {
   freeze(f) {
     if (f.frozen) return;
     const v = this.view();
-    const paths = newPaths();
+    const paths = [new Path2D(), new Path2D()];
     this.partial(f, paths, v);
     this.fill.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.strokeFlood(this.fill, f, paths);
@@ -3094,7 +3078,7 @@ class FloodAnimation {
   /** Add the streets a flood is part way along to paths, as far as it has got. */
   partial(f, paths, v) {
     const { fl } = f;
-    for (const q of f.active) if (fl.t1[q] > f.c && (!this.owner || this.owner[fl.edge[q]] === f.i)) this.piece(fl, q, f.c, this.pathFor(f, paths, q), v);
+    for (const q of f.active) if (fl.t1[q] > f.c && (!this.owner || this.owner[fl.edge[q]] === f.i)) this.piece(fl, q, f.c, paths[this.net.major[fl.edge[q]]], v);
   }
 
   /** Every flood as far as it has got, from scratch, on the flood canvas. */
@@ -3105,7 +3089,7 @@ class FloodAnimation {
     fill.clearRect(0, 0, size.x, size.y);
     const v = this.view();
     for (const f of this.shown) {
-      const paths = newPaths();
+      const paths = [new Path2D(), new Path2D()];
       this.trace(f, 0, f.e, paths, v);
       if (f.frozen) this.partial(f, paths, v);
       this.strokeFlood(fill, f, paths);
@@ -3154,7 +3138,7 @@ class FloodAnimation {
       const t = fl.at(node);
       return [i, Math.max(60, Number.isFinite(t) ? t : reachTime(this.net, fl, this.people.filter((_, j) => j !== i)) * 0.6)];
     }));
-    this.showFloods(list, ownership(this.net, list.map((i) => [i, this.flood(i), trip.get(i)])), trip);
+    this.showFloods(list, ownership(this.net, list.map((i) => [i, this.flood(i), trip.get(i)])));
     this.additive(true);
     const END = 1.03;
     const ok = await this.run(2600, (t) => {

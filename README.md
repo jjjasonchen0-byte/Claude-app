@@ -10,7 +10,7 @@ Find somewhere that's roughly as close for everyone in a group, with a press of 
    - Then the pin moves to **somewhere a group can meet**: the liveliest café, restaurant, pub, park, museum or shops within 500 m (never a motorway, railway line or car park), and the results are named after it. With no such place nearby, the spot stays on a street you can walk along.
 
    Meanwhile the panel slides down out of the way and the search plays out **on the map as it is**, dimmed a little so the lines stand out (it only moves, smoothly, if someone is out of sight):
-   - Everyone's reach floods out along the streets together, each in their colour behind a bright front (growing very slightly fainter the further it reaches), converging on the meeting point. Each flood is timed as progress through that person's own trip, so the map divides into territories that meet at the pin.
+   - Everyone's reach floods out along the streets together, each in their colour behind a bright front, converging on the meeting point. Each flood is timed as progress through that person's own trip, so the map divides into territories that meet at the pin.
    - A pin drops, labelled with a park or landmark right there (or the street). Everyone's real route lights up and they travel along it, gathering above the pin with their trip times on their name tags.
 
    Then the dimming lifts, leaving the routes on the map, and the panel slides back up with the results. The floods are shortest-path searches over the streets in view, which come from the same OpenFreeMap vector tiles as the map. **Skip** jumps to the end, and the animation speed is in the menu.
