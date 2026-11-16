@@ -648,13 +648,14 @@ async function moveAddress(p, ll) {
 function mapPadding() {
   const panel = $('#panel');
   const hidden = panel.classList.contains('away');
-  // While searching, the heading sits at the top and the status at the bottom.
+  // Room at the top for people's name tags (above their pins), clear of the top bar and, while
+  // searching, the heading; while searching the status sits at the bottom.
   const searching = state.view === 'searching';
-  let tl = [40, searching ? 130 : 80], br = [40, searching ? 120 : 40];
+  let tl = [40, 130], br = [40, searching ? 120 : 40];
   const cover = { left: 0, bottom: 0 };
   if (!hidden) {
     if (isMobile()) { cover.bottom = sheet.target || panel.offsetHeight; br = [30, cover.bottom + 24]; }
-    else { cover.left = panel.offsetLeft + panel.offsetWidth; tl = [panel.offsetWidth + 50, 80]; }
+    else { cover.left = panel.offsetLeft + panel.offsetWidth; tl = [panel.offsetWidth + 50, 130]; }
   }
   return { tl, br, cover };
 }
@@ -696,9 +697,9 @@ function inSight(latlngs, { share = 1, margins = null } = {}) {
     return p.x >= left && p.y >= top && p.x <= size.x - right && p.y <= size.y - bottom;
   });
 }
-// While searching (the panel away): on the screen, and not up under the heading. Anyone the map
-// was fitted to before (see mapPadding) is well inside these.
-const SEARCH_MARGINS = [20, 64, 20, 30];
+// While searching (the panel away): on the screen, and their name tag not up under the heading.
+// Anyone the map was fitted to before (see mapPadding) is inside these.
+const SEARCH_MARGINS = [20, 120, 20, 30];
 
 /**
  * Before the search animation: the map stays just as it is when everyone is
@@ -731,11 +732,17 @@ function sheetSizes() {
 
 function setSheet(snap) {
   const panel = $('#panel');
-  if (!isMobile()) { panel.style.height = ''; sheet.target = 0; return; }
+  if (!isMobile()) { panel.style.height = ''; panel.classList.remove('edge'); document.documentElement.style.removeProperty('--sheet-lift'); sheet.target = 0; return; }
   sheet.snap = snap;
   // While an address is being typed the sheet is as tall as it goes (see typingSheet); its position is remembered.
-  sheet.target = panel.classList.contains('typing') ? sheetSizes().max : sheetSizes()[snap];
+  const sizes = sheetSizes();
+  sheet.target = panel.classList.contains('typing') ? sizes.max : sizes[snap];
   panel.style.height = `${sheet.target}px`;
+  // The sheet floats above the bottom of the screen; pulled all the way up, it meets the screen's edges.
+  const edge = sheet.target >= sizes.max - 1;
+  panel.classList.toggle('edge', edge);
+  // The map's credits sit just above it (see .leaflet-bottom in styles.css).
+  document.documentElement.style.setProperty('--sheet-lift', `${edge ? 0 : sheet.target + 12}px`);
 }
 
 /**
@@ -786,21 +793,7 @@ function initSheet() {
   const end = () => {
     if (!drag) return;
     panel.classList.remove('dragging');
-    const s = sheetSizes();
-    const order = ['peek', 'mid', 'full'];
-    let snap;
-    if (!drag.moved) {
-      snap = sheet.snap === 'peek' ? 'mid' : 'peek'; // tap toggles
-    } else if (Math.abs(drag.v) > 0.45) {
-      // Fling: next snap point in the direction of the flick.
-      const cur = panel.offsetHeight;
-      snap = drag.v > 0
-        ? [...order].reverse().find((k) => s[k] < cur - 4) || 'peek'
-        : order.find((k) => s[k] > cur + 4) || 'full';
-    } else {
-      const cur = panel.offsetHeight;
-      snap = order.reduce((a, b) => (Math.abs(s[b] - cur) < Math.abs(s[a] - cur) ? b : a));
-    }
+    const snap = drag.moved ? snapFor(drag.v) : sheet.snap === 'peek' ? 'mid' : 'peek'; // (a tap toggles)
     drag = null;
     sheet.chosen = snap;
     setSheet(snap);
@@ -814,12 +807,90 @@ function initSheet() {
     if (e.key === 'ArrowDown') snap = sheet.snap === 'full' ? 'mid' : 'peek';
     if (snap) { sheet.chosen = snap; setSheet(snap); }
   });
+  pullFromContent(panel);
   window.addEventListener('resize', () => {
     setSheet(sheet.snap);
     // Typing with the sheet fully open: keep the address box at its top, now and once the sheet has settled.
     typingBoxToTop();
     setTimeout(typingBoxToTop, 350);
   });
+}
+
+/** Letting go of the sheet: the next size in the direction of a flick (v: px/ms, + is down), else the nearest. */
+function snapFor(v) {
+  const s = sheetSizes();
+  const cur = $('#panel').offsetHeight;
+  const order = ['peek', 'mid', 'full'];
+  if (Math.abs(v) > 0.45) {
+    return v > 0 ? [...order].reverse().find((k) => s[k] < cur - 4) || 'peek' : order.find((k) => s[k] > cur + 4) || 'full';
+  }
+  return order.reduce((a, b) => (Math.abs(s[b] - cur) < Math.abs(s[a] - cur) ? b : a));
+}
+
+/**
+ * The sheet moved by its content, as on an iPhone: a finger moving up while
+ * the content is scrolled to its top grows the sheet (following the finger,
+ * then settling at the nearest size); once the sheet is all the way up, the
+ * rest of the movement scrolls the content. Moving down at the top shrinks
+ * the sheet again. Anything that scrolls by itself (a list of suggestions,
+ * a row of tabs sideways), a box being typed in and the slider are left alone.
+ */
+function pullFromContent(panel) {
+  const body = $('#panel-body');
+  let pull = null;
+  const ownMoves = (el) => {
+    for (let n = el; n && n !== body; n = n.parentElement) {
+      if (n.matches?.('input, textarea, select, label.switch')) return true;
+      const oy = getComputedStyle(n).overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight + 1) return true;
+    }
+    return false;
+  };
+  body.addEventListener('touchstart', (e) => {
+    pull = null;
+    if (!isMobile() || e.touches.length !== 1 || panel.classList.contains('typing') || panel.classList.contains('away') || ownMoves(e.target)) return;
+    const t = e.touches[0];
+    pull = { x: t.clientX, y: t.clientY, h: panel.offsetHeight, on: false, lastY: t.clientY, lastT: performance.now(), v: 0 };
+  }, { passive: true });
+  body.addEventListener('touchmove', (e) => {
+    if (!pull) return;
+    const t = e.touches[0];
+    const dx = t.clientX - pull.x, dy = t.clientY - pull.y;
+    if (!pull.on) {
+      // Decided at the first few pixels (before the page would start scrolling): up or down at the top.
+      if (Math.abs(dx) < 3 && Math.abs(dy) < 3) return;
+      const s = sheetSizes();
+      const take = Math.abs(dy) > Math.abs(dx) && body.scrollTop <= 0 && (dy < 0 ? pull.h < s.full - 2 : pull.h > s.peek + 2);
+      if (!take) { pull = null; return; }
+      Object.assign(pull, { on: true, full: s.full });
+      panel.classList.add('dragging');
+    }
+    e.preventDefault();
+    const now = performance.now();
+    pull.v = (t.clientY - pull.lastY) / Math.max(1, now - pull.lastT);
+    pull.lastY = t.clientY;
+    pull.lastT = now;
+    const want = pull.h - dy;
+    panel.style.height = `${Math.max(56, Math.min(pull.full, want))}px`;
+    body.scrollTop = Math.max(0, want - pull.full); // (all the way up: the content scrolls on)
+    if (Math.abs(dy) > 10) pull.moved = true;
+  }, { passive: false });
+  const letGo = () => {
+    if (!pull?.on) { pull = null; return; }
+    panel.classList.remove('dragging');
+    const snap = snapFor(pull.v);
+    // A drag isn't a tap: whatever it started on isn't pressed.
+    if (pull.moved) {
+      const stop = (e) => { e.stopPropagation(); e.preventDefault(); };
+      body.addEventListener('click', stop, { capture: true, once: true });
+      setTimeout(() => body.removeEventListener('click', stop, { capture: true }), 400);
+    }
+    pull = null;
+    sheet.chosen = snap;
+    setSheet(snap);
+  };
+  body.addEventListener('touchend', letGo);
+  body.addEventListener('touchcancel', letGo);
 }
 
 // ---------------------------------------------------------------- main screen & panel
@@ -1201,12 +1272,28 @@ async function forgetAddress(id) {
 /** "Leaving: Now | [date and time]" above the Find button. */
 function leaveRow() {
   if (state.leaveAt && !leaveTime()) state.leaveAt = ''; // the chosen time has passed: back to "Now"
-  const later = state.leaveAt || toLocalInput(nextHalfHour());
+  // The box shows the time chosen, or (leaving now) the time it is now.
+  const shown = state.leaveAt || toLocalInput(new Date());
   return `<div class="leave-row" role="group" aria-label="When everyone leaves">
     <span class="leave-label">Leaving</span>
     <button class="leave-opt${state.leaveAt ? '' : ' active'}" data-action="leave-now" aria-pressed="${!state.leaveAt}">Now</button>
-    <input type="datetime-local" id="leave-at" class="leave-opt${state.leaveAt ? ' active' : ''}" value="${esc(later)}" min="${esc(toLocalInput(new Date()))}" aria-label="Leave at a date and time">
+    <input type="datetime-local" id="leave-at" class="leave-opt${state.leaveAt ? ' active' : ''}" value="${esc(shown)}" min="${esc(toLocalInput(new Date()))}" aria-label="Leave at a date and time">
   </div>`;
+}
+
+/**
+ * A date and time box that, when emptied, shows the time it is now and calls
+ * `onReset`. (A phone's Reset in its date picker empties the box.)
+ */
+function resetsToNow(box, onReset) {
+  const check = () => {
+    if (box.value) return false;
+    box.value = toLocalInput(new Date());
+    onReset();
+    return true;
+  };
+  box.addEventListener('input', check);
+  return check;
 }
 /** A Date as a datetime-local value in this device's time zone. */
 const toLocalInput = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
@@ -1227,9 +1314,21 @@ function fmtLeave(iso) {
 afterRender.people = () => {
   const at = $('#leave-at');
   if (at) {
-    const pick = () => { if (at.value) { state.leaveAt = at.value; $('.leave-row [data-action=leave-now]').classList.remove('active'); at.classList.add('active'); } };
-    at.addEventListener('change', pick);
-    at.addEventListener('click', pick); // tapping the shown time picks it
+    // A time later than now is when everyone leaves; now (or earlier), or Reset, is leaving now.
+    const now = $('.leave-row [data-action=leave-now]');
+    const show = () => {
+      now.classList.toggle('active', !state.leaveAt);
+      now.setAttribute('aria-pressed', String(!state.leaveAt));
+      at.classList.toggle('active', !!state.leaveAt);
+    };
+    const reset = resetsToNow(at, () => { state.leaveAt = ''; show(); });
+    at.addEventListener('change', () => {
+      if (reset()) return;
+      const later = new Date(at.value).getTime() > Date.now() + 60000;
+      state.leaveAt = later ? at.value : '';
+      if (!later) at.value = toLocalInput(new Date());
+      show();
+    });
   }
   // Picking an address doesn't add anyone yet: there's time for their name, then Add (or the heart).
   const add = attachSearch($('#add-search'), {
@@ -2437,9 +2536,16 @@ afterRender.place = () => {
     } else state.when = { type: 'now' };
     render({ keepScroll: true });
   });
-  $('#dir-when-time')?.addEventListener('change', (e) => {
-    if (e.target.value) { state.when = { type: 'arrive', time: e.target.value }; render({ keepScroll: true }); }
-  });
+  const arrive = $('#dir-when-time');
+  if (arrive) {
+    // Reset (an emptied box): leaving now again.
+    const reset = resetsToNow(arrive, () => { state.when = { type: 'now' }; render({ keepScroll: true }); });
+    arrive.addEventListener('change', () => {
+      if (!arrive.isConnected || reset()) return; // (a reset has drawn the page again already)
+      state.when = { type: 'arrive', time: arrive.value };
+      render({ keepScroll: true });
+    });
+  }
 };
 
 // ------------------------------------------------ photo viewer
@@ -2672,12 +2778,15 @@ function renderShare() {
 afterRender.share = () => {
   const ta = $('#share-text');
   ta.addEventListener('input', () => { state.shareText = ta.value; updateShareLinks(); });
-  $('#share-when').addEventListener('change', (e) => {
-    state.shareWhen = e.target.value;
-    state.shareText = shareText(shareContext(), { when: e.target.value ? new Date(e.target.value) : null });
+  const when = $('#share-when');
+  const setWhen = () => {
+    state.shareWhen = when.value;
+    state.shareText = shareText(shareContext(), { when: when.value ? new Date(when.value) : null });
     ta.value = state.shareText;
     updateShareLinks();
-  });
+  };
+  const reset = resetsToNow(when, setWhen); // Reset: the time it is now
+  when.addEventListener('change', () => { if (!reset()) setWhen(); });
 };
 
 function updateShareLinks() {

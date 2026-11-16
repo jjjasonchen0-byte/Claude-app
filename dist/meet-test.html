@@ -664,15 +664,26 @@ svg.leaflet-image-layer.leaflet-interactive path {
 		}
 	}
 
-/* Meet — Apple-like: system font, glass materials, inset grouped lists,
-   generous corner radii, one blue accent plus a colour per person.
-   Layout: full-bleed map; floating glass panel on desktop, draggable glass sheet on phones. */
+/* Meet — in the spirit of Apple's Liquid Glass: system font; floating surfaces of clear, frosted
+   glass with a rim of light along their edges; capsule-shaped controls; inset grouped lists;
+   one blue accent plus a colour per person.
+   Layout: full-bleed map; a floating glass panel on desktop, a draggable glass sheet on phones. */
 :root {
   --page: #ffffff;                      /* start screen */
   --bg: #f2f2f7;                        /* grouped background */
-  --card: #ffffff;
-  --material: rgba(242, 242, 247, 0.8);
-  --material-strong: rgba(255, 255, 255, 0.86);
+  --card: rgba(255, 255, 255, 0.66);       /* inset cards, on glass */
+  --card-solid: #ffffff;
+  --material: rgba(248, 248, 252, 0.52);   /* glass: the panel, the menu */
+  --material-strong: rgba(252, 252, 255, 0.74); /* thicker glass, for small things over the map */
+  --glass-blur: blur(26px) saturate(200%) brightness(1.04);
+  /* The rim of light: an inner highlight along the top edge, and (see .rim) a bright edge that fades round the sides. */
+  --glass-rim: inset 0 1px 0 rgba(255, 255, 255, 0.85), inset 0 0 0 0.5px rgba(255, 255, 255, 0.5);
+  --glass-edge: linear-gradient(150deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.25) 26%, rgba(255, 255, 255, 0.06) 55%, rgba(255, 255, 255, 0.5));
+  --glass-sheen: linear-gradient(172deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 42%);
+  --card-rim: inset 0 0.5px 0 rgba(255, 255, 255, 0.95), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --glass-floor: rgba(247, 247, 251, 0.94); /* under a button floating at the bottom of the glass: what scrolls under it fades out */
+  --wallpaper: radial-gradient(55% 45% at 12% 18%, rgba(0, 122, 255, 0.24), transparent 70%), radial-gradient(50% 42% at 88% 22%, rgba(175, 82, 222, 0.2), transparent 70%),
+    radial-gradient(60% 50% at 75% 88%, rgba(48, 176, 199, 0.2), transparent 70%), radial-gradient(45% 40% at 18% 86%, rgba(255, 149, 0, 0.14), transparent 70%), #f5f5f9;
   --fill: rgba(118, 118, 128, 0.12);
   --fill-2: rgba(118, 118, 128, 0.2);
   --text: #000000;
@@ -686,7 +697,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   --heart: #ff2d55;
   --hud: rgba(28, 28, 30, 0.88);
   --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.08);
-  --shadow-2: 0 12px 40px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-2: 0 16px 44px rgba(0, 0, 0, 0.14), 0 3px 10px rgba(0, 0, 0, 0.06);
   --panel-w: 400px;
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
@@ -694,22 +705,38 @@ svg.leaflet-image-layer.leaflet-interactive path {
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --page: #000000; --bg: #000000; --card: #1c1c1e;
-    --material: rgba(28, 28, 30, 0.8); --material-strong: rgba(44, 44, 46, 0.86);
+    --page: #000000; --bg: #000000; --card: rgba(255, 255, 255, 0.08); --card-solid: #2c2c2e;
+    --material: rgba(30, 30, 34, 0.52); --material-strong: rgba(42, 42, 48, 0.74);
+    --glass-blur: blur(26px) saturate(180%) brightness(0.92);
+    --glass-rim: inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 0 0 0.5px rgba(255, 255, 255, 0.1);
+    --glass-edge: linear-gradient(150deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.1) 26%, rgba(255, 255, 255, 0.03) 55%, rgba(255, 255, 255, 0.2));
+    --glass-sheen: linear-gradient(172deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0) 42%);
+    --card-rim: inset 0 0.5px 0 rgba(255, 255, 255, 0.1);
+    --glass-floor: rgba(34, 34, 38, 0.95);
+    --wallpaper: radial-gradient(55% 45% at 12% 18%, rgba(10, 132, 255, 0.3), transparent 70%), radial-gradient(50% 42% at 88% 22%, rgba(191, 90, 242, 0.24), transparent 70%),
+      radial-gradient(60% 50% at 75% 88%, rgba(64, 200, 224, 0.2), transparent 70%), radial-gradient(45% 40% at 18% 86%, rgba(255, 159, 10, 0.14), transparent 70%), #000;
     --fill: rgba(118, 118, 128, 0.24); --fill-2: rgba(118, 118, 128, 0.32);
     --text: #ffffff; --text-2: rgba(235, 235, 245, 0.6); --text-3: rgba(235, 235, 245, 0.3); --sep: rgba(84, 84, 88, 0.55);
     --accent: #0a84ff; --accent-tint: rgba(10, 132, 255, 0.2); --green: #30d158; --red: #ff453a; --heart: #ff375f; --hud: rgba(58, 58, 60, 0.92);
-    --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.5); --shadow-2: 0 12px 40px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
+    --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.5); --shadow-2: 0 16px 44px rgba(0, 0, 0, 0.5), 0 3px 10px rgba(0, 0, 0, 0.32);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --page: #000000; --bg: #000000; --card: #1c1c1e;
-  --material: rgba(28, 28, 30, 0.8); --material-strong: rgba(44, 44, 46, 0.86);
+  --page: #000000; --bg: #000000; --card: rgba(255, 255, 255, 0.08); --card-solid: #2c2c2e;
+  --material: rgba(30, 30, 34, 0.52); --material-strong: rgba(42, 42, 48, 0.74);
+  --glass-blur: blur(26px) saturate(180%) brightness(0.92);
+  --glass-rim: inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 0 0 0.5px rgba(255, 255, 255, 0.1);
+  --glass-edge: linear-gradient(150deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.1) 26%, rgba(255, 255, 255, 0.03) 55%, rgba(255, 255, 255, 0.2));
+  --glass-sheen: linear-gradient(172deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0) 42%);
+  --card-rim: inset 0 0.5px 0 rgba(255, 255, 255, 0.1);
+  --glass-floor: rgba(34, 34, 38, 0.95);
+  --wallpaper: radial-gradient(55% 45% at 12% 18%, rgba(10, 132, 255, 0.3), transparent 70%), radial-gradient(50% 42% at 88% 22%, rgba(191, 90, 242, 0.24), transparent 70%),
+    radial-gradient(60% 50% at 75% 88%, rgba(64, 200, 224, 0.2), transparent 70%), radial-gradient(45% 40% at 18% 86%, rgba(255, 159, 10, 0.14), transparent 70%), #000;
   --fill: rgba(118, 118, 128, 0.24); --fill-2: rgba(118, 118, 128, 0.32);
   --text: #ffffff; --text-2: rgba(235, 235, 245, 0.6); --text-3: rgba(235, 235, 245, 0.3); --sep: rgba(84, 84, 88, 0.55);
   --accent: #0a84ff; --accent-tint: rgba(10, 132, 255, 0.2); --green: #30d158; --red: #ff453a; --heart: #ff375f; --hud: rgba(58, 58, 60, 0.92);
-  --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.5); --shadow-2: 0 12px 40px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.5); --shadow-2: 0 16px 44px rgba(0, 0, 0, 0.5), 0 3px 10px rgba(0, 0, 0, 0.32);
   color-scheme: dark;
 }
 
@@ -730,8 +757,14 @@ input, textarea { font: inherit; letter-spacing: inherit; color: inherit; }
 .noscript { padding: 2rem; text-align: center; }
 /* While an on-screen keyboard is open, a screen fits the part of the page still in sight (see followKeyboard in app.js). */
 .screen { position: fixed; left: 0; right: 0; top: var(--vv-top, 0px); height: var(--vv-height, 100%); }
-.screen-centered { display: grid; place-items: center; overflow: auto; background: var(--page); padding: 28px max(20px, env(safe-area-inset-right, 0px)) 28px max(20px, env(safe-area-inset-left, 0px)); }
-.glass { background: var(--material); -webkit-backdrop-filter: saturate(180%) blur(24px); backdrop-filter: saturate(180%) blur(24px); }
+.screen-centered { display: grid; place-items: center; overflow: auto; background: var(--wallpaper); padding: 28px max(20px, env(safe-area-inset-right, 0px)) 28px max(20px, env(safe-area-inset-left, 0px)); }
+.glass { background: var(--glass-sheen), var(--material); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); box-shadow: var(--glass-rim), var(--shadow-2); }
+/* Liquid Glass's rim of light: a bright edge along the top left that fades round the sides. */
+.rim::before, .panel::before, .round-btn::before, .topbar .wordmark::before, .status-chip::before, .toast::before, .choice-group::before, .choice-cancel::before {
+  content: ""; position: absolute; inset: 0; z-index: 4; border-radius: inherit; padding: 1px; pointer-events: none; background: var(--glass-edge);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
+}
 
 /* ---------------------------------------------------------------- wordmark */
 .wordmark { font: 700 18px/1 var(--font-display); letter-spacing: -0.035em; display: inline-flex; align-items: baseline; }
@@ -741,56 +774,65 @@ input, textarea { font: inherit; letter-spacing: inherit; color: inherit; }
 /* ---------------------------------------------------------------- buttons */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 40px;
-  border: 0; border-radius: 12px; padding: 9px 16px; font-weight: 600; font-size: 15px;
-  background: var(--fill); color: var(--text); transition: transform 0.12s ease, opacity 0.15s, filter 0.15s;
+  border: 0; border-radius: 999px; padding: 9px 18px; font-weight: 600; font-size: 15px;
+  background: var(--fill); color: var(--text); box-shadow: var(--card-rim); transition: transform 0.15s cubic-bezier(0.3, 1.5, 0.5, 1), opacity 0.15s, filter 0.15s;
 }
-.btn:active:not(:disabled) { transform: scale(0.97); }
+.btn:active:not(:disabled) { transform: scale(0.96); }
 .btn:disabled { opacity: 0.35; cursor: not-allowed; }
-.btn-primary { background: var(--accent); color: #fff; }
+/* Glass tinted with the accent: lit from above, with a soft glow of its own colour. */
+.btn-primary {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0) 55%), var(--accent); color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 -1px 1px rgba(0, 0, 0, 0.1), 0 6px 18px -6px var(--accent);
+}
 .btn-primary:hover:not(:disabled) { filter: brightness(1.06); }
-.btn-tinted { background: var(--accent-tint); color: var(--accent); }
+.btn-tinted { background: var(--accent-tint); color: var(--accent); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 0 0 0.5px rgba(255, 255, 255, 0.25); }
 .btn-tinted:hover:not(:disabled) { filter: brightness(0.97); }
-.btn-plain { background: none; color: var(--accent); padding: 6px 4px; min-height: 0; font-weight: 500; }
+.btn-plain { background: none; color: var(--accent); padding: 6px 4px; min-height: 0; font-weight: 500; box-shadow: none; }
 .btn-block { width: 100%; }
-.btn-lg { min-height: 52px; border-radius: 14px; font-size: 17px; }
+.btn-lg { min-height: 54px; font-size: 17px; }
 .btn-sm { min-height: 34px; padding: 6px 14px; font-size: 14px; border-radius: 999px; }
 .btn svg { flex: none; }
 .icon-btn { border: 0; background: none; border-radius: 999px; padding: 6px; line-height: 0; color: var(--text-2); display: inline-grid; place-items: center; }
 .icon-btn:hover { background: var(--fill); color: var(--text); }
-.icon-circle { width: 30px; height: 30px; border-radius: 50%; border: 0; background: var(--fill); color: var(--text-2); display: grid; place-items: center; flex: none; }
+.icon-circle { width: 30px; height: 30px; border-radius: 50%; border: 0; background: var(--fill); color: var(--text-2); display: grid; place-items: center; flex: none; box-shadow: var(--card-rim); }
 .icon-circle:hover { color: var(--text); background: var(--fill-2); }
 .round-btn {
-  width: 44px; height: 44px; border-radius: 50%; border: 0; display: grid; place-items: center; color: var(--text);
-  background: var(--material-strong); -webkit-backdrop-filter: saturate(180%) blur(24px); backdrop-filter: saturate(180%) blur(24px); box-shadow: var(--shadow-2);
+  position: relative; width: 46px; height: 46px; border-radius: 50%; border: 0; display: grid; place-items: center; color: var(--text);
+  background: var(--glass-sheen), var(--material-strong); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-rim), var(--shadow-2); transition: transform 0.2s cubic-bezier(0.3, 1.6, 0.5, 1);
 }
-.round-btn:active { transform: scale(0.94); }
+.round-btn:active { transform: scale(0.9); }
 
 input[type=text], input[type=search], input:not([type]), input[type=datetime-local], textarea {
-  width: 100%; border: 0; background: var(--fill); border-radius: 12px; padding: 11px 14px; outline: none; font-size: 16px; transition: box-shadow 0.15s;
+  width: 100%; border: 0; background: var(--fill); border-radius: 999px; padding: 11px 16px; outline: none; font-size: 16px; transition: box-shadow 0.15s;
   -webkit-appearance: none; appearance: none;
 }
+textarea { border-radius: 20px; }
 input:focus, textarea:focus { box-shadow: 0 0 0 3px var(--accent-tint); }
 input::placeholder, textarea::placeholder { color: var(--text-2); }
 input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .searchfield input {
-  padding-left: 36px;
+  padding-left: 38px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='10.5' cy='10.5' r='6.5'/%3E%3Cpath d='M15.5 15.5l5 5'/%3E%3C/svg%3E");
-  background-repeat: no-repeat; background-position: 12px center; background-size: 16px;
+  background-repeat: no-repeat; background-position: 14px center; background-size: 16px;
 }
 
-/* iOS segmented control */
-.segmented { display: flex; gap: 2px; background: var(--fill); border-radius: 10px; padding: 2px; margin: 14px 0; }
-.segmented .seg { flex: 1; border: 0; background: transparent; padding: 6px 8px; border-radius: 8px; font-weight: 500; font-size: 13px; color: var(--text); white-space: nowrap; transition: background 0.2s, box-shadow 0.2s; }
-.segmented .seg.active { background: var(--card); font-weight: 600; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.04); }
-:root[data-theme="dark"] .segmented .seg.active { background: #636366; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .segmented .seg.active { background: #636366; } }
+/* iOS segmented control: a capsule track, the choice under a lens of glass. */
+.segmented { display: flex; gap: 2px; background: var(--fill); border-radius: 999px; padding: 3px; margin: 14px 0; box-shadow: inset 0 0.5px 1px rgba(0, 0, 0, 0.06); }
+.segmented .seg { flex: 1; border: 0; background: transparent; padding: 7px 8px; border-radius: 999px; font-weight: 500; font-size: 13px; color: var(--text); white-space: nowrap; transition: background 0.25s, box-shadow 0.25s, transform 0.2s; }
+.segmented .seg.active {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.82)); font-weight: 600;
+  box-shadow: inset 0 1px 0 #fff, inset 0 0 0 0.5px rgba(255, 255, 255, 0.7), 0 3px 10px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+}
+:root[data-theme="dark"] .segmented .seg.active { background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.16)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 3px 10px rgba(0, 0, 0, 0.3); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .segmented .seg.active { background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.16)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 3px 10px rgba(0, 0, 0, 0.3); } }
 .segmented.small { margin: 0 0 6px; }
 
 /* iOS switch */
 .switch { position: relative; width: 51px; height: 31px; flex: none; }
 .switch input { opacity: 0; width: 0; height: 0; position: absolute; }
 .switch span { position: absolute; inset: 0; background: var(--fill-2); border-radius: 999px; transition: background 0.25s; cursor: pointer; }
-.switch span::after { content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff; transition: transform 0.25s cubic-bezier(0.3, 1.3, 0.5, 1); box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0, 0, 0, 0.16); }
+.switch span::after { content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: linear-gradient(180deg, #fff, #f4f4f7); transition: transform 0.25s cubic-bezier(0.3, 1.3, 0.5, 1); box-shadow: inset 0 1px 0 #fff, 0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0, 0, 0, 0.16); }
 .switch input:checked + span { background: var(--green); }
 .switch input:checked + span::after { transform: translateX(20px); }
 .switch input:focus-visible + span { outline: 3px solid var(--accent-tint); outline-offset: 2px; }
@@ -798,12 +840,12 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 /* ---------------------------------------------------------------- address search */
 .search { position: relative; }
 .suggestions {
-  position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 1200; margin: 0; padding: 6px; list-style: none;
-  background: var(--material-strong); -webkit-backdrop-filter: saturate(180%) blur(24px); backdrop-filter: saturate(180%) blur(24px);
-  border-radius: 14px; box-shadow: var(--shadow-2); max-height: 300px; overflow: auto;
+  position: absolute; left: 0; right: 0; top: calc(100% + 8px); z-index: 1200; margin: 0; padding: 6px; list-style: none;
+  background: var(--glass-sheen), var(--material-strong); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  border-radius: 22px; box-shadow: var(--glass-rim), var(--shadow-2); max-height: 300px; overflow: auto;
 }
 .suggestions.up { top: auto; bottom: calc(100% + 6px); } /* above the box when there is no room below (a keyboard on a phone) */
-.suggestions li { padding: 9px 12px; border-radius: 10px; cursor: pointer; }
+.suggestions li { padding: 9px 12px; border-radius: 16px; cursor: pointer; }
 .suggestions li[aria-selected=true], .suggestions li:hover { background: var(--fill); }
 /* An address kept with the heart: the heart, the name and address, and a way to forget it. */
 .suggestions li.saved { display: flex; align-items: center; gap: 10px; padding-right: 6px; }
@@ -820,10 +862,14 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .intro { width: 100%; max-width: 420px; display: flex; flex-direction: column; align-items: center; gap: 30px; margin-bottom: 12vh; }
 .wordmark-xl { font-size: 58px; }
 .intro .search { width: 100%; }
-.intro .search input { min-height: 54px; font-size: 17px; border-radius: 16px; padding-right: 52px; }
+.intro .search input {
+  min-height: 56px; font-size: 17px; padding-right: 54px; background-color: var(--material-strong);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); box-shadow: var(--glass-rim), var(--shadow-2);
+}
+.intro .search input:focus { box-shadow: var(--glass-rim), 0 0 0 3px var(--accent-tint), var(--shadow-2); }
 /* A button inside the address bar, at its right end (start from where you are). */
 .field-btn {
-  position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 42px; height: 42px; border: 0; border-radius: 12px;
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 42px; height: 42px; border: 0; border-radius: 50%;
   background: transparent; color: var(--accent); display: grid; place-items: center; cursor: pointer; transition: background 0.15s;
 }
 .field-btn:hover:not(:disabled) { background: var(--accent-tint); }
@@ -843,14 +889,14 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 }
 .topbar > * { pointer-events: auto; }
 .topbar .wordmark {
-  height: 44px; padding: 0 18px; border-radius: 999px; align-items: center; box-shadow: var(--shadow-2);
-  background: var(--material-strong); -webkit-backdrop-filter: saturate(180%) blur(24px); backdrop-filter: saturate(180%) blur(24px);
+  position: relative; height: 46px; padding: 0 20px; border-radius: 999px; align-items: center; box-shadow: var(--glass-rim), var(--shadow-2);
+  background: var(--glass-sheen), var(--material-strong); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
 }
 .topbar-actions { display: flex; gap: 10px; }
 
 .panel {
-  position: absolute; z-index: 1001; display: flex; flex-direction: column; box-shadow: var(--shadow-2);
-  background: var(--material); -webkit-backdrop-filter: saturate(180%) blur(30px); backdrop-filter: saturate(180%) blur(30px);
+  position: absolute; z-index: 1001; display: flex; flex-direction: column; box-shadow: var(--glass-rim), var(--shadow-2);
+  background: var(--glass-sheen), var(--material); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
 }
 .panel-body { overflow-x: hidden; overflow-y: auto; padding: 20px; flex: 1; min-height: 0; overscroll-behavior: contain; }
 .panel-handle { display: none; }
@@ -862,17 +908,21 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .page-leaving { position: absolute; left: 0; right: 0; overflow: hidden; pointer-events: none; }
 
 @media (min-width: 760px) {
-  .panel { top: 72px; left: 14px; max-height: calc(100% - 86px); width: var(--panel-w); border-radius: 24px; transition: transform 0.7s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.5s; }
+  .panel { top: 74px; left: 14px; max-height: calc(100% - 88px); width: var(--panel-w); border-radius: 32px; transition: transform 0.7s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.5s; }
   .panel.away { transform: translateX(calc(-100% - 30px)); opacity: 0; transition: transform 0.8s cubic-bezier(0.45, 0, 0.25, 1), opacity 0.8s ease-in; }
   .leaflet-left { left: calc(var(--panel-w) + 14px); }
 }
 @media (max-width: 759px) {
-  /* What scrolls in the sheet goes on up under the pull tab and is cut off by the sheet's own
-     rounded top (the same curve), not by a straight edge below the tab. */
+  /* A sheet of glass floating just above the bottom of the screen; pulled all the way up, it
+     meets the screen's edges (as on an iPhone). What scrolls in it goes on up under the pull tab
+     and is cut off by the sheet's own rounded top (the same curve), not by a straight edge below the tab. */
   .panel {
-    left: 0; right: 0; bottom: 0; border-radius: 24px 24px 0 0; height: 50%; overflow: hidden;
-    padding-bottom: env(safe-area-inset-bottom, 0px); transition: height 0.32s cubic-bezier(0.2, 0.9, 0.3, 1), transform 0.7s cubic-bezier(0.32, 0.72, 0, 1);
+    left: 8px; right: 8px; bottom: 8px; border-radius: 34px; height: 50%; overflow: hidden;
+    padding-bottom: max(0px, calc(env(safe-area-inset-bottom, 0px) - 8px));
+    transition: height 0.32s cubic-bezier(0.2, 0.9, 0.3, 1), transform 0.7s cubic-bezier(0.32, 0.72, 0, 1),
+      left 0.32s cubic-bezier(0.2, 0.9, 0.3, 1), right 0.32s cubic-bezier(0.2, 0.9, 0.3, 1), bottom 0.32s cubic-bezier(0.2, 0.9, 0.3, 1), border-radius 0.32s;
   }
+  .panel.edge { left: 0; right: 0; bottom: 0; border-radius: 34px 34px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px); }
   .panel.dragging { transition: none; }
   /* (Down off the screen at an even pace, not all at once.) */
   .panel.away { transform: translateY(calc(100% + 24px)); transition: height 0.32s cubic-bezier(0.2, 0.9, 0.3, 1), transform 0.85s cubic-bezier(0.45, 0, 0.25, 1); }
@@ -880,7 +930,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
     position: absolute; top: 0; left: 0; right: 0; z-index: 3; display: flex; justify-content: center; align-items: center;
     height: 24px; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
   }
-  .panel-handle span { width: 36px; height: 5px; border-radius: 3px; background: var(--text-3); }
+  .panel-handle span { width: 38px; height: 5px; border-radius: 3px; background: var(--text-3); }
   .panel-handle:active { cursor: grabbing; }
   /* (and fades as it goes, so the pull tab stays clear) */
   .panel-body, .page-leaving {
@@ -888,17 +938,22 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
   }
   .panel-body { padding-top: 30px; }
   .leaflet-control-zoom { display: none; }
+  /* The map's credits just above the sheet (see setSheet in app.js); back at the bottom while the sheet is away,
+     and out of sight under it once it covers the map. */
+  .leaflet-bottom { bottom: var(--sheet-lift, 0px); transition: bottom 0.32s cubic-bezier(0.2, 0.9, 0.3, 1); }
+  #screen-main:has(> .panel.away) .leaflet-bottom { bottom: 0; }
+  #screen-main:has(> .panel.edge:not(.away)) .leaflet-control-attribution { visibility: hidden; }
 }
 
 /* ---------------------------------------------------------------- status HUD */
 .status-chip {
   position: absolute; z-index: 1002; top: calc(70px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%);
   display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 16px; border-radius: 999px; white-space: nowrap; max-width: calc(100vw - 24px);
-  background: var(--material-strong); -webkit-backdrop-filter: saturate(180%) blur(24px); backdrop-filter: saturate(180%) blur(24px); box-shadow: var(--shadow-2);
+  background: var(--glass-sheen), var(--material-strong); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); box-shadow: var(--glass-rim), var(--shadow-2);
   font-size: 14px; animation: pop 0.35s cubic-bezier(0.2, 1.15, 0.4, 1);
 }
 .status-text { font-weight: 600; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
-.chip-btn { border: 0; background: var(--fill); padding: 6px 13px; border-radius: 999px; font-weight: 600; font-size: 13px; }
+.chip-btn { border: 0; background: var(--fill); padding: 7px 14px; border-radius: 999px; font-weight: 600; font-size: 13px; box-shadow: var(--card-rim); }
 .chip-btn:first-of-type { background: var(--accent-tint); color: var(--accent); }
 .spinner { width: 16px; height: 16px; border-radius: 50%; border: 2.5px solid var(--accent-tint); border-top-color: var(--accent); animation: spin 0.8s linear infinite; flex: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -949,14 +1004,13 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
   border: 1.5px solid var(--c); background: var(--flood-glass); color: var(--flood-ink);
   font: 700 12.5px/1.25 var(--font); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25); animation: hud-in 0.4s ease both;
 }
-}
 
 .app-note { margin: 4px 20px 0; text-align: center; }
 .app-version { margin: 2px 20px 16px; text-align: center; }
 
 /* Google's place card (Places UI Kit) in a place's page. */
 .gcard-slot { margin: 0 0 14px; }
-.gcard-slot gmp-place-details { display: block; width: 100%; border-radius: 16px; overflow: hidden; box-shadow: var(--shadow-1); }
+.gcard-slot gmp-place-details { display: block; width: 100%; border-radius: 24px; overflow: hidden; box-shadow: var(--shadow-1); }
 
 /* Google's name and map credits, when the map is Google's: top right, always in view. */
 .gmap-credit {
@@ -972,7 +1026,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .badge { font-size: 13px; font-weight: 600; color: var(--text-2); background: var(--fill); padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
 .eyebrow { font-size: 13px; font-weight: 600; color: var(--accent); margin-bottom: 2px; }
 .section-title { font-size: 13px; color: var(--text-2); margin: 26px 16px 9px; text-transform: uppercase; letter-spacing: 0.02em; }
-.group { list-style: none; margin: 0 0 22px; padding: 0; background: var(--card); border-radius: 16px; overflow: hidden; }
+.group { list-style: none; margin: 0 0 22px; padding: 0; background: var(--card); border-radius: 24px; overflow: hidden; box-shadow: var(--card-rim); }
 .group > li { position: relative; }
 .group > li + li::before { content: ""; position: absolute; top: 0; right: 0; left: var(--inset, 16px); height: 0.5px; background: var(--sep); transform: scaleY(1); }
 .group.icons { --inset: 70px; }
@@ -992,11 +1046,11 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
   background: var(--c); color: #fff; font: 600 16px/1 var(--font-display);
 }
 .avatar.sm { width: 30px; height: 30px; font-size: 13px; }
-.tile { --c: var(--accent); width: 32px; height: 32px; border-radius: 9px; flex: none; display: grid; place-items: center; background: var(--c); color: #fff; }
+.tile { --c: var(--accent); width: 32px; height: 32px; border-radius: 10px; flex: none; display: grid; place-items: center; background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 60%), var(--c); color: #fff; box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.5); }
 .tile svg { width: 62%; height: 62%; }
-.tile.lg { width: 44px; height: 44px; border-radius: 12px; }
-.tile.xl { width: 56px; height: 56px; border-radius: 15px; }
-.tile.grey { background: #8e8e93; }
+.tile.lg { width: 44px; height: 44px; border-radius: 13px; }
+.tile.xl { width: 56px; height: 56px; border-radius: 16px; }
+.tile.grey { background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 60%), #8e8e93; }
 .num { --c: var(--accent); width: 30px; height: 30px; border-radius: 50%; background: var(--c); color: #fff; display: grid; place-items: center; font: 700 13px/1 var(--font-display); flex: none; }
 
 /* people: a row each, with their name and address (a pencil beside each), the switch that leaves
@@ -1028,7 +1082,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .edit-buttons .btn { min-height: 40px; padding: 8px 16px; }
 /* (The suggestions open in the row, pushing what's below down: a list in a rounded group would be cut off.) */
 .suggestions.inline { position: static; margin-top: 6px; box-shadow: 0 0 0 0.5px var(--sep); }
-.add-box { background: var(--card); border-radius: 16px; padding: 14px; display: grid; gap: 10px; margin-bottom: 12px; }
+.add-box { background: var(--card); border-radius: 26px; padding: 14px; display: grid; gap: 10px; margin-bottom: 12px; box-shadow: var(--card-rim); }
 .add-box input { background-color: var(--fill); }
 #add-search input { padding-right: 48px; } /* room for the heart */
 /* The heart in the address box: keeps the address on this device (filled once kept). */
@@ -1040,7 +1094,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .add-row { display: flex; gap: 8px; }
 .add-row input { flex: 1; min-width: 0; }
 .add-row .btn { flex: none; min-width: 76px; min-height: 44px; }
-.cta { position: sticky; bottom: -20px; padding: 16px 0 8px; margin-top: 18px; background: linear-gradient(transparent, var(--material) 35%); }
+.cta { position: sticky; bottom: -20px; padding: 22px 0 8px; margin-top: 12px; background: linear-gradient(transparent, var(--glass-floor) 45%); }
 /* Typing an address on a phone: the sheet is fully open with the box at its top (room to scroll it there, no button in the way). */
 .panel.typing .panel-content { padding-bottom: 900px; }
 .panel.typing .cta { display: none; }
@@ -1052,24 +1106,24 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .group + .meet-actions { margin-top: -8px; }
 .times-note { margin: -10px 6px 16px; } /* (under the times it is about) */
 .meet-actions .btn { min-height: 46px; font-size: 16px; }
-.meet-badge { width: 48px; height: 48px; border-radius: 50%; background: var(--accent-tint); display: grid; place-items: center; flex: none; }
+.meet-badge { width: 48px; height: 48px; border-radius: 50%; background: var(--accent-tint); display: grid; place-items: center; flex: none; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), inset 0 0 0 0.5px rgba(255, 255, 255, 0.3); }
 .meet-badge i { width: 18px; height: 18px; border-radius: 50%; background: var(--accent); border: 3.5px solid #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); }
-.notice { font-size: 13px; color: var(--text-2); background: var(--card); border-radius: 14px; padding: 12px 14px; margin: 0 0 20px; }
+.notice { font-size: 13px; color: var(--text-2); background: var(--card); border-radius: 20px; padding: 12px 16px; margin: 0 0 20px; box-shadow: var(--card-rim); }
 .pills { display: flex; gap: 8px; overflow-x: auto; margin: 4px -20px 16px; padding: 2px 20px 8px; scrollbar-width: none; }
 .pills::-webkit-scrollbar { display: none; }
 .pill {
-  display: inline-flex; align-items: center; gap: 7px; flex: none; border: 0; border-radius: 999px; padding: 5px 13px 5px 5px;
-  background: var(--card); box-shadow: var(--shadow-1); font-weight: 600; font-size: 14px; transition: transform 0.12s, background 0.2s;
+  display: inline-flex; align-items: center; gap: 7px; flex: none; border: 0; border-radius: 999px; padding: 5px 14px 5px 5px;
+  background: var(--card); box-shadow: var(--card-rim), 0 2px 6px rgba(0, 0, 0, 0.06); font-weight: 600; font-size: 14px; transition: transform 0.2s cubic-bezier(0.3, 1.5, 0.5, 1), background 0.2s;
 }
 .pill:active:not(:disabled) { transform: scale(0.96); }
 .pill .pill-ico { width: 26px; height: 26px; border-radius: 50%; background: var(--c); color: #fff; display: grid; place-items: center; }
 .pill .pill-ico svg { width: 15px; height: 15px; }
 .pill .count { color: var(--text-2); font-weight: 500; }
-.pill.active { background: var(--accent); color: #fff; }
+.pill.active { background: linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0) 55%), var(--accent); color: #fff; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 4px 14px -4px var(--accent); }
 .pill.active .pill-ico { background: rgba(255, 255, 255, 0.25); }
 .pill.active .count { color: rgba(255, 255, 255, 0.8); }
 .pill:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
-.empty { text-align: center; color: var(--text-2); padding: 30px 16px; font-size: 15px; background: var(--card); border-radius: 16px; margin-bottom: 20px; }
+.empty { text-align: center; color: var(--text-2); padding: 30px 16px; font-size: 15px; background: var(--card); border-radius: 24px; margin-bottom: 20px; box-shadow: var(--card-rim); }
 /* How far to look: "23 places within 800 m" (a spinner while they load) over a slider from 100 m to 1 km. */
 .radius-row { margin: 14px 4px 22px; }
 .radius-label { display: flex; align-items: center; gap: 5px; min-height: 22px; font-size: 14px; color: var(--text-2); font-variant-numeric: tabular-nums; }
@@ -1079,7 +1133,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .radius-slider:focus { outline: none; box-shadow: none; }
 .radius-slider::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(to right, var(--accent) var(--p, 50%), var(--fill-2) var(--p, 50%)); }
 .radius-slider::-webkit-slider-thumb {
-  -webkit-appearance: none; appearance: none; width: 26px; height: 26px; margin-top: -11px; border: 0; border-radius: 50%; background: #fff;
+  -webkit-appearance: none; appearance: none; width: 26px; height: 26px; margin-top: -11px; border: 0; border-radius: 50%; background: linear-gradient(180deg, #fff, #f2f2f6);
   box-shadow: 0 0.5px 4px rgba(0, 0, 0, 0.12), 0 6px 13px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.06); transition: transform 0.15s;
 }
 .radius-slider:active::-webkit-slider-thumb { transform: scale(1.08); }
@@ -1106,29 +1160,29 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .share-form { display: grid; gap: 0; }
 .share-form .cell { min-height: 50px; }
 .share-form label { flex: 1; font-size: 16px; }
-.share-form input[type=datetime-local] { width: auto; max-width: 62%; background: var(--fill); padding: 6px 10px; border-radius: 8px; font-size: 15px; }
+.share-form input[type=datetime-local] { width: auto; max-width: 62%; background: var(--fill); padding: 6px 12px; border-radius: 999px; font-size: 15px; }
 .share-form textarea { background: transparent; border-radius: 0; padding: 12px 14px; min-height: 120px; resize: vertical; font-size: 15px; line-height: 1.45; }
 .share-form textarea:focus { box-shadow: none; }
-.share-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.share-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
 .share-grid .btn { width: 100%; }
 
 /* ---------------------------------------------------------------- menu */
-.drawer-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.28); z-index: 1500; animation: fade 0.2s; }
+.drawer-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.22); z-index: 1500; animation: fade 0.2s; }
 @keyframes fade { from { opacity: 0; } }
 .drawer {
-  position: fixed; top: 0; right: 0; bottom: 0; width: min(360px, 92vw); z-index: 1501; background: var(--bg);
-  display: flex; flex-direction: column; overflow: auto; animation: slide 0.3s cubic-bezier(0.2, 0.9, 0.3, 1);
-  padding: env(safe-area-inset-top, 0px) 0 calc(14px + env(safe-area-inset-bottom, 0px)); box-shadow: var(--shadow-2);
+  position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); width: min(370px, calc(100vw - 20px)); z-index: 1501;
+  display: flex; flex-direction: column; overflow: auto; animation: slide 0.35s cubic-bezier(0.32, 0.72, 0, 1); border-radius: 32px; padding: 0 0 14px;
+  background: var(--glass-sheen), var(--material); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); box-shadow: var(--glass-rim), var(--shadow-2);
 }
-@keyframes slide { from { transform: translateX(100%); } }
+@keyframes slide { from { transform: translateX(calc(100% + 20px)); } }
 .drawer-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 22px 18px 14px; }
-.drawer-section { margin: 0 14px 12px; padding: 14px; border-radius: 14px; background: var(--card); }
+.drawer-section { margin: 0 14px 12px; padding: 14px 16px; border-radius: 24px; background: var(--card); box-shadow: var(--card-rim); }
 .drawer-section h3 { font-size: 13px; font-weight: 600; color: var(--text-2); margin: 0 0 8px; }
 .drawer-section.grow { flex: 1; }
 .drawer-section p { margin: 0 0 4px; }
-.history { list-style: none; padding: 0; margin: 0 -14px -14px; }
-.history li { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 10px 14px; cursor: pointer; position: relative; }
-.history li + li::before { content: ""; position: absolute; top: 0; left: 14px; right: 0; height: 0.5px; background: var(--sep); }
+.history { list-style: none; padding: 0; margin: 0 -16px -14px; }
+.history li { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 10px 16px; cursor: pointer; position: relative; }
+.history li + li::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; height: 0.5px; background: var(--sep); }
 .history li:hover { background: var(--fill); }
 .history .h-name { font-weight: 600; font-size: 15px; }
 .history .h-sub { font-size: 13px; color: var(--text-2); }
@@ -1138,12 +1192,13 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 /* ---------------------------------------------------------------- toasts (HUD) */
 .toasts { position: fixed; z-index: 2000; left: 50%; bottom: 28px; transform: translateX(-50%); display: grid; gap: 8px; width: max-content; max-width: calc(100vw - 32px); }
 .toast {
-  background: var(--hud); color: #fff; -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
-  padding: 11px 18px; border-radius: 999px; box-shadow: var(--shadow-2); font-weight: 600; font-size: 14px; display: flex; gap: 14px; align-items: center;
+  position: relative; background: var(--glass-sheen), var(--material-strong); color: var(--text); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  padding: 12px 20px; border-radius: 999px; box-shadow: var(--glass-rim), var(--shadow-2); font-weight: 600; font-size: 14px; display: flex; gap: 14px; align-items: center;
   animation: toast 0.35s cubic-bezier(0.2, 1.2, 0.4, 1);
 }
-.toast button { background: none; border: 0; color: #64d2ff; font-weight: 700; padding: 0; }
-.toast.error { background: var(--red); }
+.toast button { background: none; border: 0; color: var(--accent); font-weight: 700; padding: 0; }
+.toast.error { background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0) 55%), var(--red); color: #fff; }
+.toast.error button { color: #fff; }
 @keyframes toast { from { transform: translateY(10px) scale(0.95); opacity: 0; } }
 @media (max-width: 759px) { .toasts { bottom: auto; top: calc(70px + env(safe-area-inset-top, 0px)); } }
 
@@ -1216,24 +1271,28 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .poi-pin svg { width: 14px; height: 14px; }
 .poi-pin.hl { transform: scale(1.3); }
 .leaflet-tooltip.label {
-  background: var(--material-strong); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); color: var(--text);
-  border: 0; border-radius: 999px; box-shadow: 0 1px 5px rgba(0, 0, 0, 0.14); font-weight: 600; font-size: 11.5px; padding: 3px 9px;
+  background: var(--glass-sheen), var(--material-strong); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); color: var(--text);
+  border: 0; border-radius: 999px; box-shadow: var(--glass-rim), 0 2px 8px rgba(0, 0, 0, 0.14); font-weight: 600; font-size: 11.5px; padding: 3px 10px;
 }
 .leaflet-tooltip.label::before { display: none; }
-.leaflet-popup-content-wrapper { border-radius: 18px; background: var(--material-strong); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); color: var(--text); box-shadow: var(--shadow-2); }
+.leaflet-popup-content-wrapper { border-radius: 26px; background: var(--glass-sheen), var(--material-strong); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); color: var(--text); box-shadow: var(--glass-rim), var(--shadow-2); }
 .leaflet-popup-tip { background: var(--material-strong); }
 .leaflet-popup-content { margin: 14px 16px; font: inherit; font-size: 14px; }
 .leaflet-container a.leaflet-popup-close-button { top: 6px; right: 6px; color: var(--text-2); }
-.map-popup .btn { margin-top: 10px; width: 100%; min-height: 38px; }
+.map-popup .btn { margin-top: 10px; width: 100%; min-height: 40px; }
 .leaflet-container { font: inherit; }
-.leaflet-control-zoom { border: 0 !important; border-radius: 14px !important; overflow: hidden; box-shadow: var(--shadow-2) !important; }
+.leaflet-control-zoom { border: 0 !important; border-radius: 999px !important; overflow: hidden; box-shadow: var(--glass-rim), var(--shadow-2) !important; }
 .leaflet-control-zoom a {
-  width: 44px !important; height: 44px !important; line-height: 44px !important; font-size: 22px !important; font-weight: 400 !important;
-  background: var(--material-strong) !important; color: var(--text) !important; border-bottom: 0.5px solid var(--sep) !important;
-  -webkit-backdrop-filter: saturate(180%) blur(24px); backdrop-filter: saturate(180%) blur(24px);
+  width: 46px !important; height: 46px !important; line-height: 46px !important; font-size: 22px !important; font-weight: 400 !important;
+  background: var(--glass-sheen), var(--material-strong) !important; color: var(--text) !important; border-bottom: 0.5px solid var(--sep) !important;
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
 }
 .leaflet-control-zoom a:last-child { border-bottom: 0 !important; }
-.leaflet-control-attribution { font-size: 10px; border-radius: 8px 0 0 0; background: var(--material) !important; color: var(--text-2); }
+.leaflet-control-attribution {
+  font-size: 10px; border-radius: 10px 0 0 0; color: var(--text-2);
+  background: var(--material-strong) !important; -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+}
+@media (max-width: 759px) { .leaflet-control-attribution { margin: 0 12px 6px 0 !important; border-radius: 10px; } }
 .leaflet-control-attribution a { color: var(--text-2); }
 /* Without a CARTO key: the standard OpenStreetMap map, calmer; inverted at night. */
 .osm-tiles { filter: saturate(0.45) contrast(0.9) brightness(1.06); }
@@ -1243,6 +1302,15 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 :root[data-theme="dark"] #map { background: #262626; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #map { background: #262626; } }
 
+/* "Reduce transparency" on: the glass nearly solid. */
+@media (prefers-reduced-transparency: reduce) {
+  :root { --material: rgba(246, 246, 250, 0.97); --material-strong: rgba(252, 252, 255, 0.98); --card: #ffffff; --glass-floor: #f6f6fa; }
+  :root[data-theme="dark"] { --material: rgba(30, 30, 34, 0.97); --material-strong: rgba(42, 42, 48, 0.98); --card: #2c2c2e; --glass-floor: #1e1e22; }
+}
+@media (prefers-reduced-transparency: reduce) and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --material: rgba(30, 30, 34, 0.97); --material-strong: rgba(42, 42, 48, 0.98); --card: #2c2c2e; --glass-floor: #1e1e22; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
@@ -1251,10 +1319,10 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .leave-row { display: flex; align-items: center; gap: 10px; margin: 22px 4px 0; }
 .leave-label { font-weight: 600; font-size: 15px; margin-right: 2px; }
 .leave-opt {
-  border: 0; border-radius: 10px; padding: 8px 12px; font: inherit; font-size: 15px; color: var(--text-2); background: var(--fill);
+  border: 0; border-radius: 999px; padding: 8px 14px; font: inherit; font-size: 15px; color: var(--text-2); background: var(--fill);
   -webkit-appearance: none; appearance: none; min-height: 38px; transition: background 0.15s, color 0.15s;
 }
-input.leave-opt { flex: 1; min-width: 0; width: auto; padding: 8px 10px; }
+input.leave-opt { flex: 1; min-width: 0; width: auto; padding: 8px 12px; }
 .leave-opt.active { background: var(--accent-tint); color: var(--accent); font-weight: 600; }
 
 /* ---------------------------------------------------------------- directions */
@@ -1263,10 +1331,10 @@ input.leave-opt { flex: 1; min-width: 0; width: auto; padding: 8px 10px; }
 .segmented.modes .seg svg { flex: none; opacity: 0.8; }
 .when-row { display: flex; gap: 8px; margin: 0 0 10px; }
 .when-row select, .when-row input {
-  border: 0; background: var(--card); border-radius: 10px; padding: 8px 10px; font: inherit; font-size: 14px; color: var(--text);
-  box-shadow: var(--shadow-1); -webkit-appearance: none; appearance: none;
+  border: 0; background: var(--card); border-radius: 999px; padding: 8px 14px; font: inherit; font-size: 14px; color: var(--text);
+  box-shadow: var(--card-rim), var(--shadow-1); -webkit-appearance: none; appearance: none;
 }
-.when-row select { padding-right: 26px; background-image: linear-gradient(45deg, transparent 50%, var(--text-2) 50%), linear-gradient(135deg, var(--text-2) 50%, transparent 50%); background-position: calc(100% - 14px) 52%, calc(100% - 9px) 52%; background-size: 5px 5px; background-repeat: no-repeat; }
+.when-row select { padding-right: 30px; background-image: linear-gradient(45deg, transparent 50%, var(--text-2) 50%), linear-gradient(135deg, var(--text-2) 50%, transparent 50%); background-position: calc(100% - 17px) 52%, calc(100% - 12px) 52%; background-size: 5px 5px; background-repeat: no-repeat; }
 .when-row input { flex: 1; min-width: 0; width: auto; }
 .dirs .cell-sub { display: block; white-space: normal; }
 .dirs .cell-sub .times { display: block; margin-top: 3px; font-variant-numeric: tabular-nums; }
@@ -1284,15 +1352,15 @@ input.leave-opt { flex: 1; min-width: 0; width: auto; padding: 8px 10px; }
 .itin { padding: 2px 14px 14px 52px; }
 .itin > .footnote { margin: 0 0 10px; }
 .opt-row { display: flex; gap: 6px; overflow-x: auto; margin: 0 0 10px; scrollbar-width: none; }
-.opt-row .chip { border: 0; background: var(--fill); color: var(--text); border-radius: 999px; padding: 5px 11px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
-.opt-row .chip.active { background: var(--accent); color: #fff; }
+.opt-row .chip { border: 0; background: var(--fill); color: var(--text); border-radius: 999px; padding: 6px 12px; font-size: 12.5px; font-weight: 600; white-space: nowrap; box-shadow: var(--card-rim); }
+.opt-row .chip.active { background: linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0) 55%), var(--accent); color: #fff; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4); }
 .legs { list-style: none; margin: 0 0 12px; padding: 0; }
 .leg { display: grid; grid-template-columns: 62px 14px 1fr; gap: 0 8px; position: relative; padding-bottom: 12px; font-size: 14px; }
 .leg .t { font-size: 12.5px; font-weight: 600; color: var(--text-2); font-variant-numeric: tabular-nums; padding-top: 1px; white-space: nowrap; } /* "12:41 PM" on one line */
 .leg .rail { position: relative; }
 .leg .rail::before { content: ""; position: absolute; left: 50%; top: 4px; bottom: -8px; transform: translateX(-50%); width: 0; border-left: 3px dotted var(--text-3); }
 .leg.ride .rail::before { border-left: 4px solid var(--line); border-radius: 2px; }
-.leg .rail::after { content: ""; position: absolute; left: 50%; top: 4px; width: 10px; height: 10px; transform: translateX(-50%); border-radius: 50%; background: var(--card); border: 2.5px solid var(--text-3); }
+.leg .rail::after { content: ""; position: absolute; left: 50%; top: 4px; width: 10px; height: 10px; transform: translateX(-50%); border-radius: 50%; background: var(--card-solid); border: 2.5px solid var(--text-3); }
 .leg.ride .rail::after { border-color: var(--line); }
 .leg.end { padding-bottom: 0; }
 .leg.end .rail::before { display: none; }
@@ -1302,25 +1370,27 @@ input.leave-opt { flex: 1; min-width: 0; width: auto; padding: 8px 10px; }
 .handoff { display: flex; gap: 8px; flex-wrap: wrap; }
 .handoff .btn { margin: 0; }
 .attrib { margin: -6px 6px 14px; font-size: 11.5px; }
+.actions + .attrib { margin-top: 12px; }
 .attrib a { color: var(--text-2); }
 
 /* ---------------------------------------------------------------- per-person travel mode */
 .title-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .title-row .cell-title { flex: 0 1 auto; min-width: 0; }
 .mode-pill {
-  flex: none; display: inline-flex; align-items: center; gap: 4px; border: 0; border-radius: 999px; padding: 3px 8px 3px 7px;
+  flex: none; display: inline-flex; align-items: center; gap: 4px; border: 0; border-radius: 999px; padding: 4px 9px 4px 8px;
   background: var(--accent-tint); color: var(--accent); font-size: 12px; font-weight: 600; line-height: 1.2; white-space: nowrap;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 0 0 0.5px rgba(255, 255, 255, 0.2);
 }
 .mode-pill:hover { filter: brightness(0.96); }
 .mode-pill .caret { opacity: 0.7; transition: transform 0.2s; }
 .mode-pill[aria-expanded="true"] .caret { transform: rotate(180deg); }
 .mode-picker { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 2px 14px 14px 70px; animation: pop 0.25s cubic-bezier(0.2, 1.15, 0.4, 1); }
 .mode-opt {
-  display: grid; justify-items: center; gap: 3px; border: 0; border-radius: 12px; padding: 8px 4px; background: var(--fill);
-  color: var(--text); font-size: 12px; font-weight: 600;
+  display: grid; justify-items: center; gap: 3px; border: 0; border-radius: 18px; padding: 9px 4px; background: var(--fill);
+  color: var(--text); font-size: 12px; font-weight: 600; box-shadow: var(--card-rim);
 }
 .mode-opt:hover { background: var(--fill-2); }
-.mode-opt.active { background: var(--accent); color: #fff; }
+.mode-opt.active { background: linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0) 55%), var(--accent); color: #fff; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4); }
 .dirs .cell-btn[role="button"] { cursor: pointer; }
 
 /* ---------------------------------------------------------------- places: photos & ratings */
@@ -1344,7 +1414,7 @@ img.broken { display: none; }
 /* list of places with pictures */
 .group.places { --inset: 98px; }
 .poi { align-items: center; gap: 12px; padding: 10px 14px 10px 10px; }
-.thumb { position: relative; width: 68px; height: 68px; flex: none; border-radius: 12px; overflow: hidden; background: var(--fill); }
+.thumb { position: relative; width: 68px; height: 68px; flex: none; border-radius: 16px; overflow: hidden; background: var(--fill); }
 .thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.3s; z-index: 1; }
 .thumb img.in { opacity: 1; }
 .thumb-art { position: absolute; inset: 0; display: grid; place-items: center; color: #fff;
@@ -1359,13 +1429,13 @@ img.broken { display: none; }
 /* place page */
 .gallery { display: flex; gap: 6px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 -20px 18px; padding: 0 20px; scrollbar-width: none; }
 .gallery::-webkit-scrollbar { display: none; }
-.g-item { position: relative; flex: none; width: 62%; aspect-ratio: 4 / 3; border: 0; padding: 0; border-radius: 14px; overflow: hidden; scroll-snap-align: start; background: var(--fill); }
+.g-item { position: relative; flex: none; width: 62%; aspect-ratio: 4 / 3; border: 0; padding: 0; border-radius: 20px; overflow: hidden; scroll-snap-align: start; background: var(--fill); }
 .g-item + .g-item { width: 40%; }
 .gallery.single .g-item { width: 100%; aspect-ratio: 16 / 9; }
 .g-item img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0; transition: opacity 0.3s; }
 .g-item img.in { opacity: 1; }
-.g-item.skel { display: block; height: auto; border-radius: 14px; }
-.hero-art { height: 120px; border-radius: 16px; margin: 0 0 14px; display: grid; place-items: center; color: #fff;
+.g-item.skel { display: block; height: auto; border-radius: 20px; }
+.hero-art { height: 120px; border-radius: 24px; margin: 0 0 14px; display: grid; place-items: center; color: #fff;
   background: var(--c); }
 .place-title { margin: 0 4px 14px; display: grid; gap: 4px; }
 .place-title h2 { font-size: 26px; }
@@ -1374,20 +1444,20 @@ img.broken { display: none; }
 .place-status { font-size: 14px; color: var(--text-2); }
 .quick { display: flex; gap: 8px; margin: 0 0 14px; overflow-x: auto; scrollbar-width: none; }
 .quick::-webkit-scrollbar { display: none; }
-.q { flex: 1 0 64px; display: grid; justify-items: center; gap: 4px; border: 0; border-radius: 14px; padding: 10px 6px 8px; background: var(--card); color: var(--accent); font-size: 12px; font-weight: 600; }
+.q { flex: 1 0 64px; display: grid; justify-items: center; gap: 4px; border: 0; border-radius: 20px; padding: 11px 6px 9px; background: var(--card); color: var(--accent); font-size: 12px; font-weight: 600; box-shadow: var(--card-rim); transition: transform 0.2s cubic-bezier(0.3, 1.5, 0.5, 1); }
 .q svg { width: 21px; height: 21px; }
-.q.primary { background: var(--accent); color: #fff; }
+.q.primary { background: linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0) 55%), var(--accent); color: #fff; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 6px 16px -6px var(--accent); }
 .q:active { transform: scale(0.96); }
 /* "Open in Maps": a choice of maps apps, like a phone's own menu (at the bottom on a phone, in the middle on a computer). */
-.choice-backdrop { position: fixed; inset: 0; z-index: 2000; background: rgba(0, 0, 0, 0.32); animation: fade 0.2s; }
+.choice-backdrop { position: fixed; inset: 0; z-index: 2000; background: rgba(0, 0, 0, 0.26); animation: fade 0.2s; }
 .choice {
   position: fixed; z-index: 2001; left: 50%; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
   width: min(420px, calc(100% - 20px)); display: grid; gap: 8px; animation: choice-in 0.3s cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 @keyframes choice-in { from { opacity: 0; translate: 0 28px; } }
 .choice-group, .choice-cancel {
-  background: var(--material-strong); -webkit-backdrop-filter: saturate(180%) blur(30px); backdrop-filter: saturate(180%) blur(30px);
-  border-radius: 14px; overflow: hidden; box-shadow: var(--shadow-2);
+  position: relative; background: var(--glass-sheen), var(--material-strong); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  border-radius: 28px; overflow: hidden; box-shadow: var(--glass-rim), var(--shadow-2);
 }
 .choice-title { padding: 13px 16px; text-align: center; font-size: 13px; color: var(--text-2); }
 .choice-btn {
@@ -1409,7 +1479,7 @@ img.broken { display: none; }
 .hours tr.today th, .hours tr.today td { color: var(--text); font-weight: 600; }
 
 /* reviews */
-.rev-summary { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 14px; background: var(--card); border-radius: 14px; padding: 14px; margin-bottom: 10px; }
+.rev-summary { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 14px; background: var(--card); border-radius: 24px; padding: 16px; margin-bottom: 10px; box-shadow: var(--card-rim); }
 .big-num { font: 700 40px/1 var(--font-display); letter-spacing: -0.03em; }
 .rev-mid { display: grid; gap: 4px; }
 .bars { display: grid; gap: 3px; min-width: 90px; }
@@ -1417,9 +1487,9 @@ img.broken { display: none; }
 .bar i { height: 6px; border-radius: 3px; background: var(--fill); overflow: hidden; }
 .bar b { display: block; height: 100%; border-radius: 3px; background: #ff9f0a; }
 .subratings { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
-.subratings .chip { border: 0; background: var(--card); border-radius: 999px; padding: 5px 11px; font-size: 13px; }
+.subratings .chip { border: 0; background: var(--card); border-radius: 999px; padding: 6px 12px; font-size: 13px; box-shadow: var(--card-rim); }
 .reviews { list-style: none; padding: 0; margin: 0 0 12px; display: grid; gap: 8px; }
-.review { background: var(--card); border-radius: 14px; padding: 12px 14px; }
+.review { background: var(--card); border-radius: 22px; padding: 14px 16px; box-shadow: var(--card-rim); }
 .rv-head { display: flex; align-items: center; gap: 10px; }
 .rv-head .avatar { overflow: hidden; }
 .rv-head .avatar img { width: 100%; height: 100%; object-fit: cover; }
@@ -1430,10 +1500,10 @@ img.broken { display: none; }
 .rv-text { margin: 2px 0 0; font-size: 14px; line-height: 1.45; cursor: pointer;
   display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .rv-text.open { -webkit-line-clamp: unset; display: block; }
-.rv-reply { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: var(--fill); font-size: 13px; }
+.rv-reply { margin-top: 8px; padding: 10px 12px; border-radius: 16px; background: var(--fill); font-size: 13px; }
 
 /* photos & about */
-.photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-bottom: 10px; border-radius: 14px; overflow: hidden; }
+.photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-bottom: 10px; border-radius: 22px; overflow: hidden; }
 .photo-grid .g-item { width: auto !important; aspect-ratio: 1; border-radius: 0; }
 .features .cell { min-height: 44px; gap: 10px; font-size: 15px; }
 .features .check { color: var(--green); font-weight: 700; }
@@ -1442,11 +1512,15 @@ img.broken { display: none; }
 /* photo viewer */
 .lightbox { position: fixed; inset: 0; z-index: 2500; background: rgba(0, 0, 0, 0.92); display: grid; place-items: center; animation: fade 0.2s; touch-action: pan-y; }
 .lightbox figure { margin: 0; max-width: min(1100px, 94vw); display: grid; gap: 10px; justify-items: center; }
-.lightbox img { max-width: 100%; max-height: calc(100vh - 140px); border-radius: 10px; object-fit: contain; user-select: none; -webkit-user-drag: none; }
+.lightbox img { max-width: 100%; max-height: calc(100vh - 140px); border-radius: 18px; object-fit: contain; user-select: none; -webkit-user-drag: none; }
 .lightbox figcaption { color: rgba(255, 255, 255, 0.75); font-size: 13px; text-align: center; padding: 0 16px; }
 .lightbox figcaption a { color: #64d2ff; }
 .lb-count { display: block; margin-top: 4px; color: rgba(255, 255, 255, 0.5); }
-.lightbox button { position: absolute; border: 0; background: rgba(255, 255, 255, 0.14); color: #fff; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-size: 28px; line-height: 1; }
+.lightbox button {
+  position: absolute; border: 0; background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.08)); color: #fff; width: 46px; height: 46px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 28px; line-height: 1; -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 0 0 0.5px rgba(255, 255, 255, 0.2);
+}
 .lightbox button:hover { background: rgba(255, 255, 255, 0.24); }
 .lb-close { top: calc(16px + env(safe-area-inset-top, 0px)); right: 16px; }
 .lb-prev { left: 14px; top: 50%; transform: translateY(-50%); }
@@ -2616,6 +2690,12 @@ const THEMES = {
   light: { dim: 'rgba(255,255,255,0.24)', blend: 'source-over', shade: -0.08, front: (hex) => shade(hex, -0.42), traveller: '#ffffff' },
 };
 const FLOOD = { minorW: 1.05, majorW: 1.7, alpha: 0.88 };
+// The floods grow a little fainter the further they reach from where each person starts (by
+// travel time, as a share of their trip to the meeting point): by `by` at the meeting point,
+// barely to be seen, in bands too fine to show as steps.
+const FADE = { by: 0.22, bands: 6 };
+/** A flood's paths: minor streets in bands 0…bands-1 outwards, then major streets the same. */
+const newPaths = () => Array.from({ length: 2 * FADE.bands }, () => new Path2D());
 // The front: its colour over the newest … oldest third of it, which is this
 // much of each person's trip long; and its glow, drawn small and scaled up
 // (so soft, and cheap to draw).
@@ -2853,10 +2933,13 @@ class FloodAnimation {
    * `owner` (per street: who gets there first), each street is drawn only
    * for that person, so the floods meet instead of piling up.
    */
-  showFloods(list, owner = null) {
+  showFloods(list, owner = null, reach = null) {
     this.owner = owner;
     const th = this.theme;
-    this.shown = list.map((i) => ({ i, fl: this.flood(i), color: shade(this.people[i].color, th.shade), front: th.front(this.people[i].color), c: 0, s: 0, e: 0, p0: 0, active: [], band: 1, frozen: false })).filter((f) => f.fl);
+    this.shown = list.map((i) => ({
+      i, fl: this.flood(i), color: shade(this.people[i].color, th.shade), front: th.front(this.people[i].color),
+      reach: reach?.get(i) || 0, c: 0, s: 0, e: 0, p0: 0, active: [], band: 1, frozen: false,
+    })).filter((f) => f.fl);
     const { fill, top, dpr, size } = this;
     fill.setTransform(dpr, 0, 0, dpr, 0, 0);
     fill.clearRect(0, 0, size.x, size.y);
@@ -2866,12 +2949,18 @@ class FloodAnimation {
 
   /** Add the pieces of street in byEnd[from…to) to paths, whole or up to time `upTo`. */
   trace(f, from, to, paths, v, upTo = Infinity) {
-    const { fl } = f, net = this.net, own = this.owner;
+    const { fl } = f, own = this.owner;
     for (let j = from; j < to; j++) {
       const q = fl.byEnd[j];
       if (own && own[fl.edge[q]] !== f.i) continue;
-      this.piece(fl, q, upTo, paths[net.major[fl.edge[q]]], v);
+      this.piece(fl, q, upTo, this.pathFor(f, paths, q), v);
     }
+  }
+
+  /** The path a piece of street goes in: a minor or major street, and how far out it is (see FADE). */
+  pathFor(f, paths, q) {
+    const out = f.reach > 0 ? Math.min(FADE.bands - 1, Math.floor((f.fl.t0[q] / f.reach) * FADE.bands)) : 0;
+    return paths[this.net.major[f.fl.edge[q]] * FADE.bands + out];
   }
 
   piece(fl, q, upTo, path, v) {
@@ -2886,11 +2975,13 @@ class FloodAnimation {
 
   strokeFlood(ctx, f, paths, alpha = FLOOD.alpha) {
     ctx.globalCompositeOperation = this.theme.blend;
-    ctx.globalAlpha = alpha;
     ctx.strokeStyle = f.color;
     ctx.lineCap = 'butt';
-    ctx.lineWidth = FLOOD.minorW; ctx.stroke(paths[0]);
-    ctx.lineWidth = FLOOD.majorW; ctx.stroke(paths[1]);
+    for (let k = 0; k < FADE.bands; k++) {
+      ctx.globalAlpha = alpha * (1 - (FADE.by * (k + 0.5)) / FADE.bands);
+      ctx.lineWidth = FLOOD.minorW; ctx.stroke(paths[k]);
+      ctx.lineWidth = FLOOD.majorW; ctx.stroke(paths[FADE.bands + k]);
+    }
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
   }
@@ -2907,7 +2998,7 @@ class FloodAnimation {
     const from = f.e;
     while (f.e < fl.count && fl.t1[fl.byEnd[f.e]] <= c) f.e++;
     if (f.e > from) {
-      const v = this.view(), paths = [new Path2D(), new Path2D()];
+      const v = this.view(), paths = newPaths();
       this.fill.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
       this.trace(f, from, f.e, paths, v);
       this.strokeFlood(this.fill, f, paths);
@@ -2929,10 +3020,9 @@ class FloodAnimation {
     for (const f of this.shown) {
       if (f.frozen) continue;
       const { fl } = f;
-      const colour = [new Path2D(), new Path2D()];
+      const colour = newPaths();
       const white = FRONT.map(() => new Path2D());
       const glow = new Path2D();
-      const net = this.net;
       for (let j = f.s; j < f.e; j++) {
         const q = fl.byEnd[j];
         if (own && own[fl.edge[q]] !== f.i) continue;
@@ -2947,7 +3037,7 @@ class FloodAnimation {
         if (fl.t1[q] <= f.c) continue;
         f.active[w++] = q;
         if (own && own[fl.edge[q]] !== f.i) continue;
-        this.piece(fl, q, f.c, colour[net.major[fl.edge[q]]], v);
+        this.piece(fl, q, f.c, this.pathFor(f, colour, q), v);
         this.piece(fl, q, f.c, white[0], v);
         this.piece(fl, q, f.c, glow, v);
       }
@@ -2994,7 +3084,7 @@ class FloodAnimation {
   freeze(f) {
     if (f.frozen) return;
     const v = this.view();
-    const paths = [new Path2D(), new Path2D()];
+    const paths = newPaths();
     this.partial(f, paths, v);
     this.fill.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.strokeFlood(this.fill, f, paths);
@@ -3004,7 +3094,7 @@ class FloodAnimation {
   /** Add the streets a flood is part way along to paths, as far as it has got. */
   partial(f, paths, v) {
     const { fl } = f;
-    for (const q of f.active) if (fl.t1[q] > f.c && (!this.owner || this.owner[fl.edge[q]] === f.i)) this.piece(fl, q, f.c, paths[this.net.major[fl.edge[q]]], v);
+    for (const q of f.active) if (fl.t1[q] > f.c && (!this.owner || this.owner[fl.edge[q]] === f.i)) this.piece(fl, q, f.c, this.pathFor(f, paths, q), v);
   }
 
   /** Every flood as far as it has got, from scratch, on the flood canvas. */
@@ -3015,7 +3105,7 @@ class FloodAnimation {
     fill.clearRect(0, 0, size.x, size.y);
     const v = this.view();
     for (const f of this.shown) {
-      const paths = [new Path2D(), new Path2D()];
+      const paths = newPaths();
       this.trace(f, 0, f.e, paths, v);
       if (f.frozen) this.partial(f, paths, v);
       this.strokeFlood(fill, f, paths);
@@ -3064,7 +3154,7 @@ class FloodAnimation {
       const t = fl.at(node);
       return [i, Math.max(60, Number.isFinite(t) ? t : reachTime(this.net, fl, this.people.filter((_, j) => j !== i)) * 0.6)];
     }));
-    this.showFloods(list, ownership(this.net, list.map((i) => [i, this.flood(i), trip.get(i)])));
+    this.showFloods(list, ownership(this.net, list.map((i) => [i, this.flood(i), trip.get(i)])), trip);
     this.additive(true);
     const END = 1.03;
     const ok = await this.run(2600, (t) => {
@@ -6405,13 +6495,14 @@ async function moveAddress(p, ll) {
 function mapPadding() {
   const panel = $('#panel');
   const hidden = panel.classList.contains('away');
-  // While searching, the heading sits at the top and the status at the bottom.
+  // Room at the top for people's name tags (above their pins), clear of the top bar and, while
+  // searching, the heading; while searching the status sits at the bottom.
   const searching = state.view === 'searching';
-  let tl = [40, searching ? 130 : 80], br = [40, searching ? 120 : 40];
+  let tl = [40, 130], br = [40, searching ? 120 : 40];
   const cover = { left: 0, bottom: 0 };
   if (!hidden) {
     if (isMobile()) { cover.bottom = sheet.target || panel.offsetHeight; br = [30, cover.bottom + 24]; }
-    else { cover.left = panel.offsetLeft + panel.offsetWidth; tl = [panel.offsetWidth + 50, 80]; }
+    else { cover.left = panel.offsetLeft + panel.offsetWidth; tl = [panel.offsetWidth + 50, 130]; }
   }
   return { tl, br, cover };
 }
@@ -6453,9 +6544,9 @@ function inSight(latlngs, { share = 1, margins = null } = {}) {
     return p.x >= left && p.y >= top && p.x <= size.x - right && p.y <= size.y - bottom;
   });
 }
-// While searching (the panel away): on the screen, and not up under the heading. Anyone the map
-// was fitted to before (see mapPadding) is well inside these.
-const SEARCH_MARGINS = [20, 64, 20, 30];
+// While searching (the panel away): on the screen, and their name tag not up under the heading.
+// Anyone the map was fitted to before (see mapPadding) is inside these.
+const SEARCH_MARGINS = [20, 120, 20, 30];
 
 /**
  * Before the search animation: the map stays just as it is when everyone is
@@ -6488,11 +6579,17 @@ function sheetSizes() {
 
 function setSheet(snap) {
   const panel = $('#panel');
-  if (!isMobile()) { panel.style.height = ''; sheet.target = 0; return; }
+  if (!isMobile()) { panel.style.height = ''; panel.classList.remove('edge'); document.documentElement.style.removeProperty('--sheet-lift'); sheet.target = 0; return; }
   sheet.snap = snap;
   // While an address is being typed the sheet is as tall as it goes (see typingSheet); its position is remembered.
-  sheet.target = panel.classList.contains('typing') ? sheetSizes().max : sheetSizes()[snap];
+  const sizes = sheetSizes();
+  sheet.target = panel.classList.contains('typing') ? sizes.max : sizes[snap];
   panel.style.height = `${sheet.target}px`;
+  // The sheet floats above the bottom of the screen; pulled all the way up, it meets the screen's edges.
+  const edge = sheet.target >= sizes.max - 1;
+  panel.classList.toggle('edge', edge);
+  // The map's credits sit just above it (see .leaflet-bottom in styles.css).
+  document.documentElement.style.setProperty('--sheet-lift', `${edge ? 0 : sheet.target + 12}px`);
 }
 
 /**
@@ -6543,21 +6640,7 @@ function initSheet() {
   const end = () => {
     if (!drag) return;
     panel.classList.remove('dragging');
-    const s = sheetSizes();
-    const order = ['peek', 'mid', 'full'];
-    let snap;
-    if (!drag.moved) {
-      snap = sheet.snap === 'peek' ? 'mid' : 'peek'; // tap toggles
-    } else if (Math.abs(drag.v) > 0.45) {
-      // Fling: next snap point in the direction of the flick.
-      const cur = panel.offsetHeight;
-      snap = drag.v > 0
-        ? [...order].reverse().find((k) => s[k] < cur - 4) || 'peek'
-        : order.find((k) => s[k] > cur + 4) || 'full';
-    } else {
-      const cur = panel.offsetHeight;
-      snap = order.reduce((a, b) => (Math.abs(s[b] - cur) < Math.abs(s[a] - cur) ? b : a));
-    }
+    const snap = drag.moved ? snapFor(drag.v) : sheet.snap === 'peek' ? 'mid' : 'peek'; // (a tap toggles)
     drag = null;
     sheet.chosen = snap;
     setSheet(snap);
@@ -6571,12 +6654,90 @@ function initSheet() {
     if (e.key === 'ArrowDown') snap = sheet.snap === 'full' ? 'mid' : 'peek';
     if (snap) { sheet.chosen = snap; setSheet(snap); }
   });
+  pullFromContent(panel);
   window.addEventListener('resize', () => {
     setSheet(sheet.snap);
     // Typing with the sheet fully open: keep the address box at its top, now and once the sheet has settled.
     typingBoxToTop();
     setTimeout(typingBoxToTop, 350);
   });
+}
+
+/** Letting go of the sheet: the next size in the direction of a flick (v: px/ms, + is down), else the nearest. */
+function snapFor(v) {
+  const s = sheetSizes();
+  const cur = $('#panel').offsetHeight;
+  const order = ['peek', 'mid', 'full'];
+  if (Math.abs(v) > 0.45) {
+    return v > 0 ? [...order].reverse().find((k) => s[k] < cur - 4) || 'peek' : order.find((k) => s[k] > cur + 4) || 'full';
+  }
+  return order.reduce((a, b) => (Math.abs(s[b] - cur) < Math.abs(s[a] - cur) ? b : a));
+}
+
+/**
+ * The sheet moved by its content, as on an iPhone: a finger moving up while
+ * the content is scrolled to its top grows the sheet (following the finger,
+ * then settling at the nearest size); once the sheet is all the way up, the
+ * rest of the movement scrolls the content. Moving down at the top shrinks
+ * the sheet again. Anything that scrolls by itself (a list of suggestions,
+ * a row of tabs sideways), a box being typed in and the slider are left alone.
+ */
+function pullFromContent(panel) {
+  const body = $('#panel-body');
+  let pull = null;
+  const ownMoves = (el) => {
+    for (let n = el; n && n !== body; n = n.parentElement) {
+      if (n.matches?.('input, textarea, select, label.switch')) return true;
+      const oy = getComputedStyle(n).overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight + 1) return true;
+    }
+    return false;
+  };
+  body.addEventListener('touchstart', (e) => {
+    pull = null;
+    if (!isMobile() || e.touches.length !== 1 || panel.classList.contains('typing') || panel.classList.contains('away') || ownMoves(e.target)) return;
+    const t = e.touches[0];
+    pull = { x: t.clientX, y: t.clientY, h: panel.offsetHeight, on: false, lastY: t.clientY, lastT: performance.now(), v: 0 };
+  }, { passive: true });
+  body.addEventListener('touchmove', (e) => {
+    if (!pull) return;
+    const t = e.touches[0];
+    const dx = t.clientX - pull.x, dy = t.clientY - pull.y;
+    if (!pull.on) {
+      // Decided at the first few pixels (before the page would start scrolling): up or down at the top.
+      if (Math.abs(dx) < 3 && Math.abs(dy) < 3) return;
+      const s = sheetSizes();
+      const take = Math.abs(dy) > Math.abs(dx) && body.scrollTop <= 0 && (dy < 0 ? pull.h < s.full - 2 : pull.h > s.peek + 2);
+      if (!take) { pull = null; return; }
+      Object.assign(pull, { on: true, full: s.full });
+      panel.classList.add('dragging');
+    }
+    e.preventDefault();
+    const now = performance.now();
+    pull.v = (t.clientY - pull.lastY) / Math.max(1, now - pull.lastT);
+    pull.lastY = t.clientY;
+    pull.lastT = now;
+    const want = pull.h - dy;
+    panel.style.height = `${Math.max(56, Math.min(pull.full, want))}px`;
+    body.scrollTop = Math.max(0, want - pull.full); // (all the way up: the content scrolls on)
+    if (Math.abs(dy) > 10) pull.moved = true;
+  }, { passive: false });
+  const letGo = () => {
+    if (!pull?.on) { pull = null; return; }
+    panel.classList.remove('dragging');
+    const snap = snapFor(pull.v);
+    // A drag isn't a tap: whatever it started on isn't pressed.
+    if (pull.moved) {
+      const stop = (e) => { e.stopPropagation(); e.preventDefault(); };
+      body.addEventListener('click', stop, { capture: true, once: true });
+      setTimeout(() => body.removeEventListener('click', stop, { capture: true }), 400);
+    }
+    pull = null;
+    sheet.chosen = snap;
+    setSheet(snap);
+  };
+  body.addEventListener('touchend', letGo);
+  body.addEventListener('touchcancel', letGo);
 }
 
 // ---------------------------------------------------------------- main screen & panel
@@ -6958,12 +7119,28 @@ async function forgetAddress(id) {
 /** "Leaving: Now | [date and time]" above the Find button. */
 function leaveRow() {
   if (state.leaveAt && !leaveTime()) state.leaveAt = ''; // the chosen time has passed: back to "Now"
-  const later = state.leaveAt || toLocalInput(nextHalfHour());
+  // The box shows the time chosen, or (leaving now) the time it is now.
+  const shown = state.leaveAt || toLocalInput(new Date());
   return `<div class="leave-row" role="group" aria-label="When everyone leaves">
     <span class="leave-label">Leaving</span>
     <button class="leave-opt${state.leaveAt ? '' : ' active'}" data-action="leave-now" aria-pressed="${!state.leaveAt}">Now</button>
-    <input type="datetime-local" id="leave-at" class="leave-opt${state.leaveAt ? ' active' : ''}" value="${esc(later)}" min="${esc(toLocalInput(new Date()))}" aria-label="Leave at a date and time">
+    <input type="datetime-local" id="leave-at" class="leave-opt${state.leaveAt ? ' active' : ''}" value="${esc(shown)}" min="${esc(toLocalInput(new Date()))}" aria-label="Leave at a date and time">
   </div>`;
+}
+
+/**
+ * A date and time box that, when emptied, shows the time it is now and calls
+ * `onReset`. (A phone's Reset in its date picker empties the box.)
+ */
+function resetsToNow(box, onReset) {
+  const check = () => {
+    if (box.value) return false;
+    box.value = toLocalInput(new Date());
+    onReset();
+    return true;
+  };
+  box.addEventListener('input', check);
+  return check;
 }
 /** A Date as a datetime-local value in this device's time zone. */
 const toLocalInput = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
@@ -6984,9 +7161,21 @@ function fmtLeave(iso) {
 afterRender.people = () => {
   const at = $('#leave-at');
   if (at) {
-    const pick = () => { if (at.value) { state.leaveAt = at.value; $('.leave-row [data-action=leave-now]').classList.remove('active'); at.classList.add('active'); } };
-    at.addEventListener('change', pick);
-    at.addEventListener('click', pick); // tapping the shown time picks it
+    // A time later than now is when everyone leaves; now (or earlier), or Reset, is leaving now.
+    const now = $('.leave-row [data-action=leave-now]');
+    const show = () => {
+      now.classList.toggle('active', !state.leaveAt);
+      now.setAttribute('aria-pressed', String(!state.leaveAt));
+      at.classList.toggle('active', !!state.leaveAt);
+    };
+    const reset = resetsToNow(at, () => { state.leaveAt = ''; show(); });
+    at.addEventListener('change', () => {
+      if (reset()) return;
+      const later = new Date(at.value).getTime() > Date.now() + 60000;
+      state.leaveAt = later ? at.value : '';
+      if (!later) at.value = toLocalInput(new Date());
+      show();
+    });
   }
   // Picking an address doesn't add anyone yet: there's time for their name, then Add (or the heart).
   const add = attachSearch($('#add-search'), {
@@ -8194,9 +8383,16 @@ afterRender.place = () => {
     } else state.when = { type: 'now' };
     render({ keepScroll: true });
   });
-  $('#dir-when-time')?.addEventListener('change', (e) => {
-    if (e.target.value) { state.when = { type: 'arrive', time: e.target.value }; render({ keepScroll: true }); }
-  });
+  const arrive = $('#dir-when-time');
+  if (arrive) {
+    // Reset (an emptied box): leaving now again.
+    const reset = resetsToNow(arrive, () => { state.when = { type: 'now' }; render({ keepScroll: true }); });
+    arrive.addEventListener('change', () => {
+      if (!arrive.isConnected || reset()) return; // (a reset has drawn the page again already)
+      state.when = { type: 'arrive', time: arrive.value };
+      render({ keepScroll: true });
+    });
+  }
 };
 
 // ------------------------------------------------ photo viewer
@@ -8428,12 +8624,15 @@ function renderShare() {
 afterRender.share = () => {
   const ta = $('#share-text');
   ta.addEventListener('input', () => { state.shareText = ta.value; updateShareLinks(); });
-  $('#share-when').addEventListener('change', (e) => {
-    state.shareWhen = e.target.value;
-    state.shareText = shareText(shareContext(), { when: e.target.value ? new Date(e.target.value) : null });
+  const when = $('#share-when');
+  const setWhen = () => {
+    state.shareWhen = when.value;
+    state.shareText = shareText(shareContext(), { when: when.value ? new Date(when.value) : null });
     ta.value = state.shareText;
     updateShareLinks();
-  });
+  };
+  const reset = resetsToNow(when, setWhen); // Reset: the time it is now
+  when.addEventListener('change', () => { if (!reset()) setWhen(); });
 };
 
 function updateShareLinks() {

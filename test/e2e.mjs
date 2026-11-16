@@ -255,6 +255,20 @@ try {
   await page.dispatchEvent('#leave-at', 'change');
   assert.equal(await page.locator('#leave-at.active').count(), 1);
   assert.equal(await page.locator('.leave-row [data-action=leave-now].active').count(), 0);
+  // Reset in a phone's date picker empties the box: leaving now again, the box showing the time it is now.
+  await page.evaluate(() => {
+    const box = document.querySelector('#leave-at');
+    box.value = '';
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  assert.equal(await page.locator('.leave-row [data-action=leave-now].active').count(), 1, 'Reset: leaving now');
+  assert.equal(await page.locator('#leave-at.active').count(), 0);
+  const shownNow = await page.inputValue('#leave-at');
+  assert.ok(Math.abs(new Date(shownNow).getTime() - Date.now()) < 120000, `Reset shows the time it is now: ${shownNow}`);
+  await page.fill('#leave-at', laterValue); // (and the time chosen again, for the search)
+  await page.dispatchEvent('#leave-at', 'change');
+  assert.equal(await page.locator('#leave-at.active').count(), 1);
 
   // Find places → the search animation: everyone's floods converge on the meeting point, then the routes.
   // The map stays as it is (everyone is in sight): the lines are drawn on it.
@@ -397,11 +411,28 @@ try {
   assert.equal(await page.locator('.modes .seg.active').count(), 0, 'mixed modes: the everyone bar shows no single mode');
   await page.waitForTimeout(400);
   await shot('07c-place-mixed');
+  // Arrive by, then Reset in the date picker (an emptied box): leaving now again.
+  const empty = (sel) => page.evaluate((q) => {
+    const box = document.querySelector(q);
+    box.value = '';
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+  }, sel);
+  await page.selectOption('#dir-when-type', 'arrive');
+  await page.waitForSelector('#dir-when-time');
+  await empty('#dir-when-time');
+  await page.waitForSelector('#dir-when-time', { state: 'detached' });
+  assert.equal(await page.inputValue('#dir-when-type'), 'now', 'Reset: leaving now');
   await page.click('[data-action=choose]');
   await page.waitForSelector('#share-text');
   const text = await page.inputValue('#share-text');
   assert.match(text, /Let's meet at/);
   assert.match(text, /google\.com\/maps/);
+  // Reset on the time to send: the time it is now, in the message too.
+  await empty('#share-when');
+  const sendAt = await page.inputValue('#share-when');
+  assert.ok(Math.abs(new Date(sendAt).getTime() - Date.now()) < 120000, `Reset: the time it is now (${sendAt})`);
+  assert.notEqual(await page.inputValue('#share-text'), text, 'the message has the time');
   await shot('08-share');
 
   // History is in the menu; there's nothing to sign in to.
