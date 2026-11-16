@@ -3633,8 +3633,8 @@ __m["match"] = { nameTokens, nameSimilarity, bestMatch };
 //
 // The place comes from OpenStreetMap; it is found on Google by name close
 // to its position (an IDs-only search, which Google doesn't bill), and the
-// card is checked once it has loaded: if Google's place has another name or
-// is somewhere else, the card is dropped.
+// card is checked once it has loaded: if Google's place is somewhere else
+// (or has another name, when Google says), the card is dropped.
 const { nameSimilarity } = __m["match"];
 const { haversine } = __m["geo"];
 let loader = null;
@@ -3665,13 +3665,23 @@ async function findPlaceId(p, maps = window.google.maps) {
   return places?.[0]?.id || null;
 }
 
-/** Is the place Google loaded the same as ours? (Same kind of name, within 250 m.) */
+/**
+ * Is the place Google loaded the same as ours? Google's card brings its
+ * place's position but not its name (and nothing in the card can be read
+ * from outside it), so: when Google gives a name, the same kind of name
+ * within 250 m; otherwise within 80 m. The place was found by its name
+ * within about 200 m already (findPlaceId); the same place in OpenStreetMap
+ * and on Google is usually a few tens of metres apart.
+ */
 function samePlace(p, loaded) {
   const loc = loaded?.location;
   const lat = typeof loc?.lat === 'function' ? loc.lat() : loc?.lat;
   const lng = typeof loc?.lng === 'function' ? loc.lng() : loc?.lng;
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
-  return haversine(p.lat, p.lon, lat, lng) <= 250 && nameSimilarity(p.name, loaded.displayName || '') >= 0.6;
+  const d = haversine(p.lat, p.lon, lat, lng);
+  const name = typeof loaded.displayName === 'string' ? loaded.displayName : loaded.displayName?.text || '';
+  if (name) return d <= 250 && nameSimilarity(p.name, name) >= 0.6;
+  return d <= 80;
 }
 
 /**

@@ -23,3 +23,14 @@ test('the card is used only if Google loaded the same place', () => {
   assert.equal(samePlace(flour, { displayName: 'Flour and Stone', location: at(-33.89, 151.25) }), false, 'somewhere else');
   assert.equal(samePlace(flour, null), false);
 });
+
+test('Google\'s card brings its place\'s position but not its name: then the position decides', () => {
+  const at = (lat, lng) => ({ lat: () => lat, lng: () => lng });
+  // As the card loads it: an ID and a position, no name.
+  assert.equal(samePlace(flour, { id: 'ChIJabc', displayName: null, location: at(-33.8723, 151.2191) }), true, 'about 15 m apart');
+  assert.equal(samePlace(flour, { id: 'ChIJabc', location: at(-33.8728, 151.2192) }), true, 'about 70 m apart');
+  assert.equal(samePlace(flour, { id: 'ChIJabc', location: at(-33.8735, 151.2190) }), false, 'about 145 m apart: another place');
+  assert.equal(samePlace(flour, { id: 'ChIJabc', displayName: null, location: null }), false, 'no position at all');
+  // A name in Google's newer form ({ text }) counts as a name.
+  assert.equal(samePlace(flour, { displayName: { text: 'Bills Darlinghurst' }, location: at(-33.8723, 151.2191) }), false);
+});
