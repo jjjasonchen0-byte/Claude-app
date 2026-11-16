@@ -206,10 +206,9 @@ const FRONT = [1, 0.6, 0.3, 0.08]; // the front colour over the newest … oldes
 // they travel (dash lengths are multiples of the line's width).
 const ROUTE = { width: 4.2 };
 // How long the best routes take to draw from everyone's door to the meeting
-// point (at normal speed), and their pace: easing in and out, but steady in
-// between rather than rushing through the middle.
+// point (at normal speed). Their pace is the same throughout: no easing in
+// or out (each line moves at its person's own speed along their trip).
 const ROUTE_DRAW_MS = 3000;
-const routePace = (t) => 0.35 * t + 0.65 * easeInOut(t);
 export const LINE_STYLE = {
   walk: { dash: [0.001, 2.5], cap: 'round' },   // dots
   bike: { dash: [1.5, 1.3], cap: 'butt' },      // short dashes
@@ -627,8 +626,7 @@ export class FloodAnimation {
     this.prepareRetract();
     // The routes draw while the floods pull back: both on one clock, so the
     // last of the floods goes just as the last route reaches the meeting point.
-    if (!(await this.run(ROUTE_DRAW_MS, (t) => {
-      const p = routePace(t);
+    if (!(await this.run(ROUTE_DRAW_MS, (p) => {
       this.routeClock = total * p;
       this.drawRetract(p);
       this.drawTop();
