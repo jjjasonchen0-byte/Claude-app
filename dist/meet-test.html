@@ -3080,10 +3080,11 @@ __m["flood"] = { costTable, prepareNetwork, nearestNode, floodFrom, ownership, r
 // place chosen still come from the routing services.
 //
 // The speeds were fitted to the routing service's own times (FOSSGIS OSRM)
-// on Sydney's streets: 64 trips from 1 to 80 km, inner city to motorways.
-// Its walking times match within 5% on the median trip, cycling within
-// 11%, driving within 7%. Driving in a city is slow because of junctions,
-// so passing through one costs a few seconds.
+// on Sydney's streets: 72 drives, 48 bike rides and 24 walks, from 1 to
+// 80 km, inner city to motorways. On the median trip they are within 6% of
+// its walking times, 11% of its cycling times and 7% of its driving times.
+// Driving in a city is slow because of junctions, so passing through one
+// costs a few seconds.
 const { prepareNetwork, nearestNode } = __m["flood"];
 const { dijkstra } = __m["graph"];
 const { haversine } = __m["geo"];
