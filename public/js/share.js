@@ -1,12 +1,18 @@
 // "Send location": share sheet, messaging deep links, map links, calendar invite.
 
+/**
+ * Links that open a place in maps apps (on a phone, a link to one opens the
+ * app itself when it's there). With `googleId` (the place's ID on Google),
+ * Google Maps opens the place's own listing rather than a pin at its position.
+ */
 export function mapLinks(place) {
   const ll = `${place.lat},${place.lon}`;
   const q = encodeURIComponent(place.name ? `${place.name} ${place.address || ''}`.trim() : ll);
   return {
-    google: `https://www.google.com/maps/search/?api=1&query=${ll}`,
+    google: `https://www.google.com/maps/search/?api=1&query=${ll}${place.googleId ? `&query_place_id=${encodeURIComponent(place.googleId)}` : ''}`,
     googleDirections: `https://www.google.com/maps/dir/?api=1&destination=${ll}`,
     apple: `https://maps.apple.com/?ll=${ll}&q=${q}`,
+    waze: `https://waze.com/ul?ll=${ll}&navigate=yes`,
     osm: `https://www.openstreetmap.org/?mlat=${place.lat}&mlon=${place.lon}#map=18/${place.lat}/${place.lon}`,
     geo: `geo:${ll}?q=${ll}(${encodeURIComponent(place.name || 'Meeting spot')})`,
   };

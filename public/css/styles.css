@@ -17,6 +17,7 @@
   --accent-tint: rgba(0, 122, 255, 0.12);
   --green: #34c759;
   --red: #ff3b30;
+  --heart: #ff2d55;
   --hud: rgba(28, 28, 30, 0.88);
   --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.08);
   --shadow-2: 0 12px 40px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06);
@@ -31,7 +32,7 @@
     --material: rgba(28, 28, 30, 0.8); --material-strong: rgba(44, 44, 46, 0.86);
     --fill: rgba(118, 118, 128, 0.24); --fill-2: rgba(118, 118, 128, 0.32);
     --text: #ffffff; --text-2: rgba(235, 235, 245, 0.6); --text-3: rgba(235, 235, 245, 0.3); --sep: rgba(84, 84, 88, 0.55);
-    --accent: #0a84ff; --accent-tint: rgba(10, 132, 255, 0.2); --green: #30d158; --red: #ff453a; --hud: rgba(58, 58, 60, 0.92);
+    --accent: #0a84ff; --accent-tint: rgba(10, 132, 255, 0.2); --green: #30d158; --red: #ff453a; --heart: #ff375f; --hud: rgba(58, 58, 60, 0.92);
     --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.5); --shadow-2: 0 12px 40px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
     color-scheme: dark;
   }
@@ -41,7 +42,7 @@
   --material: rgba(28, 28, 30, 0.8); --material-strong: rgba(44, 44, 46, 0.86);
   --fill: rgba(118, 118, 128, 0.24); --fill-2: rgba(118, 118, 128, 0.32);
   --text: #ffffff; --text-2: rgba(235, 235, 245, 0.6); --text-3: rgba(235, 235, 245, 0.3); --sep: rgba(84, 84, 88, 0.55);
-  --accent: #0a84ff; --accent-tint: rgba(10, 132, 255, 0.2); --green: #30d158; --red: #ff453a; --hud: rgba(58, 58, 60, 0.92);
+  --accent: #0a84ff; --accent-tint: rgba(10, 132, 255, 0.2); --green: #30d158; --red: #ff453a; --heart: #ff375f; --hud: rgba(58, 58, 60, 0.92);
   --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.5); --shadow-2: 0 12px 40px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
   color-scheme: dark;
 }
@@ -61,7 +62,8 @@ button { font: inherit; letter-spacing: inherit; color: inherit; cursor: pointer
 input, textarea { font: inherit; letter-spacing: inherit; color: inherit; }
 :focus-visible { outline: 3px solid var(--accent-tint); outline-offset: 2px; }
 .noscript { padding: 2rem; text-align: center; }
-.screen { position: fixed; inset: 0; }
+/* While an on-screen keyboard is open, a screen fits the part of the page still in sight (see followKeyboard in app.js). */
+.screen { position: fixed; left: 0; right: 0; top: var(--vv-top, 0px); height: var(--vv-height, 100%); }
 .screen-centered { display: grid; place-items: center; overflow: auto; background: var(--page); padding: 28px max(20px, env(safe-area-inset-right, 0px)) 28px max(20px, env(safe-area-inset-left, 0px)); }
 .glass { background: var(--material); -webkit-backdrop-filter: saturate(180%) blur(24px); backdrop-filter: saturate(180%) blur(24px); }
 
@@ -137,6 +139,12 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .suggestions.up { top: auto; bottom: calc(100% + 6px); } /* above the box when there is no room below (a keyboard on a phone) */
 .suggestions li { padding: 9px 12px; border-radius: 10px; cursor: pointer; }
 .suggestions li[aria-selected=true], .suggestions li:hover { background: var(--fill); }
+/* An address kept with the heart: the heart, the name and address, and a way to forget it. */
+.suggestions li.saved { display: flex; align-items: center; gap: 10px; padding-right: 6px; }
+.s-heart { color: var(--heart); flex: none; display: grid; }
+.s-text { flex: 1; min-width: 0; }
+.s-forget { flex: none; width: 30px; height: 30px; border: 0; border-radius: 50%; background: transparent; color: var(--text-3); display: grid; place-items: center; cursor: pointer; }
+.s-forget:hover { background: var(--fill); color: var(--text-2); }
 .s-title { font-weight: 600; font-size: 15px; }
 .s-sub { font-size: 13px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .s-empty { color: var(--text-2); cursor: default !important; font-size: 14px; }
@@ -190,16 +198,25 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
   .leaflet-left { left: calc(var(--panel-w) + 14px); }
 }
 @media (max-width: 759px) {
+  /* What scrolls in the sheet goes on up under the pull tab and is cut off by the sheet's own
+     rounded top (the same curve), not by a straight edge below the tab. */
   .panel {
-    left: 0; right: 0; bottom: 0; border-radius: 24px 24px 0 0; height: 50%;
+    left: 0; right: 0; bottom: 0; border-radius: 24px 24px 0 0; height: 50%; overflow: hidden;
     padding-bottom: env(safe-area-inset-bottom, 0px); transition: height 0.32s cubic-bezier(0.2, 0.9, 0.3, 1), transform 0.3s, opacity 0.2s;
   }
   .panel.dragging { transition: none; }
   .panel.away { transform: translateY(40px); }
-  .panel-handle { display: flex; justify-content: center; align-items: center; flex: none; height: 24px; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .panel-handle {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 3; display: flex; justify-content: center; align-items: center;
+    height: 24px; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
+  }
   .panel-handle span { width: 36px; height: 5px; border-radius: 3px; background: var(--text-3); }
   .panel-handle:active { cursor: grabbing; }
-  .panel-body { padding-top: 4px; }
+  /* (and fades as it goes, so the pull tab stays clear) */
+  .panel-body {
+    padding-top: 28px;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 2px, #000 24px); mask-image: linear-gradient(to bottom, transparent 2px, #000 24px);
+  }
   .leaflet-control-zoom { display: none; }
 }
 
@@ -321,6 +338,17 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .edit-inline .btn { min-height: 34px; padding: 6px 12px; font-size: 14px; border-radius: 9px; }
 .add-box { background: var(--card); border-radius: 14px; padding: 10px; display: grid; gap: 8px; margin-bottom: 8px; }
 .add-box input { background-color: var(--fill); }
+#add-search input { padding-right: 48px; } /* room for the heart */
+/* The heart in the address box: keeps the address on this device (filled once kept). */
+.heart-btn { color: var(--heart); }
+.heart-btn:hover:not(:disabled) { background: rgba(255, 45, 85, 0.12); }
+.heart-btn:disabled { color: var(--text-3); cursor: default; }
+.heart-btn.on svg { animation: heart-pop 0.35s cubic-bezier(0.3, 1.6, 0.5, 1); }
+@keyframes heart-pop { 50% { transform: scale(1.25); } }
+/* Their name, then Add. */
+.add-row { display: flex; gap: 8px; }
+.add-row input { flex: 1; min-width: 0; }
+.add-row .btn { flex: none; min-width: 76px; min-height: 44px; }
 .cta { position: sticky; bottom: -16px; padding: 12px 0 4px; margin-top: 10px; background: linear-gradient(transparent, var(--material) 35%); }
 /* Typing an address on a phone: the sheet is fully open with the box at its top (room to scroll it there, no button in the way). */
 .panel.typing .panel-content { padding-bottom: 900px; }
@@ -346,9 +374,24 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .pill.active .count { color: rgba(255, 255, 255, 0.8); }
 .pill:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
 .empty { text-align: center; color: var(--text-2); padding: 28px 14px; font-size: 15px; background: var(--card); border-radius: 14px; margin-bottom: 14px; }
-.radius-row { display: grid; gap: 6px; margin: 4px 0 14px; }
-.radius-row .footnote { margin-left: 4px; }
-.radius-row .segmented { margin: 0; }
+/* How far to look: "23 places within 800 m" (a spinner while they load) over a slider from 100 m to 1 km. */
+.radius-row { margin: 6px 4px 16px; }
+.radius-label { display: flex; align-items: center; gap: 5px; min-height: 22px; font-size: 14px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.radius-label b { color: var(--text); font-weight: 600; }
+.radius-spin { width: 14px; height: 14px; border-width: 2px; margin-right: 2px; }
+.radius-slider { -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 30px; margin: 4px 0 0; padding: 0; background: transparent; cursor: pointer; }
+.radius-slider:focus { outline: none; box-shadow: none; }
+.radius-slider::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(to right, var(--accent) var(--p, 50%), var(--fill-2) var(--p, 50%)); }
+.radius-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 26px; height: 26px; margin-top: -11px; border: 0; border-radius: 50%; background: #fff;
+  box-shadow: 0 0.5px 4px rgba(0, 0, 0, 0.12), 0 6px 13px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.06); transition: transform 0.15s;
+}
+.radius-slider:active::-webkit-slider-thumb { transform: scale(1.08); }
+.radius-slider:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px var(--accent-tint), 0 6px 13px rgba(0, 0, 0, 0.12); }
+.radius-slider::-moz-range-track { height: 4px; border-radius: 2px; background: var(--fill-2); }
+.radius-slider::-moz-range-progress { height: 4px; border-radius: 2px; background: var(--accent); }
+.radius-slider::-moz-range-thumb { width: 26px; height: 26px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 0.5px 4px rgba(0, 0, 0, 0.12), 0 6px 13px rgba(0, 0, 0, 0.12); }
+.radius-ends { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-3); }
 .radius-ring { animation: ring-in 0.45s cubic-bezier(0.2, 0.9, 0.3, 1); transform-box: fill-box; transform-origin: center; }
 @keyframes ring-in { from { opacity: 0; transform: scale(0.8); } }
 .actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; }
@@ -643,7 +686,26 @@ img.broken { display: none; }
 .q svg { width: 21px; height: 21px; }
 .q.primary { background: var(--accent); color: #fff; }
 .q:active { transform: scale(0.96); }
-.place-tabs { margin: 4px 0 14px; position: sticky; top: -16px; z-index: 5; box-shadow: 0 0 0 6px var(--material); }
+/* "Open in Maps": a choice of maps apps, like a phone's own menu (at the bottom on a phone, in the middle on a computer). */
+.choice-backdrop { position: fixed; inset: 0; z-index: 2000; background: rgba(0, 0, 0, 0.32); animation: fade 0.2s; }
+.choice {
+  position: fixed; z-index: 2001; left: 50%; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  width: min(420px, calc(100% - 20px)); display: grid; gap: 8px; animation: choice-in 0.3s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+@keyframes choice-in { from { opacity: 0; translate: 0 28px; } }
+.choice-group, .choice-cancel {
+  background: var(--material-strong); -webkit-backdrop-filter: saturate(180%) blur(30px); backdrop-filter: saturate(180%) blur(30px);
+  border-radius: 14px; overflow: hidden; box-shadow: var(--shadow-2);
+}
+.choice-title { padding: 13px 16px; text-align: center; font-size: 13px; color: var(--text-2); }
+.choice-btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 56px; padding: 0 16px;
+  border: 0; border-top: 0.5px solid var(--sep); background: transparent; color: var(--accent); font-size: 19px; text-decoration: none;
+}
+.choice-btn:hover, .choice-btn:focus-visible { background: var(--fill); outline: none; }
+.choice-note { font-size: 12px; font-weight: 500; color: var(--text-2); }
+.choice-cancel { border-top: 0; font-weight: 600; }
+@media (min-width: 760px) { .choice { bottom: auto; top: 50%; transform: translate(-50%, -50%); } }
 .place-summary { margin: 0 4px 12px; font-size: 15px; line-height: 1.45; }
 .hours summary { cursor: pointer; list-style: none; }
 .hours summary::-webkit-details-marker { display: none; }

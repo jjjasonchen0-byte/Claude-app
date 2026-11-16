@@ -138,7 +138,9 @@ await ctx.route('https://routing.openstreetmap.de/**', (r) => {
   }
   return r.fulfill({ headers: cors, json: fx('osrm-route.json') });
 });
+let overpassAsked = 0;
 await ctx.route(/overpass/, async (r) => {
+  overpassAsked++;
   const q = new URLSearchParams(r.request().postData()).get('data');
   await new Promise((res) => setTimeout(res, 150));
   return r.fulfill({ json: pois(q) });
@@ -166,16 +168,42 @@ try {
   await page.waitForSelector('.person');
   assert.equal(await page.isDisabled('[data-action=find]'), true, 'find disabled with only you');
 
-  for (const [q, nick] of [['Brick Lane', 'Sam'], ['Clapham High', 'Jo']]) {
-    await page.fill('#add-nick', nick);
+  // Adding someone: pick their address (nobody is added yet), then their name, then Add (Sam's address
+  // kept with the heart on the way), or Enter in the name box.
+  for (const [q, nick, keep] of [['Brick Lane', 'Sam', true], ['Clapham High', 'Jo', false]]) {
+    const before = await page.locator('.person').count();
     await page.fill('#add-search input', q);
-    await page.waitForSelector('#add-search .suggestions li[data-i]');
-    await page.keyboard.press('Enter');
+    await page.waitForSelector('#add-search .suggestions li[data-i]:not(.saved)');
+    assert.equal(await page.isDisabled('[data-action=add-person]'), true, 'nothing to add before an address is picked');
+    assert.equal(await page.isDisabled('[data-action=save-address]'), true, 'nothing to keep yet');
+    await page.keyboard.press('Enter'); // the first suggestion
+    await page.waitForFunction(() => document.activeElement?.id === 'add-nick');
+    assert.equal(await page.locator('.person').count(), before, 'picking an address adds nobody yet');
+    assert.equal(await page.isDisabled('[data-action=add-person]'), false);
+    await page.keyboard.type(nick);
+    if (keep) {
+      await page.click('[data-action=save-address]');
+      await page.waitForSelector('[data-action=save-address].on[aria-pressed=true]');
+      await page.click('[data-action=add-person]');
+    } else {
+      await page.keyboard.press('Enter');
+    }
     await page.waitForFunction((n) => [...document.querySelectorAll('.person .cell-title')].some((e) => e.textContent.includes(n)), nick);
+    assert.equal(await page.inputValue('#add-search input'), '', 'the form is empty again');
+    assert.equal(await page.isDisabled('[data-action=add-person]'), true);
   }
   await page.waitForTimeout(600);
   await shot('03-people');
   assert.equal(await page.locator('.person').count(), 3);
+  // The address kept with the heart: on this device, offered in an empty address box with its name.
+  const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('meet-guest-v1')).saved);
+  assert.deepEqual(kept.map((s) => s.nickname), ['Sam']);
+  await page.click('#add-search input');
+  await page.waitForSelector('#add-search .suggestions li.saved');
+  assert.match(await page.textContent('#add-search .suggestions li.saved'), /Sam.*Brick Lane/s);
+  await shot('03b-saved');
+  await page.keyboard.press('Escape');
+  await page.locator('#add-search input').blur();
 
   // Leaving: Now by default, or a chosen time, which the search asks public transport for.
   assert.equal(await page.locator('.leave-row [data-action=leave-now].active').count(), 1, 'leaving now by default');
@@ -216,11 +244,33 @@ try {
   assert.equal(await page.locator('.trip + li [data-action=edit-people]').count(), 1, 'Edit people right under the people');
   assert.equal(await page.locator('[data-action=surprise]').count(), 0);
   assert.equal(await page.locator('.panel .modes').count(), 0, 'no travel-mode bar on the results screen');
-  // Picking a radius draws it as a circle around the meeting point.
+  // How far to look: a slider from 100 m to 1 km, drawn as a circle around the meeting point.
+  // Further than the places found so far asks again (a spinner in front of "places within"
+  // meanwhile); closer in needs no new search.
   assert.equal(await page.locator('.radius-ring').count(), 0);
-  await page.click('[data-action=radius][data-r="1000"]');
+  const slider = page.locator('.radius-slider');
+  assert.deepEqual([await slider.getAttribute('min'), await slider.getAttribute('max'), await slider.inputValue()], ['100', '1000', '800']);
+  assert.match(await page.textContent('.radius-label'), /^\s*\d+\s*places within\s*800 m\s*$/);
+  const slide = (v) => slider.evaluate((el, x) => {
+    el.value = x;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }, String(v));
+  const askedBefore = overpassAsked;
+  await slide(1000);
   await page.waitForSelector('.radius-ring');
-  await page.waitForSelector('[data-action=radius][data-r="1000"].active');
+  await page.waitForSelector('.radius-label .radius-spin');
+  await page.waitForFunction(() => !document.querySelector('.radius-spin') && /places within\s*1 km/.test(document.querySelector('.radius-label')?.textContent || ''));
+  assert.equal(overpassAsked, askedBefore + 1, 'further out: asked again');
+  const within1km = Number(await page.textContent('.radius-count'));
+  await slide(300);
+  await page.waitForFunction(() => /places within\s*300 m/.test(document.querySelector('.radius-label')?.textContent || ''));
+  const within300 = Number(await page.textContent('.radius-count'));
+  assert.ok(within300 < within1km, `${within300} places within 300 m, ${within1km} within 1 km`);
+  await slide(1000);
+  await page.waitForFunction(() => /places within\s*1 km/.test(document.querySelector('.radius-label')?.textContent || ''));
+  assert.equal(overpassAsked, askedBefore + 1, 'within what was found already: no new search');
+  assert.equal(Number(await page.textContent('.radius-count')), within1km);
   await page.waitForTimeout(700);
   await shot('05b-radius');
   const italian = page.locator('[data-action=group]', { hasText: 'Italian' });
@@ -327,7 +377,7 @@ try {
   console.log('E2E passed ✔');
 } catch (err) {
   await shot('zz-failure');
-  console.error('E2E failed:', err.message, '\nPage errors:', errors);
+  console.error('E2E failed:', err.message, '\nWhere:', (err.stack || '').split('\n').find((l) => l.includes('e2e.mjs')), '\nPage errors:', errors);
   process.exitCode = 1;
 } finally {
   await browser.close();

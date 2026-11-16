@@ -3,7 +3,7 @@
 Find somewhere that's roughly as close for everyone in a group, with a press of a button.
 
 1. **Enter where you're starting from.** The start screen is just the logo and an address bar; the arrow at its end uses your current location. The map centres on your address.
-2. **Add the people you're meeting**, each with an optional name. You can type an address, tap the map, or drag a dot. Everyone has their own **way of travelling** (public transport, walk, bike or drive): tap the pill next to a name to change it. It's remembered.
+2. **Add the people you're meeting**: pick their address (type it, or tap the map), give them a name if you like, then **Add**. The **heart** keeps an address on your device, to pick again another time (saved addresses show when the address box is empty). Drag a dot to move someone. Everyone has their own **way of travelling** (public transport, walk, bike or drive): tap the pill next to a name to change it. It's remembered.
 3. Choose when everyone leaves (**Now**, or a date and time), then press **Let’s meet.** Meet looks for the spot where everyone's **travel times are as similar as possible**, without making anyone's trip much longer than it has to be (the longest trip may grow by about 12% at most): someone driving is asked to go further than someone walking.
    - Walking, cycling and driving: travel times to a grid of spots around the group, zooming in around the best one. They are worked out in your browser over the streets of the map's own tiles (the same streets the search animation floods), with speeds fitted to the routing service's own times, so finding the spot asks no service for anything. Directions to the place you pick come from the routing service.
    - Public transport: real times from each rider to every stop in the area at that time, so the spot is picked among stops everyone can reach (a bigger station wins a tie). The three best are then checked against the actual journeys people will be shown.
@@ -19,7 +19,7 @@ Find somewhere that's roughly as close for everyone in a group, with a press of 
 6. Open a place for a **full page like a search result**: photos (tap to view full screen), rating with a breakdown, reviews, opening hours, phone, website and menu, what it offers (outdoor seating, takeaway, step-free…), and **real directions for everyone, each in their own way of travelling**: public transport (lines in their official colours, times, changes, walking legs, with *Leave now* or *Arrive by*), walking, cycling or driving.
 7. **Send the location** by share sheet, WhatsApp, Messages, Email, Telegram, copy, a calendar invite, or Google/Apple Maps.
 
-**No sign-in.** Your starting point, the people you meet, past meetups and settings are all saved on your device, in the browser's storage. Nothing about you is kept on the server. (They don't move between devices, and clearing the browser's site data clears them.)
+**No sign-in.** Your starting point, the people you meet, addresses you've kept with the heart, past meetups and settings are all saved on your device, in the browser's storage. Nothing about you is kept on the server. (They don't move between devices, and clearing the browser's site data clears them.)
 
 The look follows Apple's design language: a quiet map with white streets and no shop icons, system font, frosted-glass panels, inset grouped lists, coloured category tiles, iOS-style switches and segmented controls. On phones the panel is a bottom sheet. Drag its handle to resize it, or tap the handle to collapse and expand it.
 
@@ -159,7 +159,8 @@ The Sydney data comes from OpenStreetMap via [OpenFreeMap](https://openfreemap.o
   - *Least travel*: everyone's trips add up to the least overall.
 - Travel time and distance for each person in their own mode. The menu sets the default mode for people you add.
 - Opening hours read from OpenStreetMap: "Open · Closes 22:00", "Closes soon", "Closed · Opens Tue 09:00", and a weekly table.
-- Search radius from 500 m to 5 km, drawn as a circle around the meeting point when you pick one. The search also widens automatically when little is nearby.
+- How far to look for places: a slider from 100 m to 1 km (800 m to start, 1 km when little is nearby), drawn as a circle around the meeting point that follows the slider. Closer in needs no new search; further out shows a spinner while the places load.
+- A place's page is one page (directions, details, what else is known); **Open in Maps** offers Apple Maps, Google Maps, Waze or OpenStreetMap (and other apps on Android), the one used last at the top.
 - Replay and Skip animation.
 - Past meetups, light/dark/auto themes (the map follows), animation speed, and an installable web-app manifest.
 - If the map's streets can't be loaded and the routing service can't be reached either, Meet picks the spot from distances and says it's an estimate. A route the routing service is slow to send is drawn along the map's streets instead.

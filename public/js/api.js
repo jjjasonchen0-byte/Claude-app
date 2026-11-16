@@ -5,7 +5,7 @@ const KEY = 'meet-guest-v1'; // its name from when profiles were optional, kept 
 let memory = null; // the latest data, for when the browser's storage can't be used
 let unsaved = false; // the browser refused the last save (private browsing, storage full or blocked): memory is ahead of it
 
-const blank = () => ({ name: '', home: null, places: [], history: [], settings: {} });
+const blank = () => ({ name: '', home: null, places: [], saved: [], history: [], settings: {} });
 const newId = () => Math.random().toString(36).slice(2, 11);
 
 const located = (p) => !!p && typeof p === 'object' && Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lon));
@@ -17,6 +17,8 @@ function tidy(d) {
     home: located(o.home) ? o.home : null,
     // (A record saved without an id gets one from its position in the list, the same every time it is read.)
     places: (Array.isArray(o.places) ? o.places : []).filter(located).map((p, i) => (p.id ? p : { ...p, id: `p${i}` })),
+    // Addresses kept with the heart, to pick again later.
+    saved: (Array.isArray(o.saved) ? o.saved : []).filter(located).map((s, i) => (s.id ? s : { ...s, id: `s${i}` })),
     history: (Array.isArray(o.history) ? o.history : []).filter(located).map((h, i) => (h.id ? h : { ...h, id: `h${i}` })),
     settings: o.settings && typeof o.settings === 'object' && !Array.isArray(o.settings) ? o.settings : {},
   };
@@ -82,6 +84,24 @@ export const api = {
   async deletePlace(id) {
     const d = load();
     d.places = d.places.filter((x) => x.id !== id);
+    save(d);
+    return { ok: true };
+  },
+  /**
+   * Keep an address to pick again later (with the name it was given). The
+   * same address saved again moves to the top of the list with its new name.
+   */
+  async saveAddress(p) {
+    const d = load();
+    const entry = { id: newId(), ...clean(p), at: Date.now() };
+    delete entry.mode;
+    d.saved = [entry, ...d.saved.filter((s) => !(s.address === entry.address && Math.abs(s.lat - entry.lat) < 1e-4 && Math.abs(s.lon - entry.lon) < 1e-4))].slice(0, 50);
+    save(d);
+    return { saved: entry };
+  },
+  async unsaveAddress(id) {
+    const d = load();
+    d.saved = d.saved.filter((s) => s.id !== id);
     save(d);
     return { ok: true };
   },

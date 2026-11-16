@@ -195,6 +195,9 @@ export function categorize(tags = {}) {
   return null;
 }
 
+/** At most this many places come back from one Overpass search: a list that long may have left some out. */
+export const POI_LIMIT = 400;
+
 export function poiQuery(center, radius) {
   const around = `(around:${Math.round(radius)},${center.lat.toFixed(6)},${center.lon.toFixed(6)})`;
   const sel = [
@@ -203,7 +206,7 @@ export function poiQuery(center, radius) {
     `nwr${around}[tourism~"^(museum|gallery|attraction|zoo|aquarium|theme_park|viewpoint|picnic_site)$"][name]`,
     `nwr${around}[shop~"^(mall|department_store|books|bakery|pastry|games|video_games|toys|music|gift|clothes|coffee|tea|ice_cream|supermarket)$"][name]`,
   ];
-  return `[out:json][timeout:12];(${sel.join(';')};);out center tags 400;`;
+  return `[out:json][timeout:12];(${sel.join(';')};);out center tags ${POI_LIMIT};`;
 }
 
 /** The Wikimedia Commons file an image link points at ("File:…"), or ''. */
@@ -284,14 +287,17 @@ export function groupPois(pois) {
 }
 
 /**
- * Places near a point, as fast as possible. One Overpass query (OpenStreetMap,
- * with cuisines) races Photon (which only knows the kind of place): Photon
- * starts if Overpass has not answered within a couple of seconds, and
- * whichever has answered once both had a fair chance wins. Quiet areas get
- * one wider search.
+ * Places near a point, as fast as possible: { pois, radius, source, complete }.
+ * One Overpass query (OpenStreetMap, with cuisines) races Photon (which only
+ * knows the kind of place): Photon starts if Overpass has not answered within
+ * a couple of seconds, and whichever has answered once both had a fair chance
+ * wins. Within `radius` metres; or, with no radius, within `startRadius`, and
+ * `widerRadius` where that finds fewer than minResults. `complete`: the list
+ * has every place found that far out (Overpass's wasn't cut short; Photon's
+ * always may be).
  */
-export async function findPois(center, { radius, signal, minResults = 12, photonAfterMs = 2200, graceMs = 1200, overpassTimeoutMs = 9000 } = {}) {
-  const r = radius || 1500;
+export async function findPois(center, { radius, startRadius = 1500, widerRadius = 4000, signal, minResults = 12, photonAfterMs = 2200, graceMs = 1200, overpassTimeoutMs = 9000 } = {}) {
+  const r = radius || startRadius;
   const ctrl = new AbortController();
   const onAbort = () => ctrl.abort();
   signal?.addEventListener('abort', onAbort);
@@ -299,15 +305,15 @@ export async function findPois(center, { radius, signal, minResults = 12, photon
     let json = await overpass(poiQuery(center, r), { signal: ctrl.signal, timeoutMs: overpassTimeoutMs });
     let pois = parsePois(json.elements, center);
     let used = r;
-    if (!radius && pois.length < minResults) {
-      used = 4000;
+    if (!radius && pois.length < minResults && widerRadius > r) {
+      used = widerRadius;
       json = await overpass(poiQuery(center, used), { signal: ctrl.signal, timeoutMs: overpassTimeoutMs });
       pois = parsePois(json.elements, center);
     }
-    return { pois, radius: used, source: 'overpass' };
+    return { pois, radius: used, source: 'overpass', complete: json.elements.length < POI_LIMIT };
   })();
   let photon = null;
-  const startPhoton = () => (photon ||= photonPois(center, r, { signal: ctrl.signal }).then((pois) => ({ pois, radius: r, source: 'photon' })));
+  const startPhoton = () => (photon ||= photonPois(center, r, { signal: ctrl.signal }).then((pois) => ({ pois, radius: r, source: 'photon', complete: false })));
   const settle = (p) => p.then((v) => ({ ok: true, v }), (e) => ({ ok: false, e }));
   try {
     const o = settle(viaOverpass);

@@ -16,7 +16,7 @@ const { api } = await import('../../public/js/api.js');
 
 test('nothing saved yet: a blank start', async () => {
   store.clear();
-  assert.deepEqual(await api.start(), { name: '', home: null, places: [], history: [], settings: {} });
+  assert.deepEqual(await api.start(), { name: '', home: null, places: [], saved: [], history: [], settings: {} });
 });
 
 test('damaged or unexpected data never reaches the app as it is', async () => {
@@ -73,6 +73,23 @@ test('saving, changing and removing people and history', async () => {
   assert.equal(u.history[0].name, 'Place 59');
   await api.deleteHistory(u.history[0].id);
   assert.equal((await api.start()).history[0].name, 'Place 58');
+});
+
+test('addresses kept with the heart: saved with their names, the same one again moves to the top, removable', async () => {
+  store.set(KEY, '{}');
+  const { saved: a } = await api.saveAddress({ address: '12 King St, Newtown', lat: -33.89, lon: 151.18, nickname: ' Sam ', mode: 'walk' });
+  assert.equal(a.nickname, 'Sam');
+  assert.equal(a.mode, undefined, 'a way of travelling belongs to a person, not an address');
+  await api.saveAddress({ address: '1 Pitt St, Sydney', lat: -33.86, lon: 151.21 });
+  await api.saveAddress({ address: '12 King St, Newtown', lat: -33.89, lon: 151.18, nickname: 'Sam (work)' });
+  let u = await api.start();
+  assert.deepEqual(u.saved.map((s) => s.nickname || s.address), ['Sam (work)', '1 Pitt St, Sydney']);
+  await api.unsaveAddress(u.saved[1].id);
+  u = await api.start();
+  assert.deepEqual(u.saved.map((s) => s.address), ['12 King St, Newtown']);
+  // Damaged entries are dropped like the rest.
+  store.set(KEY, JSON.stringify({ saved: [{ address: 'no position' }, { address: 'Ok', lat: 1, lon: 2 }, 'junk'] }));
+  assert.deepEqual((await api.start()).saved.map((s) => s.address), ['Ok']);
 });
 
 test('with storage blocked everything still works for the visit, and the app can tell', async () => {

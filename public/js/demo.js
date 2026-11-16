@@ -233,10 +233,10 @@ const fmtAddress = (a) => `${a.num} ${a.street}, ${a.hood}`;
 
 // ---------------------------------------------------------------- places of interest
 
-export async function findPois(center, { radius, minResults = 12 } = {}) {
+export async function findPois(center, { radius, startRadius = 800, widerRadius = 4000, minResults = 12 } = {}) {
   const c = ensure();
   await new Promise((r) => setTimeout(r, 150));
-  const radii = radius ? [radius] : [800, 1800, 4000];
+  const radii = radius ? [radius] : [startRadius, widerRadius];
   let pois = [], used = radii[0];
   for (const r of radii) {
     used = r;
@@ -251,7 +251,7 @@ export async function findPois(center, { radius, minResults = 12 } = {}) {
     pois = parsePois(near, center);
     if (pois.length >= minResults) break;
   }
-  return { pois, radius: used };
+  return { pois, radius: used, complete: true }; // every place in the page within it
 }
 
 // ---------------------------------------------------------------- geocoding stand-ins

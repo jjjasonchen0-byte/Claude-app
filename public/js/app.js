@@ -6,7 +6,7 @@ import { findMeetingPoint, estimateSeconds, SPEEDS } from './meetpoint.js';
 import { FloodAnimation, LINE_STYLE, prepareNetwork } from './flood.js';
 import { createLocalRouter } from './localroute.js';
 import { loadRoads } from './roads.js';
-import { TABS, findPois, groupPois, summaryOf } from './pois.js';
+import { TABS, findPois, groupPois, summaryOf, cuisineLabels } from './pois.js';
 import { getConfig, ratingsSource, rateAll, thumbFor, detailsFor } from './rated.js';
 import { openStatus, weekTable } from './hours.js';
 import { haversine } from './geo.js';
@@ -19,7 +19,8 @@ import { MODES, ATTRIBUTION, getDirections, getTravelTimes, getCheckTimes, getTr
 
 const COLORS = ['#007aff', '#ff9500', '#34c759', '#af52de', '#ff3b30', '#30b0c7', '#5856d6', '#ff2d55', '#a2845e', '#8e8e93'];
 const PACE = { slow: 1.45, normal: 1, fast: 0.6 }; // how long the search animation takes
-const RADII = [500, 1000, 2000, 5000];
+// How far around the meeting point to look for places (metres): the slider's ends and steps, and where it starts.
+const RADIUS = { min: 100, max: 1000, step: 10, start: 800 };
 const PRICE = { 'Cheap Eats': '£', 'Mid Range': '££', 'Fine Dining': '£££' };
 const DEFAULT_SETTINGS = { mode: 'similar', travel: 'transit', speed: 'normal', theme: 'auto' };
 const SHEET_DEFAULT = { people: 'mid', results: 'mid', group: 'mid', place: 'mid', share: 'full' };
@@ -47,7 +48,10 @@ const GLYPH = {
   route: '<circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="6" r="2.2"/><path d="M8 18h6.5a3.5 3.5 0 0 0 0-7h-5a3.5 3.5 0 0 1 0-7H16"/>',
   menu: '<path d="M6 3.5h12v17H6zM9 8h6M9 12h6M9 16h4"/>',
   photo: '<rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><circle cx="9" cy="10.5" r="1.8"/><path d="M20.5 15.5l-5-5-8.5 8"/>',
+  heart: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/>',
 };
+/** A heart: filled for an address kept on this device. */
+const heart = (on, size = 20) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">${GLYPH.heart}</svg>`;
 GLYPH.meet = GLYPH.pin;
 const glyph = (id, size = 16, width = 2.2) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${GLYPH[id]}</svg>`;
 const tile = (id, size = '') => `<span class="tile ${size}${id === 'all' ? ' grey' : ''}" style="--c:${TAB_COLOR[id] || '#8e8e93'}">${glyph(id)}</span>`;
@@ -59,6 +63,8 @@ const backBtn = (action, label) => `<button class="back" data-action="${action}"
 const state = {
   user: null,
   places: [],
+  saved: [], // addresses kept with the heart
+  addDraft: null, // someone being added: { loc: the address picked, text: what's in the box, nick }
   settings: { ...DEFAULT_SETTINGS },
   view: 'people',
   search: null,
@@ -143,13 +149,79 @@ for (const target of [window, window.visualViewport]) {
   for (const type of ['resize', 'scroll']) target?.addEventListener(type, () => fitSuggestions?.());
 }
 
-function attachSearch(root, { near, onPick }) {
+/**
+ * A phone's on-screen keyboard: the browser shows less of the page and
+ * slides it up to keep the box being typed in clear of the keyboard, which
+ * can take that box (and everything else) out of sight. While a keyboard is
+ * open the screens fit the part of the page still in sight instead (see
+ * .screen in styles.css), and the sheet, the box and its suggestions are
+ * placed again. A pinch-zoom (which also shows less of the page) is left alone.
+ */
+function followKeyboard() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const root = document.documentElement;
+  const NOT_TYPED = ['checkbox', 'radio', 'range', 'button', 'submit', 'color', 'file', 'date', 'time', 'datetime-local'];
+  let open = false;
+  const update = () => {
+    const el = document.activeElement;
+    const typing = !!el && (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && !NOT_TYPED.includes(el.type)));
+    const now = typing && vv.scale < 1.05 && window.innerHeight - vv.height > 120;
+    if (now) {
+      root.style.setProperty('--vv-top', `${Math.max(0, Math.round(vv.offsetTop))}px`);
+      root.style.setProperty('--vv-height', `${Math.round(vv.height)}px`);
+    } else if (open) {
+      root.style.removeProperty('--vv-top');
+      root.style.removeProperty('--vv-height');
+    }
+    root.classList.toggle('keyboard', now);
+    if (!now && !open) return;
+    open = now;
+    // What sits in the screens follows: the sheet's height, the box at its top, the suggestions under it.
+    if (map && !$('#screen-main').hidden) { setSheet(sheet.snap); typingBoxToTop(); }
+    fitSuggestions?.();
+  };
+  vv.addEventListener('resize', update);
+  vv.addEventListener('scroll', update);
+  document.addEventListener('focusin', () => setTimeout(update, 0));
+  document.addEventListener('focusout', () => setTimeout(update, 60));
+}
+
+/** "Sam · 12 King St, Newtown" for an address kept with the heart. */
+const savedTitle = (s) => s.nickname || shortAddr(s.address);
+/** The saved address at the same spot as this one, if it is kept. */
+const savedMatch = (loc) => (loc ? state.saved.find((s) => s.address === loc.address || haversine(s.lat, s.lon, loc.lat, loc.lon) < 15) : null);
+
+/**
+ * An address box with suggestions as you type. With `saved`, the addresses
+ * kept with the heart come first: all of them in an empty box, the ones
+ * whose name or address has what's typed so far after that (`onUnsave(id)`
+ * forgets one from the list).
+ */
+function attachSearch(root, { near, onPick, saved = null, onUnsave = null }) {
   const input = $('input', root);
   const list = $('.suggestions', root);
   let items = [];
   let sel = -1;
   let timer;
   let ctrl;
+  /** Saved addresses with these words in their name or address, as suggestions. */
+  const savedFor = (q, max) => {
+    const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    return (saved?.() || [])
+      .filter((s) => words.every((w) => `${s.nickname || ''} ${s.address}`.toLowerCase().includes(w)))
+      .slice(0, max)
+      .map((s) => ({ ...s, title: savedTitle(s), subtitle: s.address, saved: true }));
+  };
+  /** In a box with less than a word in it: the saved addresses (if any), or nothing. */
+  const showSaved = () => {
+    const q = input.value;
+    if (q.trim().length >= 3) return false;
+    items = savedFor(q, 8);
+    sel = -1;
+    if (items.length && document.activeElement === input) render(); else close();
+    return true;
+  };
 
   /**
    * Put the list where it can be seen: below the box when there is room
@@ -163,7 +235,7 @@ function attachSearch(root, { near, onPick }) {
     const panelBody = root.closest('#panel-body'); // in the panel, the list is cut off at the panel's edges
     if (panelBody) {
       const c = panelBody.getBoundingClientRect();
-      top = Math.max(top, c.top);
+      top = Math.max(top, c.top + ($('#panel-handle')?.offsetHeight || 0)); // (not up under the pull tab)
       bottom = Math.min(bottom, c.bottom - ($('.cta', panelBody)?.offsetHeight || 0));
     }
     const r = input.getBoundingClientRect();
@@ -177,8 +249,11 @@ function attachSearch(root, { near, onPick }) {
   const stop = () => { clearTimeout(timer); ctrl?.abort(); ctrl = null; };
   const render = () => {
     list.innerHTML = items.length
-      ? items.map((r, i) => `<li role="option" data-i="${i}" aria-selected="${i === sel}">
-          <div class="s-title">${esc(r.title)}</div><div class="s-sub">${esc(r.subtitle)}</div></li>`).join('')
+      ? items.map((r, i) => `<li role="option" data-i="${i}" aria-selected="${i === sel}"${r.saved ? ' class="saved"' : ''}>
+          ${r.saved ? `<span class="s-heart">${heart(true, 16)}</span>` : ''}
+          <div class="s-text"><div class="s-title">${esc(r.title)}</div><div class="s-sub">${esc(r.subtitle)}</div></div>
+          ${r.saved && onUnsave ? `<button type="button" class="s-forget" data-forget="${esc(r.id)}" aria-label="Forget ${esc(r.title)}" title="Forget this address">${glyph('close', 11, 2.6)}</button>` : ''}
+        </li>`).join('')
       : '<li class="s-empty">No matches. Try adding a town or postcode.</li>';
     list.hidden = false;
     fitSuggestions = fit;
@@ -192,20 +267,25 @@ function attachSearch(root, { near, onPick }) {
     input.value = r.address;
     onPick(r);
   };
+  input.addEventListener('focus', showSaved);
   input.addEventListener('input', () => {
     stop();
     const q = input.value;
-    if (q.trim().length < 3) { close(); return; }
+    if (showSaved()) return;
+    // Straight away: the saved addresses that match (the list shown a moment ago no longer does).
+    items = savedFor(q, 3);
+    sel = items.length ? 0 : -1;
+    if (items.length && document.activeElement === input) render(); else close();
     timer = setTimeout(async () => {
       const mine = ctrl = new AbortController();
       try {
         const found = await searchAddress(q, { near: near?.(), signal: mine.signal });
         if (mine.signal.aborted) return;
-        items = found;
+        items = [...savedFor(q, 3), ...found];
         sel = items.length ? 0 : -1;
         if (document.activeElement === input) render();
       } catch (err) {
-        if (!mine.signal.aborted) { items = []; if (document.activeElement === input) render(); }
+        if (!mine.signal.aborted) { items = savedFor(q, 3); if (document.activeElement === input) render(); }
       }
     }, 300);
   });
@@ -218,6 +298,16 @@ function attachSearch(root, { near, onPick }) {
   });
   input.addEventListener('blur', () => setTimeout(close, 150));
   list.addEventListener('mousedown', (e) => {
+    const forget = e.target.closest('[data-forget]');
+    if (forget) {
+      // Forgetting a saved address: it goes from the list, which stays open (as does the keyboard).
+      e.preventDefault();
+      onUnsave?.(forget.dataset.forget);
+      items = items.filter((x) => !(x.saved && x.id === forget.dataset.forget));
+      sel = Math.min(sel, items.length - 1);
+      if (items.length) render(); else close();
+      return;
+    }
     const li = e.target.closest('li[data-i]');
     if (li) { e.preventDefault(); pick(Number(li.dataset.i)); }
   });
@@ -229,6 +319,7 @@ function attachSearch(root, { near, onPick }) {
 function onUser(user) {
   state.user = user;
   state.places = user.places || [];
+  state.saved = user.saved || [];
   state.settings = { ...DEFAULT_SETTINGS, ...(user.settings || {}) };
   if (state.settings.mode !== 'total') state.settings.mode = 'similar'; // "fair" from before is now "similar"
   if (!MODES.some((m) => m.id === state.settings.travel)) state.settings.travel = DEFAULT_SETTINGS.travel;
@@ -266,7 +357,7 @@ async function saveHome(loc) {
 }
 
 function initHome() {
-  homeSearchCtl = attachSearch($('#home-search'), { near: () => null, onPick: saveHome });
+  homeSearchCtl = attachSearch($('#home-search'), { near: () => null, onPick: saveHome, saved: () => state.saved, onUnsave: forgetAddress });
   // On a small screen the logo and box move to the top while typing: the
   // suggestions then open in the part of the screen the keyboard leaves free.
   const home = $('#screen-home'), box = homeSearchCtl.input;
@@ -489,8 +580,9 @@ function initMap() {
     if (state.view !== 'people') { map.closePopup(popup); return; }
     const div = document.createElement('div');
     div.innerHTML = `<div style="font-weight:600;max-width:220px">${esc(shortAddr(loc.address))}</div>
-      <button class="btn btn-primary">Add this address</button>`;
-    $('button', div).onclick = () => { map.closePopup(popup); addPlace({ ...loc, lat, lon: lng }); };
+      <button class="btn btn-primary">Use this address</button>`;
+    // Into the form, like a picked suggestion: their name next, then Add (or the heart).
+    $('button', div).onclick = () => { map.closePopup(popup); chooseAddress({ ...loc, lat, lon: lng }); };
     popup.setContent(div);
   });
 }
@@ -535,8 +627,8 @@ async function moveAddress(p, ll) {
 }
 
 /** Fit the map to points, leaving room for the panel. */
-function fitTo(latlngs, { maxZoom = 16, animate = true } = {}) {
-  if (!latlngs.length) return;
+/** The map's margins (top left, bottom right) left clear of the panel and the heading: [x, y] pixels each. */
+function mapPadding() {
   const panel = $('#panel');
   const hidden = panel.classList.contains('away');
   // While searching, the heading sits at the top and the status at the bottom.
@@ -546,6 +638,12 @@ function fitTo(latlngs, { maxZoom = 16, animate = true } = {}) {
     if (isMobile()) br = [30, (sheet.target || panel.offsetHeight) + 24];
     else tl = [panel.offsetWidth + 50, 80];
   }
+  return { tl, br };
+}
+
+function fitTo(latlngs, { maxZoom = 16, animate = true } = {}) {
+  if (!latlngs.length) return;
+  const { tl, br } = mapPadding();
   const b = L.latLngBounds(latlngs);
   if (latlngs.length === 1 || b.getNorthEast().equals(b.getSouthWest())) {
     map.setView(latlngs[0], Math.min(maxZoom, 15), { animate });
@@ -592,7 +690,9 @@ function typingSheet(on) {
 function typingBoxToTop() {
   const body = $('#panel-body'), box = $('.add-box', body);
   if (!box || !$('#panel').classList.contains('typing')) return;
-  body.scrollTop += box.getBoundingClientRect().top - body.getBoundingClientRect().top - 6;
+  // Just below the pull tab (what scrolls goes on up under it).
+  const under = $('#panel-handle')?.offsetHeight || 0;
+  body.scrollTop += box.getBoundingClientRect().top - body.getBoundingClientRect().top - under - 6;
   fitSuggestions?.();
 }
 
@@ -683,30 +783,68 @@ function setView(view, { pop = false } = {}) {
 }
 
 /**
- * The search area as a circle around the meeting point, once a radius has
- * been picked. Shown with the categories and with a category's places;
- * hidden on a place's page.
+ * The search area as a circle around the meeting point, once the slider has
+ * been moved. Shown with the categories and with a category's places;
+ * hidden on a place's page. Its size eases to the distance chosen a frame
+ * at a time, so it follows the slider smoothly.
  */
-let radiusCircle = null;
-function drawRadius({ fit = false } = {}) {
+let radiusCircle = null, radiusGlide = 0;
+function drawRadius() {
   const s = state.search;
   const r = s?.showRadius;
   if (!r || !s.meet || !['results', 'group'].includes(state.view)) {
+    cancelAnimationFrame(radiusGlide);
     if (radiusCircle) resultLayer.removeLayer(radiusCircle);
     radiusCircle = null;
     return;
   }
-  if (!radiusCircle || radiusCircle.getRadius() !== r || !resultLayer.hasLayer(radiusCircle)) {
-    if (radiusCircle) resultLayer.removeLayer(radiusCircle);
-    radiusCircle = L.circle([s.meet.lat, s.meet.lon], {
+  const at = L.latLng(s.meet.lat, s.meet.lon);
+  if (!radiusCircle || !resultLayer.hasLayer(radiusCircle)) {
+    radiusCircle = L.circle(at, {
       radius: r, color: '#007aff', weight: 1.5, opacity: 0.75, dashArray: '6 6',
       fillColor: '#007aff', fillOpacity: 0.07, interactive: false, className: 'radius-ring',
     }).addTo(resultLayer);
+    return;
   }
-  if (fit) {
-    const dLat = r / 111320, dLon = r / (111320 * Math.cos((s.meet.lat * Math.PI) / 180));
-    fitTo([[s.meet.lat - dLat, s.meet.lon - dLon], [s.meet.lat + dLat, s.meet.lon + dLon]], { maxZoom: 17 });
-  }
+  if (!radiusCircle.getLatLng().equals(at)) radiusCircle.setLatLng(at);
+  cancelAnimationFrame(radiusGlide);
+  const step = () => {
+    if (!radiusCircle) return;
+    const now = radiusCircle.getRadius();
+    const next = Math.abs(r - now) < 1.5 ? r : now + (r - now) * 0.35;
+    radiusCircle.setRadius(next);
+    if (next !== r) radiusGlide = requestAnimationFrame(step);
+  };
+  step();
+}
+
+/**
+ * Touching the slider: the map comes in close enough to see the circle
+ * change, with room for the furthest the slider goes (once each time the
+ * results are shown, so it doesn't jump about while sliding).
+ */
+function zoomToRadii() {
+  const s = state.search;
+  if (!s?.meet || !map || s.radiiShown) return;
+  s.radiiShown = true;
+  const r = RADIUS.max;
+  const dLat = r / 111320, dLon = r / (111320 * Math.cos((s.meet.lat * Math.PI) / 180));
+  fitTo([[s.meet.lat - dLat, s.meet.lon - dLon], [s.meet.lat + dLat, s.meet.lon + dLon]], { maxZoom: 17 });
+}
+
+/** The whole circle in sight beside (or above) the panel: the map moves out to it only if part of it is hidden. */
+function showWholeRadius(r) {
+  const s = state.search;
+  if (!s?.meet || !map) return;
+  const dLat = r / 111320, dLon = r / (111320 * Math.cos((s.meet.lat * Math.PI) / 180));
+  const corners = [[s.meet.lat - dLat, s.meet.lon - dLon], [s.meet.lat + dLat, s.meet.lon + dLon]];
+  const { tl, br } = mapPadding();
+  const size = map.getSize();
+  const inSight = corners.every(([lat, lon]) => {
+    const p = map.latLngToContainerPoint([lat, lon]);
+    return p.x >= tl[0] && p.y >= tl[1] && p.x <= size.x - br[0] && p.y <= size.y - br[1];
+  });
+  if (!inSight) fitTo(corners, { maxZoom: 17 });
 }
 
 const afterRender = {};
@@ -754,18 +892,99 @@ function renderPeople() {
   return `
     <div class="sheet-title"><h2>Who's meeting</h2><span class="badge">${active} of ${all.length}</span></div>
     <ul class="group icons">${rows}</ul>
-    <div class="add-box">
-      <div class="search searchfield" id="add-search">
-        <input id="add-input" type="search" placeholder="Add someone's address" autocomplete="off" aria-label="Someone's address">
-        <ul class="suggestions" role="listbox" hidden></ul>
-      </div>
-      <input id="add-nick" maxlength="60" placeholder="Their name (optional)" aria-label="Their name">
-    </div>
+    ${addBox()}
     <p class="footnote" style="margin:0 6px">Or tap the map to drop a pin. Drag any pin to move it.</p>
     ${leaveRow()}
     <div class="cta">
       <button class="btn btn-primary btn-block btn-lg" data-action="find" ${active < 2 ? 'disabled' : ''}>Let’s meet</button>
     </div>`;
+}
+
+/**
+ * Adding someone: their address (typed and picked from the suggestions, a
+ * saved one, or a spot tapped on the map), then their name, then Add. The
+ * heart keeps the address on this device, to pick again another time.
+ */
+function addBox() {
+  const d = state.addDraft || {};
+  return `<div class="add-box">
+      <div class="search searchfield" id="add-search">
+        <input id="add-input" type="search" placeholder="Add someone's address" autocomplete="off" aria-label="Someone's address" value="${esc(d.text ?? d.loc?.address ?? '')}">
+        <button class="field-btn heart-btn" type="button" data-action="save-address"></button>
+        <ul class="suggestions" role="listbox" hidden></ul>
+      </div>
+      <div class="add-row">
+        <input id="add-nick" maxlength="60" placeholder="Their name (optional)" aria-label="Their name" autocomplete="off" enterkeyhint="done" value="${esc(d.nick || '')}">
+        <button class="btn btn-primary" type="button" data-action="add-person">Add</button>
+      </div>
+    </div>`;
+}
+
+/** The Add button and the heart, for the address picked so far (if any). */
+function refreshAddBox() {
+  const loc = state.addDraft?.loc;
+  const add = $('[data-action=add-person]'), btn = $('[data-action=save-address]');
+  if (add) add.disabled = !loc;
+  if (!btn) return;
+  const kept = !!savedMatch(loc);
+  btn.disabled = !loc;
+  btn.classList.toggle('on', kept);
+  btn.setAttribute('aria-pressed', String(kept));
+  const label = !loc ? 'Pick an address to save it' : kept ? 'Saved on this device. Tap to forget it' : 'Save this address on this device';
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
+  btn.innerHTML = heart(kept);
+}
+
+/** An address for the person being added (a suggestion, a saved address or a spot on the map): their name comes next. */
+function chooseAddress(loc, { nickname = '' } = {}) {
+  const d = state.addDraft ||= {};
+  d.loc = { address: loc.address, lat: Number(loc.lat), lon: Number(loc.lon) };
+  d.text = loc.address;
+  const nick = $('#add-nick');
+  if (nickname && nick && !nick.value.trim()) nick.value = nickname;
+  if (nick) d.nick = nick.value;
+  const box = $('#add-input');
+  if (box) box.value = loc.address;
+  refreshAddBox();
+  nick?.focus(); // on a phone the keyboard stays up for it
+}
+
+/** Add the person in the form (their address picked, their name if given). */
+async function addFromBox() {
+  const d = state.addDraft;
+  if (!d?.loc) return;
+  const nickname = ($('#add-nick')?.value ?? d.nick ?? '').trim();
+  state.addDraft = null;
+  document.activeElement?.blur(); // someone added: the keyboard goes down
+  await addPlace({ ...d.loc, nickname });
+}
+
+/** The heart: keep the picked address on this device (with the name typed), or forget it again. */
+async function toggleSavedAddress() {
+  const loc = state.addDraft?.loc;
+  if (!loc) return;
+  const kept = savedMatch(loc);
+  try {
+    if (kept) {
+      await forgetAddress(kept.id);
+      toast(`Forgot ${savedTitle(kept)}`);
+    } else {
+      const nickname = ($('#add-nick')?.value || '').trim();
+      const { saved } = await api.saveAddress({ ...loc, nickname });
+      state.saved = [saved, ...state.saved.filter((s) => s.id !== saved.id && !(s.address === saved.address && haversine(s.lat, s.lon, saved.lat, saved.lon) < 15))];
+      toast(`Saved ${savedTitle(saved)} on this device`);
+      warnIfUnsaved();
+    }
+  } catch (err) { toast(err.message, { error: true }); }
+  refreshAddBox();
+}
+
+/** Forget a saved address. */
+async function forgetAddress(id) {
+  state.saved = state.saved.filter((s) => s.id !== id);
+  refreshAddBox();
+  try { await api.unsaveAddress(id); } catch (err) { toast(err.message, { error: true }); }
 }
 
 /** "Leaving: Now | [date and time]" above the Find button. */
@@ -801,20 +1020,37 @@ afterRender.people = () => {
     at.addEventListener('change', pick);
     at.addEventListener('click', pick); // tapping the shown time picks it
   }
+  // Picking an address doesn't add anyone yet: there's time for their name, then Add (or the heart).
   const add = attachSearch($('#add-search'), {
     near: () => state.user.home,
-    onPick: (r) => addPlace({ ...r, nickname: $('#add-nick').value }),
+    onPick: (r) => chooseAddress(r, { nickname: r.saved ? r.nickname : '' }),
+    saved: () => state.saved,
+    onUnsave: forgetAddress,
   });
+  const nickBox = $('#add-nick');
+  refreshAddBox();
+  add.input.addEventListener('input', () => {
+    const d = state.addDraft ||= {};
+    d.text = add.input.value;
+    // Typing again: the address picked before no longer stands.
+    if (d.loc && add.input.value !== d.loc.address) { d.loc = null; refreshAddBox(); }
+  });
+  nickBox.addEventListener('input', () => { (state.addDraft ||= {}).nick = nickBox.value; });
+  nickBox.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); if (state.addDraft?.loc) addFromBox(); else add.input.focus(); } });
+  // The heart keeps the keyboard where it is (tapping it doesn't take the cursor from the box).
+  $('[data-action=save-address]').addEventListener('mousedown', (e) => e.preventDefault());
   // On a phone the sheet opens all the way for typing (see typingSheet). A list drawn
   // again (someone added) starts out of that state.
   typingSheet(false);
   const stay = () => ['add-input', 'add-nick'].includes(document.activeElement?.id);
-  add.input.addEventListener('focus', () => {
-    if (!isMobile()) return;
-    typingSheet(true);
-    setTimeout(add.fit, 350); // once the sheet has grown
-  });
-  for (const el of [add.input, $('#add-nick')]) el.addEventListener('blur', () => setTimeout(() => { if (!stay()) typingSheet(false); }, 200));
+  for (const el of [add.input, nickBox]) {
+    el.addEventListener('focus', () => {
+      if (!isMobile()) return;
+      typingSheet(true);
+      setTimeout(() => { typingBoxToTop(); add.fit(); }, 350); // once the sheet has grown
+    });
+    el.addEventListener('blur', () => setTimeout(() => { if (!stay()) typingSheet(false); }, 200));
+  }
   const nick = $('.edit-inline input');
   if (nick) { nick.focus(); nick.select(); }
 };
@@ -1058,7 +1294,7 @@ async function findPlaces({ replay = false } = {}) {
     if (!map.getBounds().pad(-0.06).contains([meet.lat, meet.lon])) fitTo([...people.map((p) => [p.lat, p.lon]), [meet.lat, meet.lon]], { maxZoom: 16, animate: false });
     const search = state.search = {
       people, meeting, meet, local, anchor: prev?.anchor || null, routes: prev?.routes || null, rule, leaveAt,
-      pois: prev?.pois || null, grouped: prev?.grouped || null, radius: prev?.radius || null, tab: prev?.tab || null,
+      pois: prev?.pois || null, grouped: prev?.grouped || null, radius: prev?.radius || null, loaded: prev?.loaded || null, tab: prev?.tab || null,
       group: null, place: null, area: prev?.area || null, poiError: prev?.poiError || null, sort: prev?.sort, showRadius: prev?.showRadius,
     };
 
@@ -1071,7 +1307,8 @@ async function findPlaces({ replay = false } = {}) {
       if (a) {
         search.anchor = a;
         meet = search.meet = { lat: a.lat, lon: a.lon };
-        for (const p of search.pois) p.fromCenter = haversine(meet.lat, meet.lon, p.lat, p.lon);
+        for (const p of search.loaded?.pois || search.pois) p.fromCenter = haversine(meet.lat, meet.lon, p.lat, p.lon);
+        if (search.loaded) showPoisWithin(search, search.radius); // measured from the new spot
       }
       return meet;
     });
@@ -1140,24 +1377,40 @@ async function findPlaces({ replay = false } = {}) {
   }
 }
 
+/**
+ * The places around the meeting point: within `radius` metres, or (the
+ * first time) RADIUS.start, or RADIUS.max where that finds too few. What
+ * was found is kept (search.loaded), so a smaller distance on the slider
+ * needs no new search when that list was complete.
+ */
 async function loadPois(search, signal, radius) {
   search.poiError = null;
   try {
-    const { pois, radius: used } = await findPois(search.meet, { radius, signal });
-    search.pois = pois;
-    search.radius = used;
-    search.grouped = groupPois(pois);
-    search.tab = search.tab && search.grouped[search.tab].length ? search.tab
-      : (TABS.find((t) => search.grouped[t.id].length) || TABS[0]).id;
+    const found = await findPois(search.meet, radius ? { radius, signal } : { startRadius: RADIUS.start, widerRadius: RADIUS.max, signal });
+    search.loaded = { pois: found.pois, radius: found.radius, complete: !!found.complete };
+    showPoisWithin(search, Math.min(found.radius, RADIUS.max));
   } catch (err) {
     if (signal?.aborted) throw err;
+    search.loaded = null;
     search.pois = [];
     search.grouped = groupPois([]);
-    search.radius = radius || 800;
+    search.radius = radius || RADIUS.start;
     search.tab = TABS[0].id;
-    search.poiError = 'Places could not be loaded. Check your connection and try a different radius.';
+    search.poiError = 'Places could not be loaded. Check your connection and try another distance.';
   }
 }
+
+/** Show the places found within r metres of the meeting point, sorted into tabs and listings. */
+function showPoisWithin(search, r) {
+  search.pois = (search.loaded?.pois || []).filter((p) => p.fromCenter <= r);
+  search.radius = r;
+  search.grouped = groupPois(search.pois);
+  search.tab = search.tab && search.grouped[search.tab].length ? search.tab
+    : (TABS.find((t) => search.grouped[t.id].length) || TABS[0]).id;
+}
+
+/** Can the places within r be shown from what was found already (a complete list from at least that far)? */
+const loadedCovers = (search, r) => !!search.loaded?.complete && r <= search.loaded.radius;
 
 /** Rough road distance from every person to a place (real times load separately). */
 const distancesTo = (poi) => state.search.people.map((person) => haversine(person.lat, person.lon, poi.lat, poi.lon) * 1.3);
@@ -1281,9 +1534,7 @@ function renderResults() {
         ${groups.map((g) => `<li><button class="cell cell-btn" data-action="group" data-group="${esc(g.group)}">${tile(s.tab)}<span class="cell-main cell-title">${esc(g.group)}</span><span class="cell-end count">${g.items.length}</span>${CHEV}</button></li>`).join('')}
         ${groups.length > 1 ? `<li><button class="cell cell-btn" data-action="group" data-group="*">${tile('all')}<span class="cell-main cell-title">All ${esc(tabMeta.label.toLowerCase())}</span><span class="cell-end count">${tabCount}</span>${CHEV}</button></li>` : ''}
       </ul>`
-    : `<div class="empty">${s.poiError ? esc(s.poiError) : 'Nothing found nearby. Try a wider radius.'}</div>`;
-
-  const radius = RADII.map((r) => `<button class="seg${r === s.radius ? ' active' : ''}" data-action="radius" data-r="${r}">${fmtDist(r)}</button>`).join('');
+    : `<div class="empty">${s.poiError ? esc(s.poiError) : s.poiLoading ? 'Looking for places…' : `Nothing found within ${fmtRadius(s.radius || RADIUS.start)}. Slide the distance further.`}</div>`;
 
   return `
     <div class="result-head">
@@ -1301,10 +1552,94 @@ function renderResults() {
     ${s.meeting.approx ? '<p class="notice">Travel times could not be checked right now, so this spot is estimated from distance.</p>' : ''}
     <div class="pills" role="tablist">${tabs}</div>
     ${list}
-    <div class="radius-row"><span class="footnote">${total} places within</span><div class="segmented">${radius}</div></div>
+    ${radiusRow(s, total)}
     <div class="actions">
       <button class="btn btn-tinted" data-action="replay">Replay</button>
     </div>`;
+}
+
+// ------------------------------------------------ how far to look: the slider
+
+const radiusShare = (r) => ((r - RADIUS.min) / (RADIUS.max - RADIUS.min)) * 100;
+/** "800 m", "1 km". */
+const fmtRadius = (r) => (r >= 1000 ? `${+(r / 1000).toFixed(1)} km` : `${Math.round(r / 10) * 10} m`);
+
+/** "23 places within 800 m" (a spinner in place of the number while they load), and the slider. */
+function radiusRow(s, total) {
+  const r = Math.min(RADIUS.max, Math.max(RADIUS.min, s.radius || RADIUS.start));
+  return `<div class="radius-row">
+      <div class="radius-label">${radiusCount(s.poiLoading ? null : total)}<span>places within</span> <b class="radius-dist">${fmtRadius(r)}</b></div>
+      <input type="range" class="radius-slider" min="${RADIUS.min}" max="${RADIUS.max}" step="${RADIUS.step}" value="${r}"
+        aria-label="How far from the meeting point to look for places" aria-valuetext="${fmtRadius(r)}" style="--p:${radiusShare(r)}%">
+      <div class="radius-ends"><span>${fmtRadius(RADIUS.min)}</span><span>${fmtRadius(RADIUS.max)}</span></div>
+    </div>`;
+}
+/** The number of places, a spinner while they load (null), or nothing while it isn't known (''). */
+const radiusCount = (n) => (n === null ? '<span class="spinner radius-spin" role="status" aria-label="Loading places"></span>'
+  : n === '' ? '' : `<b class="radius-count">${n}</b> `);
+
+afterRender.results = () => {
+  const slider = $('.radius-slider');
+  const s = state.search;
+  if (!slider || !s) return;
+  // A finger on the slider: places that finish loading meanwhile wait for it to let go (drawing the
+  // list again would take the slider from under it). Letting go without moving it changes nothing else.
+  const letGo = () => setTimeout(() => {
+    if (!s.sliding) return; // the change of distance dealt with it
+    s.sliding = false;
+    if (s.renderLater && state.search === s && state.view === 'results') { s.renderLater = false; render({ keepScroll: true }); }
+  }, 0);
+  slider.addEventListener('pointerdown', () => { s.sliding = true; zoomToRadii(); });
+  slider.addEventListener('keydown', zoomToRadii);
+  slider.addEventListener('pointerup', letGo);
+  slider.addEventListener('pointercancel', letGo);
+  slider.addEventListener('input', () => radiusMoved(Number(slider.value)));
+  slider.addEventListener('change', () => { s.sliding = false; s.renderLater = false; radiusChosen(Number(slider.value)); });
+};
+
+/** The slider moving: the circle follows it, and the count when the places that far out are known already. */
+function radiusMoved(r) {
+  const s = state.search;
+  if (!s) return;
+  s.showRadius = r;
+  drawRadius();
+  const slider = $('.radius-slider'), dist = $('.radius-dist'), label = $('.radius-label');
+  slider?.style.setProperty('--p', `${radiusShare(r)}%`);
+  slider?.setAttribute('aria-valuetext', fmtRadius(r));
+  if (dist) dist.textContent = fmtRadius(r);
+  if (label && !s.poiLoading) {
+    const known = loadedCovers(s, r) ? s.loaded.pois.filter((p) => p.fromCenter <= r).length : '';
+    $('.radius-count, .radius-spin', label)?.remove();
+    label.insertAdjacentHTML('afterbegin', radiusCount(known));
+  }
+}
+
+/** A distance chosen (the slider let go): the places within it, from what was found already or from a new search. */
+async function radiusChosen(r) {
+  const s = state.search;
+  if (!s) return;
+  s.showRadius = r;
+  drawRadius();
+  showWholeRadius(r);
+  radiusAbort?.abort();
+  if (loadedCovers(s, r)) {
+    s.poiLoading = false;
+    showPoisWithin(s, r);
+    if (state.view === 'results') render({ keepScroll: true });
+    return;
+  }
+  // Only the latest distance counts: a search still under way for another is dropped.
+  const ctrl = radiusAbort = new AbortController();
+  s.poiLoading = true;
+  s.radius = r;
+  const label = $('.radius-label');
+  if (label) { $('.radius-count, .radius-spin', label)?.remove(); label.insertAdjacentHTML('afterbegin', radiusCount(null)); }
+  await loadPois(s, ctrl.signal, r).catch(() => {});
+  if (ctrl.signal.aborted || state.search !== s) return;
+  s.poiLoading = false;
+  if (state.view !== 'results') return;
+  if (s.sliding) s.renderLater = true; // not while a finger is on the slider
+  else render({ keepScroll: true });
 }
 
 // ------------------------------------------------ ratings & photos
@@ -1555,7 +1890,6 @@ function openPlace(id) {
   if (!p) return;
   s.placeDrawn = null;
   s.place = p;
-  state.placeTab = 'overview';
   loadDetails(p);
   setView('place');
 }
@@ -1607,7 +1941,6 @@ function loadOtherDetails(p) {
 
 // ------------------------------------------------ place view
 
-const PLACE_TABS = { overview: 'Overview', reviews: 'Reviews', photos: 'Photos', about: 'About' };
 const TRIP = { BUSINESS: 'Business', COUPLES: 'Couples', FAMILY: 'Family', FRIENDS: 'Friends', SOLO: 'Solo' };
 
 function renderPlace() {
@@ -1635,8 +1968,7 @@ function renderPlace() {
   const phone = d.phone || p.phone;
   const site = hrefOf(d.website || p.website);
   const menu = hrefOf(d.menu || p.menu);
-  const tabs = ['overview', (d.reviews?.length || r?.count) && 'reviews', photos.length > 1 && 'photos', p.id !== 'meet' && 'about'].filter(Boolean);
-  const tab = tabs.includes(state.placeTab) ? state.placeTab : 'overview';
+  const hasReviews = !!(d.reviews?.length || r?.count);
 
   // Google's place card (photos, rating, reviews, hours…) takes the gallery's place; it's put in after rendering.
   const kit = p.kit?.status === 'ok' ? p.kit : null;
@@ -1649,24 +1981,30 @@ function renderPlace() {
   const meta = [p.id === 'meet' ? 'Meeting point' : p.group, PRICE[r?.priceLevel], p.id === 'meet' ? '' : `${fmtDist(p.fromCenter)} from the meeting point`].filter(Boolean);
   const quick = [
     `<button class="q primary" data-action="choose">${glyph('send', 19)}<span>Send</span></button>`,
-    `<button class="q" data-action="place-tab" data-tab="overview" data-scroll="getting-there">${glyph('route', 19)}<span>Directions</span></button>`,
+    `<button class="q" data-action="jump" data-to="getting-there">${glyph('route', 19)}<span>Directions</span></button>`,
     phone ? `<a class="q" href="tel:${esc(phone.replace(/[^\d+]/g, ''))}">${glyph('phone', 19)}<span>Call</span></a>` : '',
     site ? `<a class="q" href="${esc(site)}" target="_blank" rel="noopener">${glyph('globe', 19)}<span>Website</span></a>` : '',
     menu ? `<a class="q" href="${esc(menu)}" target="_blank" rel="noopener">${glyph('menu', 19)}<span>Menu</span></a>` : '',
   ].join('');
-  const bodies = { overview: placeOverview, reviews: placeReviews, photos: placePhotos, about: placeAbout };
+  // One page, no tabs: getting there and the details, then reviews (when there are any beside
+  // Google's card), then what else is known about the place, then where to open it.
   return `
     ${p.id === 'meet' ? backBtn('back-results', 'Places') : backBtn('back-group', s.group === '*' ? 'Back' : s.group)}
     ${gallery}
     <div class="place-title">
       <h2>${esc(p.name)}</h2>
-      ${!kit && r?.rating != null ? `<div class="place-rating">${ratingHtml(r, { big: true })}${r.count ? `<button class="btn btn-plain" data-action="place-tab" data-tab="reviews">${Number(r.count).toLocaleString()} reviews</button>` : ''}</div>` : loading && ratingsOn ? '<span class="skel" style="width:150px;height:16px"></span>' : ''}
+      ${!kit && r?.rating != null ? `<div class="place-rating">${ratingHtml(r, { big: true })}${r.count ? `<button class="btn btn-plain" data-action="jump" data-to="reviews">${Number(r.count).toLocaleString()} reviews</button>` : ''}</div>` : loading && ratingsOn ? '<span class="skel" style="width:150px;height:16px"></span>' : ''}
       <div class="footnote">${esc(meta.join(' · '))}</div>
       ${st ? `<div class="place-status">${statusHtml(st)}</div>` : ''}
     </div>
     <div class="quick">${quick}</div>
-    ${tabs.length > 1 ? `<div class="segmented place-tabs" role="tablist">${tabs.map((t) => `<button class="seg${t === tab ? ' active' : ''}" role="tab" aria-selected="${t === tab}" data-action="place-tab" data-tab="${t}">${PLACE_TABS[t]}</button>`).join('')}</div>` : ''}
-    ${bodies[tab](p, d, r, ds)}`;
+    ${placeOverview(p, d, r, ds)}
+    ${hasReviews && !kit ? `<div class="section-title" id="reviews">Reviews</div>${placeReviews(p, d, r)}` : ''}
+    ${p.id !== 'meet' ? placeAbout(p, d) : ''}
+    <div class="actions">
+      <button class="btn btn-tinted" data-action="open-maps">Open in Maps</button>
+    </div>
+    ${p.id !== 'meet' ? `<p class="footnote attrib">Place details from <a href="https://www.openstreetmap.org/${esc(p.id)}" target="_blank" rel="noopener">OpenStreetMap</a>${d.source === 'tripadvisor' ? ' and Tripadvisor' : d.source === 'google' ? ' and Google Maps' : ''}</p>` : ''}`;
 }
 
 function placeOverview(p, d, r, ds) {
@@ -1685,9 +2023,8 @@ function placeOverview(p, d, r, ds) {
     ? `<details class="hours"><summary>${st ? statusHtml(st) : 'Opening hours'}</summary><table>${week.map((w) => `<tr${w.today ? ' class="today"' : ''}><th>${w.day}</th><td>${esc(w.text)}</td></tr>`).join('')}</table></details>`
     : d.hours?.length ? d.hours.map(esc).join('<br>') : p.hours ? esc(p.hours) : '';
   const summary = d.ranking || d.description || p.description;
-  const links = mapLinks(p);
   return `
-    ${summary ? `<p class="place-summary">${esc(d.ranking ? d.ranking : '')}${d.ranking && (d.description || p.description) ? '<br>' : ''}${esc(truncate(d.description || p.description || '', 220))}</p>` : ''}
+    ${summary ? `<p class="place-summary">${esc(d.ranking ? d.ranking : '')}${d.ranking && (d.description || p.description) ? '<br>' : ''}${esc(truncate(d.description || p.description || '', 600))}</p>` : ''}
     <div class="section-title" id="getting-there">Getting there</div>
     ${modeSwitch('dir-mode')}
     ${anyTransit ? `<div class="when-row">
@@ -1705,10 +2042,59 @@ function placeOverview(p, d, r, ds) {
       ${hours ? `<li><div class="cell"><span class="k">Hours</span><span class="v">${hours}</span></div></li>` : ''}
       ${phone ? `<li><div class="cell"><span class="k">Phone</span><a class="v" href="tel:${esc(phone.replace(/[^\d+]/g, ''))}">${esc(phone)}</a></div></li>` : ''}
       ${site ? `<li><div class="cell"><span class="k">Website</span><a class="v" href="${esc(site)}" target="_blank" rel="noopener">${esc(site.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''))}</a></div></li>` : ''}
-    </ul>
-    <div class="actions">
-      <a class="btn btn-tinted" href="${esc(links.osm)}" target="_blank" rel="noopener">Open in maps</a>
-    </div>`;
+    </ul>`;
+}
+
+/**
+ * "Open in Maps": a choice of maps apps, like a phone's own menu for it,
+ * with the one used last time at the top. Choosing one opens the place in
+ * it (the app itself, on a phone that has it).
+ */
+function chooseMapsApp(p) {
+  if (!p) return;
+  $('.choice-backdrop')?.click(); // one at a time
+  const links = mapLinks({ ...p, name: p.id === 'meet' ? 'Meeting point' : p.name, googleId: p.kit?.id });
+  const ua = navigator.userAgent;
+  const appleDevice = /iPhone|iPad|iPod|Macintosh/i.test(ua);
+  const apps = [
+    { id: 'apple', name: 'Apple Maps', url: links.apple },
+    { id: 'google', name: 'Google Maps', url: links.google },
+    { id: 'waze', name: 'Waze', url: links.waze },
+    /Android/i.test(ua) && { id: 'geo', name: 'Another maps app', url: links.geo },
+    { id: 'osm', name: 'OpenStreetMap', url: links.osm },
+  ].filter(Boolean);
+  // Apple's own first on Apple's devices, Google's first elsewhere; the one used last above both.
+  if (!appleDevice) apps.push(apps.shift());
+  const last = state.settings.mapsApp;
+  apps.sort((a, b) => (b.id === last) - (a.id === last));
+  const back = document.createElement('div');
+  back.className = 'choice-backdrop';
+  const box = document.createElement('div');
+  box.className = 'choice';
+  box.setAttribute('role', 'dialog');
+  box.setAttribute('aria-modal', 'true');
+  box.setAttribute('aria-label', 'Open in a maps app');
+  box.innerHTML = `<div class="choice-group">
+      <div class="choice-title">Open “${esc(p.id === 'meet' ? 'the meeting point' : p.name)}” in</div>
+      ${apps.map((a) => `<a class="choice-btn" data-app="${a.id}" href="${esc(a.url)}"${a.id === 'geo' ? '' : ' target="_blank" rel="noopener"'}>${esc(a.name)}${a.id === last ? '<span class="choice-note">Last used</span>' : ''}</a>`).join('')}
+    </div>
+    <button class="choice-btn choice-cancel" type="button">Cancel</button>`;
+  const close = () => { back.remove(); box.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  back.addEventListener('click', close);
+  $('.choice-cancel', box).addEventListener('click', close);
+  box.addEventListener('click', (e) => {
+    const app = e.target.closest('[data-app]')?.dataset.app;
+    if (!app) return;
+    if (state.settings.mapsApp !== app) {
+      state.settings.mapsApp = app;
+      api.updateMe({ settings: { mapsApp: app } }).catch(() => {});
+    }
+    setTimeout(close, 0); // once the link has gone
+  });
+  document.addEventListener('keydown', onKey);
+  document.body.append(back, box);
+  $('.choice-btn', box).focus({ preventScroll: true });
 }
 
 const truncate = (t, n) => (t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t);
@@ -1742,12 +2128,6 @@ function placeReviews(p, d, r) {
     ${from ? `<p class="footnote attrib">${esc(from)}</p>` : ''}`;
 }
 
-function placePhotos(p, d) {
-  const photos = d.photos || [];
-  return `<div class="photo-grid">${photos.map((ph, k) => `<button class="g-item" data-action="photo" data-i="${k}" aria-label="Photo ${k + 1}"><img src="${esc(ph.url)}" alt="${esc(ph.caption || '')}" loading="lazy" decoding="async"></button>`).join('')}</div>
-    <p class="footnote attrib">${esc([d.source === 'tripadvisor' && 'Photos from Tripadvisor', d.source === 'google' && 'Photos from Google Maps (tap one to see who took it)', photos.some((ph) => ph.link) && 'Photos from Wikimedia Commons (tap one for its credit)', d.photoNote].filter(Boolean).join(' · '))}</p>`;
-}
-
 function placeAbout(p, d) {
   const yes = (v) => v === 'yes' || v === 'only';
   const feats = [
@@ -1756,14 +2136,12 @@ function placeAbout(p, d) {
     yes(p.dogs) && 'Dogs welcome', ...(d.features || []),
   ].filter(Boolean);
   const unique = [...new Set(feats)];
-  const cuisines = (p.cuisine || '').split(/[;,]/).map((c) => c.trim().replace(/_/g, ' ')).filter(Boolean);
+  const cuisines = cuisineLabels(p.cuisine);
+  // (Its description is at the top of the page, with the details.)
   return `
-    ${d.description || p.description ? `<p class="place-summary">${esc(d.description || p.description)}</p>` : ''}
-    ${cuisines.length || d.categories?.length ? `<div class="section-title">Food</div><div class="subratings">${[...new Set([...cuisines.map((c) => c[0].toUpperCase() + c.slice(1)), ...(d.categories || [])])].map((c) => `<span class="chip">${esc(c)}</span>`).join('')}</div>` : ''}
+    ${cuisines.length || d.categories?.length ? `<div class="section-title">Food</div><div class="subratings">${[...new Set([...cuisines, ...(d.categories || [])])].map((c) => `<span class="chip">${esc(c)}</span>`).join('')}</div>` : ''}
     ${unique.length ? `<div class="section-title">Good to know</div><ul class="group features">${unique.map((f) => `<li><div class="cell"><span class="check">✓</span>${esc(f)}</div></li>`).join('')}</ul>` : ''}
-    ${d.ranking || d.awards?.length ? `<div class="section-title">Recognition</div><ul class="group features">${[d.ranking, ...(d.awards || [])].filter(Boolean).map((a) => `<li><div class="cell">${esc(a)}</div></li>`).join('')}</ul>` : ''}
-    ${!unique.length && !cuisines.length && !d.description && !p.description ? '<div class="empty">No more details listed for this place.</div>' : ''}
-    <p class="footnote attrib">Place details from <a href="https://www.openstreetmap.org/${esc(p.id)}" target="_blank" rel="noopener">OpenStreetMap</a>${d.source === 'tripadvisor' ? ' and Tripadvisor' : d.source === 'google' ? ' and Google Maps' : ''}</p>`;
+    ${d.ranking || d.awards?.length ? `<div class="section-title">Recognition</div><ul class="group features">${[d.ranking, ...(d.awards || [])].filter(Boolean).map((a) => `<li><div class="cell">${esc(a)}</div></li>`).join('')}</ul>` : ''}`;
 }
 
 afterRender.place = () => {
@@ -2048,6 +2426,8 @@ function initPanel() {
     const s = state.search;
     switch (action) {
       case 'find': findPlaces(); break;
+      case 'add-person': addFromBox(); break;
+      case 'save-address': toggleSavedAddress(); break;
       case 'leave-now': state.leaveAt = ''; render({ keepScroll: true }); break;
       case 'focus': {
         const p = everyone().find((x) => x.id === id);
@@ -2060,33 +2440,19 @@ function initPanel() {
       case 'toggle': patchPlace(id, { active: el.checked }); break;
       case 'tab': s.tab = el.dataset.tab; render(); break;
       case 'group': s.markersKey = null; s.group = el.dataset.group; s.sort = s.sort || 'near'; setView('group'); break;
-      case 'radius': {
-        const r = Number(el.dataset.r);
-        s.showRadius = r;
-        drawRadius({ fit: true });
-        for (const b of $$('[data-action=radius]')) b.classList.toggle('active', b === el);
-        el.textContent = '…';
-        // Only the latest choice counts: one still loading is dropped.
-        radiusAbort?.abort();
-        const ctrl = radiusAbort = new AbortController();
-        await loadPois(s, ctrl.signal, r).catch(() => {});
-        if (ctrl.signal.aborted || state.search !== s) break;
-        render();
-        break;
-      }
       case 'replay': findPlaces({ replay: true }); break;
       case 'meet-place': {
         const m = s.meet;
         s.place = { id: 'meet', name: s.anchor ? s.anchor.name : s.area ? shortAddr(s.area) : 'Meeting point', lat: m.lat, lon: m.lon, tab: 'meet', group: 'Meeting point', address: s.area || '', fromCenter: 0 };
         s.placeDrawn = null;
-        state.placeTab = 'overview';
-        setView('place');
+              setView('place');
         break;
       }
       case 'edit-people': cancelSearch(); break;
       case 'back-results':
         poiLayer.clearLayers();
         s.markersKey = null;
+        s.radiiShown = false; // the map shows everyone again: touching the slider comes in close again
         setView('results');
         fitTo([...s.people.map((p) => [p.lat, p.lon]), [s.meet.lat, s.meet.lon]], { maxZoom: 16 });
         break;
@@ -2116,14 +2482,12 @@ function initPanel() {
         break;
       }
       case 'choose': enterShare(); break;
-      case 'place-tab': {
-        state.placeTab = el.dataset.tab;
-        render({ keepScroll: true });
-        const target = el.dataset.scroll ? document.getElementById(el.dataset.scroll) : $('.place-tabs');
+      case 'jump': { // to a part of a place's page (Directions, its reviews)
         if (isMobile() && sheet.snap === 'peek') setSheet('mid');
-        target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        document.getElementById(el.dataset.to)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         break;
       }
+      case 'open-maps': chooseMapsApp(s.place); break;
       case 'photo': openLightbox(s.place.details?.photos || [], Number(el.dataset.i)); break;
       case 'rv-more': el.classList.toggle('open'); break;
       case 'back-place': setView('place'); break;
@@ -2288,6 +2652,7 @@ function initDrawer() {
 // ---------------------------------------------------------------- boot
 
 async function boot() {
+  followKeyboard();
   initHome();
   initPanel();
   initSheet();
