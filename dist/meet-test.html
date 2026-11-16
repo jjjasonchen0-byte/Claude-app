@@ -8032,7 +8032,7 @@ function renderYourRoute(p, ds) {
     ${backBtn('back-results', 'Back')}
     <div class="sheet-title">
       <span class="avatar" style="--c:${me.color}">${esc(initial(me.name))}</span>
-      <div style="flex:1;min-width:0"><h2>Your route</h2><div class="footnote">To ${esc(p.name)}${p.address && p.address !== p.name ? `, ${esc(shortAddr(p.address))}` : ''}</div></div>
+      <div style="flex:1;min-width:0"><h2>Your route</h2><div class="footnote">To ${esc(p.name)}${s.anchor && areaLine(s) ? `, ${esc(areaLine(s))}` : ''}</div></div>
     </div>
     ${placeOverview(p, {}, null, ds)}
     <div class="actions">
