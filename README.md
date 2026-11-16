@@ -119,12 +119,12 @@ The cheapest way to show a place's **real photos, rating and reviews**: Google's
 
 To turn it on:
 
-1. In the [Google Cloud console](https://console.cloud.google.com) (the same project is fine), enable **Maps JavaScript API** and **Places API (New)**.
-2. Under **APIs & Services → Credentials**, create **another** API key. This one is seen by browsers, so restrict it: under **Application restrictions** choose **Websites** and add your site, for example `https://meet-xxxx.onrender.com/*`; under **API restrictions** choose **Maps JavaScript API** and **Places API (New)**.
+1. In the [Google Cloud console](https://console.cloud.google.com) (the same project is fine), enable **Maps JavaScript API**, **Places API (New)** and **[Places UI Kit](https://console.cloud.google.com/apis/library/placewidgets.googleapis.com)**. The last one is separate from the other two: without it the card fails with "The API is not activated on your project".
+2. Under **APIs & Services → Credentials**, create **another** API key. This one is seen by browsers, so restrict it: under **Application restrictions** choose **Websites** and add your site, for example `https://meet-xxxx.onrender.com/*`; under **API restrictions** choose **Maps JavaScript API**, **Places API (New)** and **Places UI Kit**.
 3. Add it as `GOOGLE_MAPS_BROWSER_KEY` on Render and redeploy.
 4. Optionally, set a budget alert in the Cloud console (the app has no daily cap for the card, since Google bills it in the browser).
 
-Tested with stand-ins only, since no key was available: open a few places after you add yours.
+If the card doesn't show: open the place's page with the browser's console open (Google's card says why there), and look in Render's log for a line starting `Google place details:` (Google's reason when the server's own lookup, used when the card can't load, is refused). The app stops trying Google's card for the rest of a visit after it fails twice, so test in a newly opened tab.
 
 ### Real-world data and the rules that come with it
 
