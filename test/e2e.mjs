@@ -115,7 +115,9 @@ await ctx.route('**/api/transit/reach?**', (r) => {
   }
   return r.fulfill({ json: { cells } });
 });
+let tablesAsked = 0; // travel-time tables asked of the routing service (through the server or not)
 await ctx.route('**/api/traveltimes?**', (r) => {
+  tablesAsked++;
   const q = new URL(r.request().url()).searchParams;
   const n = q.get('from').split(';').length, m = q.get('to').split(';').length;
   const t = normalizeOsrmTable(fx('osrm-table.json'));
@@ -129,6 +131,7 @@ await ctx.route('https://routing.openstreetmap.de/**', (r) => {
   const u = new URL(r.request().url());
   const cors = { 'access-control-allow-origin': '*' };
   if (u.pathname.includes('/table/')) {
+    tablesAsked++;
     const n = u.searchParams.get('sources').split(';').length, m = u.searchParams.get('destinations').split(';').length;
     const t = fx('osrm-table.json');
     return r.fulfill({ headers: cors, json: { code: 'Ok', durations: Array.from({ length: n }, (_, i) => Array.from({ length: m }, (_, j) => t.durations[i % 2][j % 2] + j * 30)) } });
@@ -315,7 +318,8 @@ try {
   await page.waitForTimeout(500);
   await shot('13-mobile-people');
 
-  assert.ok(routingAsked > 0, 'walking, cycling and driving times came straight from the routing service');
+  assert.ok(routingAsked > 0, 'walking, cycling and driving routes came straight from the routing service');
+  assert.equal(tablesAsked, 0, 'travel times for finding the spot and for lists of places were worked out over the streets loaded, not asked for');
   assert.deepEqual(errors, [], `page errors: ${errors.join('\n')}`);
   console.log('E2E passed ✔');
 } catch (err) {

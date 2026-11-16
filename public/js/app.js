@@ -3,7 +3,8 @@
 import { api } from './api.js';
 import { searchAddress, reverseGeocode, currentPosition } from './geocode.js';
 import { findMeetingPoint, estimateSeconds, SPEEDS } from './meetpoint.js';
-import { FloodAnimation, LINE_STYLE } from './flood.js';
+import { FloodAnimation, LINE_STYLE, prepareNetwork } from './flood.js';
+import { createLocalRouter } from './localroute.js';
 import { loadRoads } from './roads.js';
 import { TABS, findPois, groupPois } from './pois.js';
 import { getConfig, ratingsSource, rateAll, thumbFor, detailsFor } from './rated.js';
@@ -987,6 +988,15 @@ function trackFor(person, route, meet, estimate) {
   return { ...base, duration: route.duration, pieces: [{ pts: [door, ...(route.geometry || []), end], t0: 0, t1: route.duration, mode: person.mode }] };
 }
 
+/**
+ * Travel times for finding the meeting point: worked out over the streets
+ * loaded here when they reach everyone asked about, else asked of the
+ * routing service.
+ */
+const travelTimesWith = (local) => (mode, sources, destinations, opts) => (local?.ok && sources.every((p) => local.covers(p, mode))
+  ? local.travelTimes(mode, sources, destinations)
+  : getTravelTimes(mode, sources, destinations, opts));
+
 async function findPlaces({ replay = false } = {}) {
   const prev = replay ? state.search : null;
   const people = prev ? prev.people : activePeople();
@@ -1008,26 +1018,33 @@ async function findPlaces({ replay = false } = {}) {
   const status = (text) => setStatus(text, { skip: true });
 
   try {
-    // Started together: the fairest spot (a few small requests to the routing
-    // service) and the streets for the animation.
-    const meetingP = prev ? Promise.resolve(prev.meeting) : findMeetingPoint(people, {
-      rule, travelTimes: getTravelTimes, signal: ctrl.signal, onStatus: status,
+    // First the streets around everyone (a handful of the map's own tiles):
+    // the animation floods them, and walking, cycling and driving times for
+    // finding the fairest spot are worked out over them, here (see
+    // localroute.js), instead of hundreds of them being asked of the routing
+    // service. If they are slow to come, the routing service is asked as before.
+    const roadsP = withTimeout(loadRoads(streetsArea(), { signal: ctrl.signal }), 8000).catch(() => null);
+    const netP = roadsP.then((roads) => (roads?.A?.length ? prepareNetwork(roads) : null)).catch(() => null);
+    const localP = netP.then((net) => (net ? createLocalRouter(null, net) : null));
+    const localSoon = Promise.race([localP, new Promise((r) => setTimeout(() => r(null), 4000))]);
+    const meetingP = prev ? Promise.resolve(prev.meeting) : localSoon.then((local) => findMeetingPoint(people, {
+      rule, travelTimes: travelTimesWith(local), signal: ctrl.signal, onStatus: status,
       directions: (mode, a, b, o) => getDirections(mode, a, b, { ...o, ...at }),
       // With Google: the best few spots checked against Google's travel times for everyone.
       checkTimes: usingGoogle() ? (ps, spots, o) => getCheckTimes(ps, spots, { ...o, ...at }) : undefined,
       // Public transport: real times from each rider to every stop around.
       transitReach: getTransitReach, time: leaveAt,
-    });
+    }));
     meetingP.catch(() => {});
-    const roadsP = withTimeout(loadRoads(streetsArea(), { signal: ctrl.signal }), 8000).catch(() => null);
     status(prev ? 'Replaying the search' : 'Finding the fairest spot…');
     if (!(await fx.intro())) return;
-    const roads = await roadsP;
+    const net = await netP;
     if (!live()) return;
-    fx.setRoads(roads);
+    fx.setRoads(null, net);
     fx.prepare();
 
     const meeting = await meetingP;
+    const local = await localP;
     if (!live()) return;
     const spot = meeting.meet;
     if (!Number.isFinite(spot?.lat) || !Number.isFinite(spot?.lon)) throw new Error('Couldn’t place a meeting point. Try again, or move someone’s pin.');
@@ -1035,7 +1052,7 @@ async function findPlaces({ replay = false } = {}) {
     // Keep the meeting point in view (it can lie a little outside the group).
     if (!map.getBounds().pad(-0.06).contains([meet.lat, meet.lon])) fitTo([...people.map((p) => [p.lat, p.lon]), [meet.lat, meet.lon]], { maxZoom: 16, animate: false });
     const search = state.search = {
-      people, meeting, meet, anchor: prev?.anchor || null, routes: prev?.routes || null, rule, leaveAt,
+      people, meeting, meet, local, anchor: prev?.anchor || null, routes: prev?.routes || null, rule, leaveAt,
       pois: prev?.pois || null, grouped: prev?.grouped || null, radius: prev?.radius || null, tab: prev?.tab || null,
       group: null, place: null, area: prev?.area || null, poiError: prev?.poiError || null, sort: prev?.sort, showRadius: prev?.showRadius,
     };
@@ -1056,13 +1073,19 @@ async function findPlaces({ replay = false } = {}) {
     const areaP = search.area ? Promise.resolve() : anchorP.then((m) => reverseGeocode(m.lat, m.lon, { signal: ctrl.signal }))
       .then((r) => { if (r) search.area = r.address; if (state.view === 'results') render({ keepScroll: true }); })
       .catch(() => {});
-    // Someone whose times could not be checked a moment ago (their routing service
-    // did not answer) is not waited on for long again: their route is a straight line.
+    // Everyone's route there from the routing service (or Google). Walking,
+    // cycling and driving routes that are slow to come are worked out along the
+    // streets here instead (the same streets the floods ran along); the real
+    // ones still come for the results. Someone whose times could not be checked
+    // a moment ago is not waited on for long again: their route is a straight line.
     // (The free routing service is asked one route a second, so with it a bigger group waits a little longer.)
-    const inTurn = usingGoogle() ? 0 : 1200 * people.filter((p) => p.mode !== 'transit').length;
-    const routeWait = (i) => (meeting.approx || meeting.real?.[i] === false ? 4000 : 10000) + inTurn;
+    const road = (p) => p.mode !== 'transit';
+    const inTurn = usingGoogle() ? 0 : 1200 * people.filter(road).length;
+    const routeWait = (i) => (road(people[i]) && local?.ok ? 3000 + inTurn
+      : (meeting.approx || meeting.real?.[i] === false ? 4000 : 10000) + (road(people[i]) ? inTurn : 0));
+    const localRoute = (p, m) => (road(p) && local?.ok ? local.directions(p.mode, p, m).catch(() => null) : null);
     const routesP = search.routes ? Promise.resolve(search.routes)
-      : anchorP.then((m) => Promise.all(people.map((p, i) => withTimeout(getDirections(p.mode, p, m, { signal: ctrl.signal, ...at }), routeWait(i)).catch(() => null))));
+      : anchorP.then((m) => Promise.all(people.map(async (p, i) => (await withTimeout(getDirections(p.mode, p, m, { signal: ctrl.signal, ...at }), routeWait(i)).catch(() => null)) || localRoute(p, m))));
     status('Finding everyone’s routes…');
     const ok2 = await fx.allAtOnce(spot);
     if (!ok2 || !live()) return;
@@ -1185,9 +1208,9 @@ const clock = (iso) => (iso ? new Date(iso).toLocaleTimeString([], { hour: 'nume
 const mins = (sec) => fmtTime(Math.max(1, Math.round(sec / 60)));
 
 /** One person's travel time: real when known (seconds), otherwise an estimate from road distance. */
-const tripRow = (person, d, sec) => `<li class="trip"><div class="cell"><span class="avatar sm" style="--c:${person.color}">${esc(initial(person.name))}</span>
+const tripRow = (person, d, sec, approx = false) => `<li class="trip"><div class="cell"><span class="avatar sm" style="--c:${person.color}">${esc(initial(person.name))}</span>
   <span class="cell-main"><span class="title-row"><span class="cell-title">${esc(person.name)}</span>${modePill(person)}</span></span>
-  <span class="cell-end"><b>${sec != null ? mins(sec) : `≈ ${fmtTime(travelMinutes(d, person.mode))}`}</b>${fmtDist(d)}</span></div>${modePicker(person)}</li>`;
+  <span class="cell-end"><b>${sec != null ? `${approx ? '≈ ' : ''}${mins(sec)}` : `≈ ${fmtTime(travelMinutes(d, person.mode))}`}</b>${fmtDist(d)}</span></div>${modePicker(person)}</li>`;
 
 /** Everyone-at-once bar; shows the shared mode, or nothing selected when people differ. */
 function modeSwitch(action) {
@@ -1204,21 +1227,18 @@ function loadMeetTimes() {
   const meet = s.meet;
   const key = `${s.people.map((p) => p.mode).join(',')}|${meet.lat},${meet.lon}`;
   if (s.meetTimes?.key === key) return;
-  const mt = s.meetTimes = { key, values: s.people.map(() => null) };
+  const mt = s.meetTimes = { key, values: s.people.map(() => null), approx: s.people.map(() => false) };
   const refresh = () => { if (state.search === s && s.meetTimes === mt && state.view === 'results') render({ keepScroll: true }); };
-  // The routes already fetched for the animation give most of these.
-  const known = s.people.map((person, i) => routeMode(s.routes?.[i]) === person.mode);
-  known.forEach((k, i) => { if (k) mt.values[i] = s.routes[i].duration; });
+  // The routes fetched for the animation give most of these. One worked out
+  // along the streets here is shown (as an estimate) until the real one comes:
+  // usually it is on its way already (the same request as the animation's).
   s.people.forEach((person, i) => {
-    if (person.mode !== 'transit' || known[i]) return;
-    getDirections('transit', person, meet, s.leaveAt ? { time: s.leaveAt } : {}).then((d) => { mt.values[i] = d.duration; refresh(); }).catch(() => {});
+    const r = s.routes?.[i];
+    if (routeMode(r) === person.mode && r.provider !== 'local') { mt.values[i] = r.duration; return; }
+    if (routeMode(r) === person.mode) { mt.values[i] = r.duration; mt.approx[i] = true; }
+    getDirections(person.mode, person, meet, s.leaveAt ? { time: s.leaveAt } : {})
+      .then((d) => { mt.values[i] = d.duration; mt.approx[i] = false; refresh(); }).catch(() => {});
   });
-  for (const mode of ['walk', 'bike', 'drive']) {
-    const idx = s.people.map((p, i) => (p.mode === mode && !known[i] ? i : -1)).filter((i) => i >= 0);
-    if (!idx.length) continue;
-    getTravelTimes(mode, idx.map((i) => s.people[i]), [meet])
-      .then((t) => { t.durations.forEach((row, k) => { mt.values[idx[k]] = row[0]; }); refresh(); }).catch(() => {});
-  }
 }
 
 // ------------------------------------------------ results view
@@ -1269,7 +1289,7 @@ function renderResults() {
         ${s.anchor && areaLine(s) ? `<div class="footnote">${esc(areaLine(s))}</div>` : ''}
       </div>
     </div>
-    <ul class="group icons">${s.people.map((p, i) => tripRow(p, s.routes?.[i]?.distance ?? s.meeting.dists[i], s.meetTimes?.values[i])).join('')}
+    <ul class="group icons">${s.people.map((p, i) => tripRow(p, s.routes?.[i]?.distance ?? s.meeting.dists[i], s.meetTimes?.values[i], s.meetTimes?.approx?.[i])).join('')}
       <li><button class="cell cell-btn" data-action="edit-people">${tile('pencil')}<span class="cell-main cell-title">Edit people</span>${CHEV}</button></li>
       <li><button class="cell cell-btn" data-action="meet-place">${tile('meet')}<span class="cell-main cell-title">Routes to this spot &amp; send it</span>${CHEV}</button></li></ul>
     ${s.leaveAt ? `<p class="footnote" style="margin:-4px 6px 12px">Times for leaving at ${esc(fmtLeave(s.leaveAt))}.</p>` : ''}
@@ -1405,7 +1425,8 @@ function loadGroupTimes(items) {
   for (const mode of ['walk', 'bike', 'drive']) {
     const idx = s.people.map((p, i) => (p.mode === mode ? i : -1)).filter((i) => i >= 0);
     if (!idx.length) continue;
-    getTravelTimes(mode, idx.map((i) => s.people[i]), list)
+    // Worked out over the streets loaded for the search when they reach everyone: no requests at all.
+    travelTimesWith(s.local)(mode, idx.map((i) => s.people[i]), list)
       .then((t) => { t.durations.forEach((row, k) => { gt.durations[idx[k]] = row; }); refresh(); }).catch(() => {});
   }
   return gt.durations;

@@ -377,8 +377,9 @@ export class FloodAnimation {
 
   // ------------------------------------------------ the streets
 
-  setRoads(roads) {
-    this.net = roads && roads.A.length ? prepareNetwork(roads) : null;
+  /** The streets to flood: as roads.js makes them, or a network prepared from them already (`net`). */
+  setRoads(roads, net = null) {
+    this.net = net || (roads && roads.A.length ? prepareNetwork(roads) : null);
     this.drawBase();
   }
 

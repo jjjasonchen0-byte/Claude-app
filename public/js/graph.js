@@ -77,9 +77,11 @@ class Heap {
  * Dijkstra from `start`: { dist, parent }. With `allowed` (a 256-entry table
  * indexed by edge kind), streets whose kind is not allowed are skipped. With
  * `cost` (also by edge kind), each street's length is multiplied by its kind's
- * cost, for example seconds per metre.
+ * cost, for example seconds per metre. With `nodeCost` (one number per
+ * corner), going through a corner costs that much more (a junction's lights
+ * and turns, say).
  */
-export function dijkstra(g, start, allowed = null, cost = null) {
+export function dijkstra(g, start, allowed = null, cost = null, nodeCost = null) {
   const dist = new Float64Array(g.n).fill(Infinity);
   const parent = new Int32Array(g.n).fill(-1);
   const heap = new Heap();
@@ -93,7 +95,7 @@ export function dijkstra(g, start, allowed = null, cost = null) {
     for (let e = g.adjStart[u]; e < g.adjStart[u + 1]; e++) {
       if (allowed && kinds && !allowed[kinds[e]]) continue;
       const v = g.adjNode[e];
-      const nd = du + (cost && kinds ? g.adjLen[e] * cost[kinds[e]] : g.adjLen[e]);
+      const nd = du + (cost && kinds ? g.adjLen[e] * cost[kinds[e]] : g.adjLen[e]) + (nodeCost ? nodeCost[v] : 0);
       if (nd < dist[v]) { dist[v] = nd; parent[v] = u; heap.push(nd, v); }
     }
   }

@@ -83,6 +83,7 @@ const modules = [
   ['graph', 'public/js/graph.js'],
   ['meetpoint', 'public/js/meetpoint.js'],
   ['flood', 'public/js/flood.js'],
+  ['localroute', 'public/js/localroute.js'],
   ['pois', 'public/js/pois.js'],
   ['anchor', 'public/js/anchor.js'],
   ['match', 'public/js/match.js'],
