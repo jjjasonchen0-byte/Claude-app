@@ -6,12 +6,12 @@ import { findMeetingPoint, estimateSeconds, SPEEDS } from './meetpoint.js';
 import { FloodAnimation, LINE_STYLE, prepareNetwork } from './flood.js';
 import { createLocalRouter } from './localroute.js';
 import { loadRoads } from './roads.js';
-import { TABS, findPois, groupPois } from './pois.js';
+import { TABS, findPois, groupPois, summaryOf } from './pois.js';
 import { getConfig, ratingsSource, rateAll, thumbFor, detailsFor } from './rated.js';
 import { openStatus, weekTable } from './hours.js';
 import { haversine } from './geo.js';
 import { pickAnchor } from './anchor.js';
-import { loadPlacesKit, findPlaceId, placeCard, samePlace } from './placeskit.js';
+import { loadPlacesKit, placeIdFor, rowPhoto, placeCard, samePlace } from './placeskit.js';
 import { mapLinks, shareText, messagingLinks, nativeShare, copyText, calendarInvite, download } from './share.js';
 import { MODES, ATTRIBUTION, getDirections, getTravelTimes, getCheckTimes, getTransitReach, useGoogle, usingGoogle, navLinks, vehicleName, isWalkLeg } from './directions.js';
 
@@ -1368,16 +1368,50 @@ function loadThumb(el) {
   if (ratingsOn && p.rating === undefined) { queueRating(p); return; }
   if (p.thumb === null || el.querySelector('img')) return;
   el.dataset.loading = '1';
-  thumbFor(p).then((url) => {
+  rowThumb(p).then((url) => {
+    // Google's kinds of place may say more about it than OpenStreetMap did.
+    const sum = el.closest('.poi')?.querySelector('.p-sum');
+    if (sum) sum.textContent = summaryOf(p);
     if (!url || !el.isConnected || el.querySelector('img')) return;
     const img = new Image();
     img.alt = '';
     img.decoding = 'async';
+    if (p.thumbBy) img.title = `Photo: ${p.thumbBy}`;
     img.onload = () => img.classList.add('in');
     img.onerror = () => { img.remove(); p.thumb = null; };
     img.src = url;
     el.prepend(img);
   }).catch(() => {}).finally(() => { delete el.dataset.loading; });
+}
+
+/**
+ * Photos in lists from Google: with its map on the page (its terms keep its
+ * places to it) and the browser key its place card uses. Only rows on screen
+ * ask, once a visit each.
+ */
+let rowPhotoFailures = 0; // times in a row Google could not be asked at all (then it's left alone for the visit)
+const rowPhotosOn = () => !!placesKitKey && usingGoogle() && rowPhotoFailures < 3;
+
+/** A photo for a place's row: Google's, else Tripadvisor's or a free one from Wikimedia Commons (null if none). */
+async function rowThumb(p) {
+  if (p.thumb !== undefined) return p.thumb;
+  if (rowPhotosOn() && p.google === undefined) {
+    try {
+      await loadPlacesKit(placesKitKey);
+      const g = await rowPhoto(p);
+      rowPhotoFailures = 0;
+      p.google = g;
+      if (g?.types?.length) p.gtypes = g.types;
+      if (g?.url) {
+        p.thumbBy = g.by;
+        p.thumbFrom = 'google';
+        return (p.thumb = g.url);
+      }
+    } catch {
+      rowPhotoFailures++;
+    }
+  }
+  return thumbFor(p);
 }
 
 function observeRows() {
@@ -1437,20 +1471,23 @@ function loadGroupTimes(items) {
   return gt.durations;
 }
 
-function poiRow({ p, worstMin, real }, i) {
-  const s = state.search;
+/**
+ * A place in a list: its photo, its name, a very short summary of it
+ * ("Korean · BBQ"), its rating and whether it's open; on the right, how far
+ * it is from the meeting point and about how long the longest trip there is.
+ */
+function poiRow({ p, worstMin }, i) {
   const r = p.rating;
   const ratingPart = r?.rating != null ? ratingHtml(r) : ratingsOn && r === undefined ? '<span class="skel" style="width:92px"></span>' : '';
   const line2 = [ratingPart, esc(PRICE[r?.priceLevel] || '')].filter(Boolean).join('<span class="dot">·</span>');
-  const where = [s.group === '*' ? p.group : '', p.address].filter(Boolean).map(esc).join(' · ');
   const st = statusHtml(openStatus(p.hours));
   return `<li><button class="cell cell-btn poi" data-action="place" data-id="${esc(p.id)}">
-      <span class="thumb" data-thumb="${esc(p.id)}">${p.thumb ? `<img class="in" src="${esc(p.thumb)}" alt="">` : ''}${thumbArt(p)}<span class="num" style="--c:${TAB_COLOR[p.tab]}">${i + 1}</span></span>
+      <span class="thumb" data-thumb="${esc(p.id)}">${p.thumb ? `<img class="in" src="${esc(p.thumb)}" alt=""${p.thumbBy ? ` title="${esc(`Photo: ${p.thumbBy}`)}"` : ''}>` : ''}${thumbArt(p)}<span class="num" style="--c:${TAB_COLOR[p.tab]}">${i + 1}</span></span>
       <span class="cell-main"><span class="cell-title">${esc(p.name)}</span>
+        <span class="cell-sub p-sum">${esc(summaryOf(p))}</span>
         ${line2 ? `<span class="cell-meta">${line2}</span>` : ''}
-        <span class="cell-sub">${where || 'Near the meeting point'}</span>
         ${st ? `<span class="cell-sub">${st}</span>` : ''}</span>
-      <span class="cell-end"><b>${fmtDist(p.fromCenter)}</b>max ${real ? '' : '≈ '}${fmtTime(worstMin)}</span>
+      <span class="cell-end"><b>${fmtDist(p.fromCenter)}</b>~${fmtTime(worstMin)}</span>
     </button></li>`;
 }
 
@@ -1462,8 +1499,12 @@ function renderGroup() {
   const markersKey = `${s.tab}|${s.group}|${s.sort}|${items.map((x) => x.p.id).join(',')}`;
   if (s.markersKey !== markersKey) { s.markersKey = markersKey; drawPoiMarkers(items.map((x) => x.p)); }
   const anyTa = items.some((x) => x.p.rating?.rating != null);
-  const anyFree = items.some((x) => x.p.thumb && !x.p.rating?.id);
-  const credits = [anyTa && (ratingsName === 'Tripadvisor' ? 'Ratings and photos from Tripadvisor' : ratingsName), anyFree && 'Some photos from Wikimedia Commons'].filter(Boolean).join(' · ');
+  const anyFree = items.some((x) => x.p.thumbFrom === 'commons');
+  const credits = [
+    rowPhotosOn() && 'Photos from Google Maps',
+    anyTa && (ratingsName === 'Tripadvisor' ? 'Ratings and photos from Tripadvisor' : ratingsName),
+    anyFree && 'Some photos from Wikimedia Commons',
+  ].filter(Boolean).join(' · ');
   return `
     ${backBtn('back-results', 'Categories')}
     <div class="sheet-title">${tile(s.tab, 'lg')}<div style="flex:1;min-width:0"><h2>${esc(title)}</h2><div class="footnote">${items.length} place${items.length === 1 ? '' : 's'} nearby</div></div></div>
@@ -1536,7 +1577,7 @@ function loadDetails(p) {
     const failed = () => { if (++kitFailures >= 2) placesKitKey = null; fallback(); };
     p.kit = { status: 'loading' };
     loadPlacesKit(placesKitKey)
-      .then(() => findPlaceId(p))
+      .then(() => placeIdFor(p))
       .then((id) => {
         if (!id) return fallback();
         p.kit = {
@@ -2154,6 +2195,8 @@ function applyTheme() {
   const t = state.settings.theme;
   if (t === 'auto') document.documentElement.removeAttribute('data-theme');
   else document.documentElement.setAttribute('data-theme', t);
+  // The phone's status bar (and the browser's own bars) in the app's colours.
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', isDark() ? '#000000' : '#f2f2f7');
   if (map) addBasemap();
   anim?.setTheme(isDark() ? 'dark' : 'light');
 }

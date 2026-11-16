@@ -116,6 +116,7 @@ The cheapest way to show a place's **real photos, rating and reviews**: Google's
 - **How it finds the place:** by name within about 200 m of where OpenStreetMap has it. Once the card has loaded, Meet checks Google's place has a similar name and is within 250 m; if not, the card is dropped and the free photos are shown instead.
 - The card is made once per place and kept while you look at it, so it loads (and is billed) once, not each time the page updates.
 - The look is Google's (it follows light and dark mode); its "Google Maps" credit is part of the card.
+- **Photos in lists** come with the same key, on Google's map: each place in a list (Restaurants, Fast food, All food…) gets its first Google photo beside it, and, when OpenStreetMap doesn't say what food it serves, Google's kinds of place for the line under its name ("Korean · BBQ"). Only places scrolled into view ask, once a visit each. Finding the place and its photos is free; checking its position and kinds is a Place Details Essentials request (10,000 a month free, then $5 per 1,000); each photo shown is a Place Details Photos request (**1,000 a month free, then $7 per 1,000**). A list shows about 6–10 places before scrolling.
 
 To turn it on:
 

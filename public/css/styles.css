@@ -618,6 +618,7 @@ img.broken { display: none; }
 .cell-meta { display: flex; align-items: center; gap: 0; font-size: 13px; color: var(--text-2); margin-top: 2px; white-space: nowrap; overflow: hidden; }
 .cell-meta .dot { margin: 0 5px; }
 .poi .cell-sub { margin-top: 2px; }
+.poi .p-sum { font-weight: 500; }
 .poi .cell-title { font-weight: 600; }
 
 /* place page */

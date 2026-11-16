@@ -1284,6 +1284,7 @@ img.broken { display: none; }
 .cell-meta { display: flex; align-items: center; gap: 0; font-size: 13px; color: var(--text-2); margin-top: 2px; white-space: nowrap; overflow: hidden; }
 .cell-meta .dot { margin: 0 5px; }
 .poi .cell-sub { margin-top: 2px; }
+.poi .p-sum { font-weight: 500; }
 .poi .cell-title { font-weight: 600; }
 
 /* place page */
@@ -3597,6 +3598,82 @@ const CUISINE = {
 
 const titleCase = (s) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
+// What a place serves, for the line under its name in a list ("Korean · BBQ"):
+// the listing names above, said for one place where they differ.
+const SERVES = {
+  coffee_shop: 'Coffee', fried_chicken: 'Fried chicken', chicken_wings: 'Chicken wings', wings: 'Chicken wings',
+  korean_barbecue: 'Korean BBQ', korean_bbq: 'Korean BBQ', regional: 'Local food', fish: 'Seafood', cocktail: 'Cocktails',
+  wine: 'Wine', beer: 'Beer', ice_cream: 'Ice cream', frozen_yogurt: 'Frozen yoghurt', gelato: 'Gelato', chocolate: 'Chocolate',
+};
+const bbq = (s) => s.replace(/\b(Bbq|Barbecue)\b/g, 'BBQ');
+
+/** What a place serves, from OpenStreetMap's cuisine tag ("korean;barbecue" → ["Korean", "BBQ"]). */
+function cuisineLabels(cuisine) {
+  const out = [];
+  for (const raw of String(cuisine || '').split(/[;,]/)) {
+    const c = raw.trim().toLowerCase().replace(/[\s-]+/g, '_');
+    if (!c) continue;
+    const label = bbq(SERVES[c] || CUISINE[c] || titleCase(c));
+    if (!out.includes(label)) out.push(label);
+  }
+  return out;
+}
+
+// Google's kinds of place (its "types"), for places OpenStreetMap gives no cuisine:
+// any "…_restaurant" by its cuisine, and these.
+const GOOGLE_KINDS = {
+  hamburger_restaurant: 'Burgers', fast_food_restaurant: 'Fast food', barbecue_restaurant: 'BBQ',
+  korean_barbecue_restaurant: 'Korean BBQ', steak_house: 'Steakhouse', coffee_shop: 'Coffee', cafe: 'Café',
+  bakery: 'Bakery', bar: 'Bar', pub: 'Pub', wine_bar: 'Wine bar', cocktail_bar: 'Cocktails', ice_cream_shop: 'Ice cream',
+  sandwich_shop: 'Sandwiches', meal_takeaway: 'Takeaway', dessert_shop: 'Desserts', donut_shop: 'Doughnuts',
+  juice_shop: 'Juice', tea_house: 'Tea', bagel_shop: 'Bagels', chocolate_shop: 'Chocolate', confectionery: 'Sweets',
+  acai_shop: 'Açaí', deli: 'Deli', diner: 'Diner', food_court: 'Food court', brewpub: 'Brewpub', cafeteria: 'Cafeteria',
+};
+const GENERIC_RESTAURANTS = new Set(['restaurant', 'fine_dining_restaurant', 'family_restaurant', 'buffet_restaurant']);
+
+/** Google's types for a place as short names, cuisines first (["korean_restaurant", "barbecue_restaurant", …] → ["Korean", "BBQ"]). */
+function googleKinds(types) {
+  const cuisines = [], others = [];
+  for (const t of types || []) {
+    if (/_restaurant$/.test(t) && !GENERIC_RESTAURANTS.has(t)) {
+      const c = t.replace(/_restaurant$/, '');
+      const label = GOOGLE_KINDS[t] || bbq(SERVES[c] || CUISINE[c] || titleCase(c));
+      if (!cuisines.includes(label)) cuisines.push(label);
+    } else if (GOOGLE_KINDS[t] && !others.includes(GOOGLE_KINDS[t])) others.push(GOOGLE_KINDS[t]);
+  }
+  return [...cuisines, ...others.filter((l) => !cuisines.includes(l))];
+}
+
+/**
+ * A very short summary of a place, for the line under its name: what it
+ * serves ("Korean · BBQ", "Fried chicken"), from OpenStreetMap, else from
+ * Google's kinds of place (`p.gtypes`, food and drink only), else what it is
+ * ("Fast food", "Museum").
+ */
+function summaryOf(p) {
+  const food = cuisineLabels(p.cuisine);
+  if (food.length) return food.slice(0, 3).join(' · ');
+  const google = ['food', 'drinks'].includes(p.tab) ? googleKinds(p.gtypes) : [];
+  if (google.length) return google.slice(0, 2).join(' · ');
+  return p.kind || p.group || '';
+}
+
+// What a place is, said for one place (OpenStreetMap's amenity, shop, leisure or tourism value).
+const KIND = {
+  restaurant: 'Restaurant', food_court: 'Food court', fast_food: 'Fast food', cafe: 'Café', bar: 'Bar', pub: 'Pub',
+  biergarten: 'Beer garden', ice_cream: 'Ice cream', bakery: 'Bakery', pastry: 'Patisserie', coffee: 'Coffee shop', tea: 'Tea shop',
+  cinema: 'Cinema', nightclub: 'Nightclub', bowling_alley: 'Bowling', escape_game: 'Escape room', amusement_arcade: 'Arcade',
+  gambling: 'Arcade', miniature_golf: 'Mini golf', sports_centre: 'Sports centre', fitness_centre: 'Gym', ice_rink: 'Ice rink',
+  water_park: 'Water park', theme_park: 'Theme park', zoo: 'Zoo', aquarium: 'Aquarium', karaoke_box: 'Karaoke',
+  trampoline_park: 'Trampoline park', museum: 'Museum', gallery: 'Gallery', arts_centre: 'Arts centre', theatre: 'Theatre',
+  library: 'Library', attraction: 'Attraction', community_centre: 'Community centre', park: 'Park', garden: 'Garden',
+  playground: 'Playground', nature_reserve: 'Nature reserve', viewpoint: 'Viewpoint', picnic_site: 'Picnic spot',
+  beach_resort: 'Beach', mall: 'Shopping centre', department_store: 'Department store', books: 'Bookshop', games: 'Games shop',
+  video_games: 'Video games', toys: 'Toy shop', music: 'Music shop', musical_instrument: 'Music shop', gift: 'Gift shop',
+  clothes: 'Clothes shop', shoes: 'Shoe shop', supermarket: 'Supermarket', convenience: 'Convenience store', marketplace: 'Market',
+};
+const kindOf = (tags) => KIND[tags.amenity] || KIND[tags.shop] || KIND[tags.leisure] || KIND[tags.tourism] || (tags.natural === 'beach' ? 'Beach' : '');
+
 /** Map OSM tags to { tab, group } or null if uninteresting. */
 function categorize(tags = {}) {
   const a = tags.amenity, l = tags.leisure, t = tags.tourism, s = tags.shop;
@@ -3697,6 +3774,7 @@ function parsePois(elements, center) {
       lat, lon,
       tab: cat.tab,
       group: cat.group,
+      kind: kindOf(tags),
       address: formatAddress(tags),
       cuisine: tags.cuisine || '',
       hours: tags.opening_hours || '',
@@ -3847,7 +3925,7 @@ async function photonPois(center, radiusM, { signal, timeoutMs = 8000 } = {}) {
     .filter((p) => p.fromCenter <= radiusM * 1.1);
 }
 
-__m["pois"] = { OVERPASS_ENDPOINTS, overpass, TABS, categorize, poiQuery, parsePois, groupPois, findPois, PHOTON_GROUPS, photonUrl, photonElements };
+__m["pois"] = { OVERPASS_ENDPOINTS, overpass, TABS, cuisineLabels, googleKinds, summaryOf, categorize, poiQuery, parsePois, groupPois, findPois, PHOTON_GROUPS, photonUrl, photonElements };
 })();
 // ---- anchor
 (() => {
@@ -3984,6 +4062,38 @@ async function findPlaceId(p, maps = window.google.maps) {
   return places?.[0]?.id || null;
 }
 
+const ids = new Map(); // a place from OpenStreetMap → Promise of its Google ID (or null), looked for once a visit
+
+/** Google's ID for a place, looked for once a visit (for its list photo and its card alike). */
+function placeIdFor(p, maps = window.google.maps) {
+  const key = `${p.id}|${p.name}|${Number(p.lat).toFixed(5)},${Number(p.lon).toFixed(5)}`;
+  if (!ids.has(key)) ids.set(key, findPlaceId(p, maps).catch((err) => { ids.delete(key); throw err; }));
+  return ids.get(key);
+}
+
+/**
+ * A photo of a place for a list, and the kinds of place Google says it is:
+ * { url, by, types }, or null when Google doesn't know it there. Looking for
+ * the place and its photos is free; its position (to check it's the same
+ * place) and kinds are a Place Details Essentials request (10,000 a month
+ * free, then $5 per 1,000); the photo itself, once shown, is a Place Details
+ * Photos request (1,000 a month free, then $7 per 1,000).
+ */
+async function rowPhoto(p, { size = 240, maps = window.google.maps } = {}) {
+  const id = await placeIdFor(p, maps);
+  if (!id) return null;
+  const { Place } = await maps.importLibrary('places');
+  const place = new Place({ id });
+  await place.fetchFields({ fields: ['location', 'photos', 'types'] });
+  if (!samePlace(p, place)) return null;
+  const photo = place.photos?.[0];
+  return {
+    url: photo ? photo.getURI({ maxWidth: size, maxHeight: size }) : null,
+    by: (photo?.authorAttributions || []).map((a) => a.displayName).filter(Boolean).join(', '),
+    types: Array.isArray(place.types) ? place.types : [],
+  };
+}
+
 /**
  * Is the place Google loaded the same as ours? Google's card brings its
  * place's position but not its name (and nothing in the card can be read
@@ -4033,7 +4143,7 @@ function placeCard(id, { dark = false, onLoad, onError } = {}) {
   return el;
 }
 
-__m["placeskit"] = { loadPlacesKit, findPlaceId, samePlace, placeCard };
+__m["placeskit"] = { loadPlacesKit, findPlaceId, placeIdFor, rowPhoto, samePlace, placeCard };
 })();
 // ---- hours
 (() => {
@@ -4733,16 +4843,17 @@ async function rateAll(pois) {
   }
 }
 
-/** A photo URL for a list row, or null. */
+/** A photo URL for a list row, or null (`p.thumbFrom` says whose: 'tripadvisor' or 'commons'). */
 async function thumbFor(p) {
   if (p.thumb !== undefined) return p.thumb;
   if (p.rating?.id) {
     try {
       const { photo } = await getJson(`/api/places/photo/${encodeURIComponent(p.rating.id)}`);
-      if (photo?.url) return (p.thumb = photo.url);
+      if (photo?.url) { p.thumbFrom = 'tripadvisor'; return (p.thumb = photo.url); }
     } catch { /* fall through to free photos */ }
   }
   const free = await freeImage(p).catch(() => null);
+  if (free) p.thumbFrom = 'commons';
   return (p.thumb = free ? commonsUrl(free, 240) : null);
 }
 
@@ -5707,12 +5818,12 @@ const { findMeetingPoint, estimateSeconds, SPEEDS } = __m["meetpoint"];
 const { FloodAnimation, LINE_STYLE, prepareNetwork } = __m["flood"];
 const { createLocalRouter } = __m["localroute"];
 const { loadRoads } = __m["roads"];
-const { TABS, findPois, groupPois } = __m["pois"];
+const { TABS, findPois, groupPois, summaryOf } = __m["pois"];
 const { getConfig, ratingsSource, rateAll, thumbFor, detailsFor } = __m["rated"];
 const { openStatus, weekTable } = __m["hours"];
 const { haversine } = __m["geo"];
 const { pickAnchor } = __m["anchor"];
-const { loadPlacesKit, findPlaceId, placeCard, samePlace } = __m["placeskit"];
+const { loadPlacesKit, placeIdFor, rowPhoto, placeCard, samePlace } = __m["placeskit"];
 const { mapLinks, shareText, messagingLinks, nativeShare, copyText, calendarInvite, download } = __m["share"];
 const { MODES, ATTRIBUTION, getDirections, getTravelTimes, getCheckTimes, getTransitReach, useGoogle, usingGoogle, navLinks, vehicleName, isWalkLeg } = __m["directions"];
 // ---------------------------------------------------------------- constants
@@ -6903,16 +7014,50 @@ function loadThumb(el) {
   if (ratingsOn && p.rating === undefined) { queueRating(p); return; }
   if (p.thumb === null || el.querySelector('img')) return;
   el.dataset.loading = '1';
-  thumbFor(p).then((url) => {
+  rowThumb(p).then((url) => {
+    // Google's kinds of place may say more about it than OpenStreetMap did.
+    const sum = el.closest('.poi')?.querySelector('.p-sum');
+    if (sum) sum.textContent = summaryOf(p);
     if (!url || !el.isConnected || el.querySelector('img')) return;
     const img = new Image();
     img.alt = '';
     img.decoding = 'async';
+    if (p.thumbBy) img.title = `Photo: ${p.thumbBy}`;
     img.onload = () => img.classList.add('in');
     img.onerror = () => { img.remove(); p.thumb = null; };
     img.src = url;
     el.prepend(img);
   }).catch(() => {}).finally(() => { delete el.dataset.loading; });
+}
+
+/**
+ * Photos in lists from Google: with its map on the page (its terms keep its
+ * places to it) and the browser key its place card uses. Only rows on screen
+ * ask, once a visit each.
+ */
+let rowPhotoFailures = 0; // times in a row Google could not be asked at all (then it's left alone for the visit)
+const rowPhotosOn = () => !!placesKitKey && usingGoogle() && rowPhotoFailures < 3;
+
+/** A photo for a place's row: Google's, else Tripadvisor's or a free one from Wikimedia Commons (null if none). */
+async function rowThumb(p) {
+  if (p.thumb !== undefined) return p.thumb;
+  if (rowPhotosOn() && p.google === undefined) {
+    try {
+      await loadPlacesKit(placesKitKey);
+      const g = await rowPhoto(p);
+      rowPhotoFailures = 0;
+      p.google = g;
+      if (g?.types?.length) p.gtypes = g.types;
+      if (g?.url) {
+        p.thumbBy = g.by;
+        p.thumbFrom = 'google';
+        return (p.thumb = g.url);
+      }
+    } catch {
+      rowPhotoFailures++;
+    }
+  }
+  return thumbFor(p);
 }
 
 function observeRows() {
@@ -6972,20 +7117,23 @@ function loadGroupTimes(items) {
   return gt.durations;
 }
 
-function poiRow({ p, worstMin, real }, i) {
-  const s = state.search;
+/**
+ * A place in a list: its photo, its name, a very short summary of it
+ * ("Korean · BBQ"), its rating and whether it's open; on the right, how far
+ * it is from the meeting point and about how long the longest trip there is.
+ */
+function poiRow({ p, worstMin }, i) {
   const r = p.rating;
   const ratingPart = r?.rating != null ? ratingHtml(r) : ratingsOn && r === undefined ? '<span class="skel" style="width:92px"></span>' : '';
   const line2 = [ratingPart, esc(PRICE[r?.priceLevel] || '')].filter(Boolean).join('<span class="dot">·</span>');
-  const where = [s.group === '*' ? p.group : '', p.address].filter(Boolean).map(esc).join(' · ');
   const st = statusHtml(openStatus(p.hours));
   return `<li><button class="cell cell-btn poi" data-action="place" data-id="${esc(p.id)}">
-      <span class="thumb" data-thumb="${esc(p.id)}">${p.thumb ? `<img class="in" src="${esc(p.thumb)}" alt="">` : ''}${thumbArt(p)}<span class="num" style="--c:${TAB_COLOR[p.tab]}">${i + 1}</span></span>
+      <span class="thumb" data-thumb="${esc(p.id)}">${p.thumb ? `<img class="in" src="${esc(p.thumb)}" alt=""${p.thumbBy ? ` title="${esc(`Photo: ${p.thumbBy}`)}"` : ''}>` : ''}${thumbArt(p)}<span class="num" style="--c:${TAB_COLOR[p.tab]}">${i + 1}</span></span>
       <span class="cell-main"><span class="cell-title">${esc(p.name)}</span>
+        <span class="cell-sub p-sum">${esc(summaryOf(p))}</span>
         ${line2 ? `<span class="cell-meta">${line2}</span>` : ''}
-        <span class="cell-sub">${where || 'Near the meeting point'}</span>
         ${st ? `<span class="cell-sub">${st}</span>` : ''}</span>
-      <span class="cell-end"><b>${fmtDist(p.fromCenter)}</b>max ${real ? '' : '≈ '}${fmtTime(worstMin)}</span>
+      <span class="cell-end"><b>${fmtDist(p.fromCenter)}</b>~${fmtTime(worstMin)}</span>
     </button></li>`;
 }
 
@@ -6997,8 +7145,12 @@ function renderGroup() {
   const markersKey = `${s.tab}|${s.group}|${s.sort}|${items.map((x) => x.p.id).join(',')}`;
   if (s.markersKey !== markersKey) { s.markersKey = markersKey; drawPoiMarkers(items.map((x) => x.p)); }
   const anyTa = items.some((x) => x.p.rating?.rating != null);
-  const anyFree = items.some((x) => x.p.thumb && !x.p.rating?.id);
-  const credits = [anyTa && (ratingsName === 'Tripadvisor' ? 'Ratings and photos from Tripadvisor' : ratingsName), anyFree && 'Some photos from Wikimedia Commons'].filter(Boolean).join(' · ');
+  const anyFree = items.some((x) => x.p.thumbFrom === 'commons');
+  const credits = [
+    rowPhotosOn() && 'Photos from Google Maps',
+    anyTa && (ratingsName === 'Tripadvisor' ? 'Ratings and photos from Tripadvisor' : ratingsName),
+    anyFree && 'Some photos from Wikimedia Commons',
+  ].filter(Boolean).join(' · ');
   return `
     ${backBtn('back-results', 'Categories')}
     <div class="sheet-title">${tile(s.tab, 'lg')}<div style="flex:1;min-width:0"><h2>${esc(title)}</h2><div class="footnote">${items.length} place${items.length === 1 ? '' : 's'} nearby</div></div></div>
@@ -7071,7 +7223,7 @@ function loadDetails(p) {
     const failed = () => { if (++kitFailures >= 2) placesKitKey = null; fallback(); };
     p.kit = { status: 'loading' };
     loadPlacesKit(placesKitKey)
-      .then(() => findPlaceId(p))
+      .then(() => placeIdFor(p))
       .then((id) => {
         if (!id) return fallback();
         p.kit = {
@@ -7688,6 +7840,8 @@ function applyTheme() {
   const t = state.settings.theme;
   if (t === 'auto') document.documentElement.removeAttribute('data-theme');
   else document.documentElement.setAttribute('data-theme', t);
+  // The phone's status bar (and the browser's own bars) in the app's colours.
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', isDark() ? '#000000' : '#f2f2f7');
   if (map) addBasemap();
   anim?.setTheme(isDark() ? 'dark' : 'light');
 }

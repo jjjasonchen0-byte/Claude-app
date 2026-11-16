@@ -62,6 +62,82 @@ const CUISINE = {
 
 const titleCase = (s) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
+// What a place serves, for the line under its name in a list ("Korean · BBQ"):
+// the listing names above, said for one place where they differ.
+const SERVES = {
+  coffee_shop: 'Coffee', fried_chicken: 'Fried chicken', chicken_wings: 'Chicken wings', wings: 'Chicken wings',
+  korean_barbecue: 'Korean BBQ', korean_bbq: 'Korean BBQ', regional: 'Local food', fish: 'Seafood', cocktail: 'Cocktails',
+  wine: 'Wine', beer: 'Beer', ice_cream: 'Ice cream', frozen_yogurt: 'Frozen yoghurt', gelato: 'Gelato', chocolate: 'Chocolate',
+};
+const bbq = (s) => s.replace(/\b(Bbq|Barbecue)\b/g, 'BBQ');
+
+/** What a place serves, from OpenStreetMap's cuisine tag ("korean;barbecue" → ["Korean", "BBQ"]). */
+export function cuisineLabels(cuisine) {
+  const out = [];
+  for (const raw of String(cuisine || '').split(/[;,]/)) {
+    const c = raw.trim().toLowerCase().replace(/[\s-]+/g, '_');
+    if (!c) continue;
+    const label = bbq(SERVES[c] || CUISINE[c] || titleCase(c));
+    if (!out.includes(label)) out.push(label);
+  }
+  return out;
+}
+
+// Google's kinds of place (its "types"), for places OpenStreetMap gives no cuisine:
+// any "…_restaurant" by its cuisine, and these.
+const GOOGLE_KINDS = {
+  hamburger_restaurant: 'Burgers', fast_food_restaurant: 'Fast food', barbecue_restaurant: 'BBQ',
+  korean_barbecue_restaurant: 'Korean BBQ', steak_house: 'Steakhouse', coffee_shop: 'Coffee', cafe: 'Café',
+  bakery: 'Bakery', bar: 'Bar', pub: 'Pub', wine_bar: 'Wine bar', cocktail_bar: 'Cocktails', ice_cream_shop: 'Ice cream',
+  sandwich_shop: 'Sandwiches', meal_takeaway: 'Takeaway', dessert_shop: 'Desserts', donut_shop: 'Doughnuts',
+  juice_shop: 'Juice', tea_house: 'Tea', bagel_shop: 'Bagels', chocolate_shop: 'Chocolate', confectionery: 'Sweets',
+  acai_shop: 'Açaí', deli: 'Deli', diner: 'Diner', food_court: 'Food court', brewpub: 'Brewpub', cafeteria: 'Cafeteria',
+};
+const GENERIC_RESTAURANTS = new Set(['restaurant', 'fine_dining_restaurant', 'family_restaurant', 'buffet_restaurant']);
+
+/** Google's types for a place as short names, cuisines first (["korean_restaurant", "barbecue_restaurant", …] → ["Korean", "BBQ"]). */
+export function googleKinds(types) {
+  const cuisines = [], others = [];
+  for (const t of types || []) {
+    if (/_restaurant$/.test(t) && !GENERIC_RESTAURANTS.has(t)) {
+      const c = t.replace(/_restaurant$/, '');
+      const label = GOOGLE_KINDS[t] || bbq(SERVES[c] || CUISINE[c] || titleCase(c));
+      if (!cuisines.includes(label)) cuisines.push(label);
+    } else if (GOOGLE_KINDS[t] && !others.includes(GOOGLE_KINDS[t])) others.push(GOOGLE_KINDS[t]);
+  }
+  return [...cuisines, ...others.filter((l) => !cuisines.includes(l))];
+}
+
+/**
+ * A very short summary of a place, for the line under its name: what it
+ * serves ("Korean · BBQ", "Fried chicken"), from OpenStreetMap, else from
+ * Google's kinds of place (`p.gtypes`, food and drink only), else what it is
+ * ("Fast food", "Museum").
+ */
+export function summaryOf(p) {
+  const food = cuisineLabels(p.cuisine);
+  if (food.length) return food.slice(0, 3).join(' · ');
+  const google = ['food', 'drinks'].includes(p.tab) ? googleKinds(p.gtypes) : [];
+  if (google.length) return google.slice(0, 2).join(' · ');
+  return p.kind || p.group || '';
+}
+
+// What a place is, said for one place (OpenStreetMap's amenity, shop, leisure or tourism value).
+const KIND = {
+  restaurant: 'Restaurant', food_court: 'Food court', fast_food: 'Fast food', cafe: 'Café', bar: 'Bar', pub: 'Pub',
+  biergarten: 'Beer garden', ice_cream: 'Ice cream', bakery: 'Bakery', pastry: 'Patisserie', coffee: 'Coffee shop', tea: 'Tea shop',
+  cinema: 'Cinema', nightclub: 'Nightclub', bowling_alley: 'Bowling', escape_game: 'Escape room', amusement_arcade: 'Arcade',
+  gambling: 'Arcade', miniature_golf: 'Mini golf', sports_centre: 'Sports centre', fitness_centre: 'Gym', ice_rink: 'Ice rink',
+  water_park: 'Water park', theme_park: 'Theme park', zoo: 'Zoo', aquarium: 'Aquarium', karaoke_box: 'Karaoke',
+  trampoline_park: 'Trampoline park', museum: 'Museum', gallery: 'Gallery', arts_centre: 'Arts centre', theatre: 'Theatre',
+  library: 'Library', attraction: 'Attraction', community_centre: 'Community centre', park: 'Park', garden: 'Garden',
+  playground: 'Playground', nature_reserve: 'Nature reserve', viewpoint: 'Viewpoint', picnic_site: 'Picnic spot',
+  beach_resort: 'Beach', mall: 'Shopping centre', department_store: 'Department store', books: 'Bookshop', games: 'Games shop',
+  video_games: 'Video games', toys: 'Toy shop', music: 'Music shop', musical_instrument: 'Music shop', gift: 'Gift shop',
+  clothes: 'Clothes shop', shoes: 'Shoe shop', supermarket: 'Supermarket', convenience: 'Convenience store', marketplace: 'Market',
+};
+const kindOf = (tags) => KIND[tags.amenity] || KIND[tags.shop] || KIND[tags.leisure] || KIND[tags.tourism] || (tags.natural === 'beach' ? 'Beach' : '');
+
 /** Map OSM tags to { tab, group } or null if uninteresting. */
 export function categorize(tags = {}) {
   const a = tags.amenity, l = tags.leisure, t = tags.tourism, s = tags.shop;
@@ -162,6 +238,7 @@ export function parsePois(elements, center) {
       lat, lon,
       tab: cat.tab,
       group: cat.group,
+      kind: kindOf(tags),
       address: formatAddress(tags),
       cuisine: tags.cuisine || '',
       hours: tags.opening_hours || '',

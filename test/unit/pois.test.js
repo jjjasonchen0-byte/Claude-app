@@ -93,6 +93,34 @@ test('places: when Overpass is slow, Photon steps in after a moment', async () =
   } finally { s.restore(); }
 });
 
+import { summaryOf, cuisineLabels, googleKinds } from '../../public/js/pois.js';
+
+test('a very short summary of each place: what it serves, else what it is', () => {
+  const place = (tags) => parsePois([{ type: 'node', id: 1, lat: 51.5, lon: -0.1, tags: { name: 'A place', ...tags } }], { lat: 51.5, lon: -0.1 })[0];
+  const kbbq = place({ amenity: 'restaurant', cuisine: 'korean;barbecue' });
+  const kfc = place({ amenity: 'fast_food', cuisine: 'fried_chicken', brand: 'KFC' });
+  const noodles = place({ amenity: 'restaurant', cuisine: 'Noodle; chinese ;noodle' });
+  const plain = place({ amenity: 'restaurant' });
+  const takeaway = place({ amenity: 'fast_food' });
+  const pub = place({ amenity: 'pub' });
+  const museum = place({ tourism: 'museum' });
+  assert.equal(summaryOf(kbbq), 'Korean · BBQ');
+  assert.equal(summaryOf(kfc), 'Fried chicken');
+  assert.equal(summaryOf(noodles), 'Noodles · Chinese', 'each once, in order');
+  assert.equal(summaryOf(plain), 'Restaurant');
+  assert.equal(summaryOf(takeaway), 'Fast food');
+  assert.equal(summaryOf(pub), 'Pub');
+  assert.equal(summaryOf(museum), 'Museum');
+  assert.deepEqual(cuisineLabels('korean_bbq;sri_lankan'), ['Korean BBQ', 'Sri Lankan']);
+  // No cuisine on the map: Google's kinds of place, food and drink only, cuisines first.
+  assert.deepEqual(googleKinds(['bar', 'korean_restaurant', 'barbecue_restaurant', 'restaurant', 'food', 'point_of_interest']), ['Korean', 'BBQ', 'Bar']);
+  assert.deepEqual(googleKinds(['restaurant', 'food', 'establishment']), []);
+  assert.equal(summaryOf({ ...plain, gtypes: ['chicken_restaurant', 'fast_food_restaurant', 'restaurant'] }), 'Chicken · Fast food');
+  assert.equal(summaryOf({ ...plain, gtypes: ['restaurant'] }), 'Restaurant');
+  assert.equal(summaryOf({ ...kbbq, gtypes: ['japanese_restaurant'] }), 'Korean · BBQ', 'the map\'s cuisine first');
+  assert.equal(summaryOf({ ...museum, gtypes: ['art_gallery_restaurant'] }), 'Museum', 'not for museums and the like');
+});
+
 test('a place whose image link has a stray % still loads with the rest of the list', () => {
   const pois = parsePois([
     { type: 'node', id: 1, lat: 51.5, lon: -0.1, tags: { name: 'Odd Museum', tourism: 'museum', image: 'https://commons.wikimedia.org/wiki/File:100%_odd.jpg' } },

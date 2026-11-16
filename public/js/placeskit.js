@@ -40,6 +40,38 @@ export async function findPlaceId(p, maps = window.google.maps) {
   return places?.[0]?.id || null;
 }
 
+const ids = new Map(); // a place from OpenStreetMap → Promise of its Google ID (or null), looked for once a visit
+
+/** Google's ID for a place, looked for once a visit (for its list photo and its card alike). */
+export function placeIdFor(p, maps = window.google.maps) {
+  const key = `${p.id}|${p.name}|${Number(p.lat).toFixed(5)},${Number(p.lon).toFixed(5)}`;
+  if (!ids.has(key)) ids.set(key, findPlaceId(p, maps).catch((err) => { ids.delete(key); throw err; }));
+  return ids.get(key);
+}
+
+/**
+ * A photo of a place for a list, and the kinds of place Google says it is:
+ * { url, by, types }, or null when Google doesn't know it there. Looking for
+ * the place and its photos is free; its position (to check it's the same
+ * place) and kinds are a Place Details Essentials request (10,000 a month
+ * free, then $5 per 1,000); the photo itself, once shown, is a Place Details
+ * Photos request (1,000 a month free, then $7 per 1,000).
+ */
+export async function rowPhoto(p, { size = 240, maps = window.google.maps } = {}) {
+  const id = await placeIdFor(p, maps);
+  if (!id) return null;
+  const { Place } = await maps.importLibrary('places');
+  const place = new Place({ id });
+  await place.fetchFields({ fields: ['location', 'photos', 'types'] });
+  if (!samePlace(p, place)) return null;
+  const photo = place.photos?.[0];
+  return {
+    url: photo ? photo.getURI({ maxWidth: size, maxHeight: size }) : null,
+    by: (photo?.authorAttributions || []).map((a) => a.displayName).filter(Boolean).join(', '),
+    types: Array.isArray(place.types) ? place.types : [],
+  };
+}
+
 /**
  * Is the place Google loaded the same as ours? Google's card brings its
  * place's position but not its name (and nothing in the card can be read

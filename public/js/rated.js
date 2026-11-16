@@ -66,16 +66,17 @@ export async function rateAll(pois) {
   }
 }
 
-/** A photo URL for a list row, or null. */
+/** A photo URL for a list row, or null (`p.thumbFrom` says whose: 'tripadvisor' or 'commons'). */
 export async function thumbFor(p) {
   if (p.thumb !== undefined) return p.thumb;
   if (p.rating?.id) {
     try {
       const { photo } = await getJson(`/api/places/photo/${encodeURIComponent(p.rating.id)}`);
-      if (photo?.url) return (p.thumb = photo.url);
+      if (photo?.url) { p.thumbFrom = 'tripadvisor'; return (p.thumb = photo.url); }
     } catch { /* fall through to free photos */ }
   }
   const free = await freeImage(p).catch(() => null);
+  if (free) p.thumbFrom = 'commons';
   return (p.thumb = free ? commonsUrl(free, 240) : null);
 }
 
