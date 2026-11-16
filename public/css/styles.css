@@ -220,6 +220,8 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .growth-canvas.zooming { transition: transform 0.25s cubic-bezier(0, 0, 0.25, 1), opacity 0.3s; }
 .growth-canvas.dim { opacity: 0.25; }
 .growth-canvas.away { opacity: 0; }
+/* The floods' fronts add their light to the floods below them (dark theme). */
+.growth-canvas.adds, .flood-glow.adds { mix-blend-mode: plus-lighter; }
 
 /* ---------------------------------------------------------------- search animation: the flood map */
 /* Light and dark like the rest of the app: ink is the text colour, glass the name tags and pins. */
@@ -232,6 +234,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .flood-base { z-index: 447; opacity: 0; }
 .flood-base.on { opacity: 1; }
 .flood-fill { z-index: 448; transition: opacity 0.25s; }
+.flood-glow { z-index: 449; transition: none; }
 .topbar { transition: opacity 0.3s; }
 #screen-main.flooding .topbar { opacity: 0; pointer-events: none; }
 #screen-main.flooding .topbar > * { pointer-events: none; }

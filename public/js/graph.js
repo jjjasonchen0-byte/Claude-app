@@ -18,8 +18,10 @@ export function rng(seed) {
 /**
  * Make an undirected CSR graph from parallel edge arrays. `kinds` (optional,
  * one small number per edge) lets a search skip some kinds of street.
+ * `lengths` (optional, metres per edge) is used instead of the straight line
+ * between each edge's ends.
  */
-export function fromEdgeList(lat, lon, A, B, kinds = null) {
+export function fromEdgeList(lat, lon, A, B, kinds = null, lengths = null) {
   const n = lat.length;
   const deg = new Int32Array(n + 1);
   for (let k = 0; k < A.length; k++) { deg[A[k]]++; deg[B[k]]++; }
@@ -31,7 +33,7 @@ export function fromEdgeList(lat, lon, A, B, kinds = null) {
   const adjKind = kinds ? new Uint8Array(adjStart[n]) : null;
   for (let k = 0; k < A.length; k++) {
     const a = A[k], b = B[k];
-    const len = haversine(lat[a], lon[a], lat[b], lon[b]);
+    const len = lengths ? lengths[k] : haversine(lat[a], lon[a], lat[b], lon[b]);
     if (adjKind) { adjKind[fill[a]] = kinds[k]; adjKind[fill[b]] = kinds[k]; }
     adjNode[fill[a]] = b; adjLen[fill[a]++] = len;
     adjNode[fill[b]] = a; adjLen[fill[b]++] = len;

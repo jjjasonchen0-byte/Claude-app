@@ -886,6 +886,8 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .growth-canvas.zooming { transition: transform 0.25s cubic-bezier(0, 0, 0.25, 1), opacity 0.3s; }
 .growth-canvas.dim { opacity: 0.25; }
 .growth-canvas.away { opacity: 0; }
+/* The floods' fronts add their light to the floods below them (dark theme). */
+.growth-canvas.adds, .flood-glow.adds { mix-blend-mode: plus-lighter; }
 
 /* ---------------------------------------------------------------- search animation: the flood map */
 /* Light and dark like the rest of the app: ink is the text colour, glass the name tags and pins. */
@@ -898,6 +900,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .flood-base { z-index: 447; opacity: 0; }
 .flood-base.on { opacity: 1; }
 .flood-fill { z-index: 448; transition: opacity 0.25s; }
+.flood-glow { z-index: 449; transition: none; }
 .topbar { transition: opacity 0.3s; }
 #screen-main.flooding .topbar { opacity: 0; pointer-events: none; }
 #screen-main.flooding .topbar > * { pointer-events: none; }
@@ -1659,8 +1662,10 @@ function rng(seed) {
 /**
  * Make an undirected CSR graph from parallel edge arrays. `kinds` (optional,
  * one small number per edge) lets a search skip some kinds of street.
+ * `lengths` (optional, metres per edge) is used instead of the straight line
+ * between each edge's ends.
  */
-function fromEdgeList(lat, lon, A, B, kinds = null) {
+function fromEdgeList(lat, lon, A, B, kinds = null, lengths = null) {
   const n = lat.length;
   const deg = new Int32Array(n + 1);
   for (let k = 0; k < A.length; k++) { deg[A[k]]++; deg[B[k]]++; }
@@ -1672,7 +1677,7 @@ function fromEdgeList(lat, lon, A, B, kinds = null) {
   const adjKind = kinds ? new Uint8Array(adjStart[n]) : null;
   for (let k = 0; k < A.length; k++) {
     const a = A[k], b = B[k];
-    const len = haversine(lat[a], lon[a], lat[b], lon[b]);
+    const len = lengths ? lengths[k] : haversine(lat[a], lon[a], lat[b], lon[b]);
     if (adjKind) { adjKind[fill[a]] = kinds[k]; adjKind[fill[b]] = kinds[k]; }
     adjNode[fill[a]] = b; adjLen[fill[a]++] = len;
     adjNode[fill[b]] = a; adjLen[fill[b]++] = len;
@@ -2252,19 +2257,10 @@ function prepareNetwork(roads) {
     const s = Math.sin((Math.max(-85.05, Math.min(85.05, lat[i])) * Math.PI) / 180);
     ny[i] = (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * 256;
   }
-  // A "road" for the counter: the stretch of street between two junctions.
-  const deg = new Int32Array(n), e1 = new Int32Array(n), e2 = new Int32Array(n);
-  for (let k = 0; k < m; k++) {
-    for (const v of [A[k], B[k]]) { if (deg[v] === 0) e1[v] = k; else if (deg[v] === 1) e2[v] = k; deg[v]++; }
-  }
-  const up = Int32Array.from({ length: Math.max(n, m) }, (_, i) => i);
-  const find = (i) => { while (up[i] !== i) { up[i] = up[up[i]]; i = up[i]; } return i; };
-  for (let v = 0; v < n; v++) if (deg[v] === 2) { const a = find(e1[v]), b = find(e2[v]); if (a !== b) up[a] = b; }
-  const chain = new Int32Array(m);
-  const dense = new Map();
-  for (let k = 0; k < m; k++) { const r = find(k); if (!dense.has(r)) dense.set(r, dense.size); chain[k] = dense.get(r); }
+  const { chain, chains, deg } = roadsOf(n, A, B);
   // The largest connected network: floods start from a corner on it, not a stray car park.
-  for (let i = 0; i < n; i++) up[i] = i;
+  const up = Int32Array.from({ length: n }, (_, i) => i);
+  const find = (i) => { while (up[i] !== i) { up[i] = up[up[i]]; i = up[i]; } return i; };
   for (let k = 0; k < m; k++) { const a = find(A[k]), b = find(B[k]); if (a !== b) up[a] = b; }
   const size = new Map();
   for (let i = 0; i < n; i++) if (deg[i]) size.set(find(i), (size.get(find(i)) || 0) + 1);
@@ -2277,8 +2273,123 @@ function prepareNetwork(roads) {
     if (!grid.has(key)) grid.set(key, []);
     grid.get(key).push(i);
   }
-  const major = Uint8Array.from(kinds, (k) => ((k & 7) <= 2 ? 1 : 0));
-  return { n, m, lat, lon, A, B, kinds, g, len, nx, ny, chain, chains: dense.size, grid, major };
+  return { n, m, lat, lon, A, B, kinds, g, len, nx, ny, chain, chains, grid, major: majorOf(kinds) };
+}
+
+const majorOf = (kinds) => Uint8Array.from(kinds, (k) => ((k & 7) <= 2 ? 1 : 0));
+
+/** "Roads" for the counter: each stretch of street between two junctions (or ends) gets one number. */
+function roadsOf(n, A, B) {
+  const m = A.length;
+  const deg = new Int32Array(n), e1 = new Int32Array(n), e2 = new Int32Array(n);
+  for (let k = 0; k < m; k++) {
+    for (const v of [A[k], B[k]]) { if (deg[v] === 0) e1[v] = k; else if (deg[v] === 1) e2[v] = k; deg[v]++; }
+  }
+  const up = Int32Array.from({ length: m }, (_, i) => i);
+  const find = (i) => { while (up[i] !== i) { up[i] = up[up[i]]; i = up[i]; } return i; };
+  for (let v = 0; v < n; v++) if (deg[v] === 2) { const a = find(e1[v]), b = find(e2[v]); if (a !== b) up[a] = b; }
+  const chain = new Int32Array(m);
+  const dense = new Map();
+  for (let k = 0; k < m; k++) { const r = find(k); if (!dense.has(r)) dense.set(r, dense.size); chain[k] = dense.get(r); }
+  return { chain, chains: dense.size, deg };
+}
+
+/**
+ * The same streets in fewer, longer pieces, for flooding and drawing at one
+ * zoom. The map's streets come in short pieces (most shorter than a pixel
+ * on screen, and each one costs as much to draw as a long one), so a stretch
+ * of street through corners where nothing else joins it (and of one kind) is
+ * cut only where it bends by more than `tolerance`, or where a piece would
+ * be longer than `maxLength` (both in the network's map units: Web Mercator
+ * at zoom 0, as nx / ny). Each piece keeps its length along the street, so
+ * the floods move as before. The corners left out have no streets in the
+ * result; positions and the nearest-corner index are shared with `net`.
+ */
+function simplifyNetwork(net, { tolerance, maxLength = Infinity }) {
+  const { n, m, A, B, kinds, nx, ny } = net;
+  // The streets at each corner (by street number).
+  const start = new Int32Array(n + 1);
+  for (let k = 0; k < m; k++) { start[A[k] + 1]++; start[B[k] + 1]++; }
+  for (let i = 0; i < n; i++) start[i + 1] += start[i];
+  const fill = start.slice(0, n);
+  const at = new Int32Array(start[n]);
+  for (let k = 0; k < m; k++) { at[fill[A[k]]++] = k; at[fill[B[k]]++] = k; }
+  // Corners that stay: junctions, dead ends, and where the kind of street changes.
+  const keep = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    if (start[i + 1] - start[i] !== 2) { keep[i] = 1; continue; }
+    const a = at[start[i]], b = at[start[i] + 1];
+    if (a === b || kinds[a] !== kinds[b]) keep[i] = 1; // a === b: a loop from the corner back to itself
+  }
+  const outA = [], outB = [], outK = [], outL = [];
+  const used = new Uint8Array(m);
+  let seq = new Int32Array(64), along = new Float64Array(64), mark = new Uint8Array(64);
+  const stack = [];
+  const tol2 = tolerance * tolerance;
+  const far = (i, j) => { // the point between i and j furthest from the line i–j, if further than the tolerance
+    const ax = nx[seq[i]], ay = ny[seq[i]], dx = nx[seq[j]] - ax, dy = ny[seq[j]] - ay, l2 = dx * dx + dy * dy;
+    let worst = -1, wd = tol2;
+    for (let p = i + 1; p < j; p++) {
+      const px = nx[seq[p]] - ax, py = ny[seq[p]] - ay;
+      const t = l2 > 0 ? Math.max(0, Math.min(1, (px * dx + py * dy) / l2)) : 0;
+      const ex = px - t * dx, ey = py - t * dy, d2 = ex * ex + ey * ey;
+      if (d2 > wd) { wd = d2; worst = p; }
+    }
+    return worst;
+  };
+  // From a corner that stays along street k to the next one, as few pieces as will do.
+  const run = (u, k) => {
+    let count = 0, v = u, e = k, total = 0;
+    const push = (node) => {
+      if (count === seq.length) {
+        const s = new Int32Array(count * 2); s.set(seq); seq = s;
+        const l = new Float64Array(count * 2); l.set(along); along = l;
+        mark = new Uint8Array(count * 2);
+      }
+      seq[count] = node; along[count++] = total;
+    };
+    push(u);
+    for (;;) {
+      used[e] = 1;
+      total += net.len[e];
+      const w = A[e] === v ? B[e] : A[e];
+      push(w);
+      if (keep[w]) break;
+      const next = at[start[w]] === e ? at[start[w] + 1] : at[start[w]];
+      if (used[next]) break;
+      v = w; e = next;
+    }
+    // Douglas–Peucker: keep the points that bend the line by more than the tolerance.
+    mark.fill(0, 0, count);
+    mark[0] = mark[count - 1] = 1;
+    stack.push(0, count - 1);
+    while (stack.length) {
+      const j = stack.pop(), i = stack.pop();
+      const p = far(i, j);
+      if (p >= 0) { mark[p] = 1; stack.push(i, p, p, j); }
+    }
+    // …and enough others that no piece is longer than maxLength (where the street has a point to cut at).
+    const piece = (i, j) => { outA.push(seq[i]); outB.push(seq[j]); outK.push(kinds[k]); outL.push(along[j] - along[i]); };
+    let last = 0, len = 0;
+    for (let p = 1; p < count; p++) {
+      const step = Math.hypot(nx[seq[p]] - nx[seq[p - 1]], ny[seq[p]] - ny[seq[p - 1]]);
+      if (len + step > maxLength && p - 1 > last) { piece(last, p - 1); last = p - 1; len = 0; }
+      len += step;
+      if (mark[p]) { piece(last, p); last = p; len = 0; }
+    }
+  };
+  for (let i = 0; i < n; i++) {
+    if (!keep[i]) continue;
+    for (let s = start[i]; s < start[i + 1]; s++) if (!used[at[s]]) run(i, at[s]);
+  }
+  // Rings of street with no junction on them: start anywhere.
+  for (let k = 0; k < m; k++) if (!used[k]) { keep[A[k]] = 1; run(A[k], k); }
+  const A2 = Int32Array.from(outA), B2 = Int32Array.from(outB), K2 = Uint8Array.from(outK), L2 = Float32Array.from(outL);
+  const { chain, chains } = roadsOf(n, A2, B2);
+  return {
+    ...net, m: A2.length, A: A2, B: B2, kinds: K2, len: L2,
+    g: fromEdgeList(net.lat, net.lon, A2, B2, K2, L2), chain, chains, major: majorOf(K2),
+  };
 }
 
 /** The nearest corner on the main network with a street this way of travelling can use (-1 if none within ~2 km). */
@@ -2341,12 +2452,31 @@ function floodFrom(net, person) {
     add(a, b, k, ta + off, meet + off, f);
     add(b, a, k, tb + off, meet + off, 1 - f);
   }
-  const ids = (key) => Int32Array.from({ length: p }, (_, i) => i).sort((x, y) => key[x] - key[y]);
   const starts = Float32Array.from(chainStart.filter(Number.isFinite)).sort();
   return {
     start, at: (i) => (i >= 0 ? time(i) : Infinity), count: p,
-    from, to, edge, t0, t1, frac, byStart: ids(t0), byEnd: ids(t1), roadStarts: starts,
+    from, to, edge, t0, t1, frac, byStart: order(t0, p), byEnd: order(t1, p), roadStarts: starts,
   };
+}
+
+/**
+ * The first n positions of `key` (a Float32Array of times, none below 0)
+ * in order of their times: a radix sort on the numbers' bits (which for
+ * floats of one sign are in the same order as the numbers), many times
+ * quicker than sorting with a comparison.
+ */
+function order(key, n) {
+  const bits = new Uint32Array(key.buffer, key.byteOffset, n);
+  let idx = Int32Array.from({ length: n }, (_, i) => i), tmp = new Int32Array(n);
+  const count = new Int32Array(2048);
+  for (let shift = 0; shift < 32; shift += 11) {
+    count.fill(0);
+    for (let i = 0; i < n; i++) count[(bits[idx[i]] >>> shift) & 2047]++;
+    for (let b = 0, sum = 0; b < 2048; b++) { const c = count[b]; count[b] = sum; sum += c; }
+    for (let i = 0; i < n; i++) { const j = idx[i]; tmp[count[(bits[j] >>> shift) & 2047]++] = j; }
+    [idx, tmp] = [tmp, idx];
+  }
+  return idx;
 }
 
 /**
@@ -2399,10 +2529,24 @@ const THEMES = {
 };
 const BASE = { minorW: 0.7, majorW: 1.2 };
 const FLOOD = { minorW: 1.05, majorW: 1.7, alpha: 0.88 };
-const FRONT = [1, 0.6, 0.3, 0.08]; // the front colour over the newest … oldest quarter of the front
+// The front: its colour over the newest … oldest third of it, which is this
+// much of each person's trip long; and its glow, drawn small and scaled up
+// (so soft, and cheap to draw).
+const FRONT = [1, 0.6, 0.3];
+const FRONT_BAND = 0.0525;
+const GLOW = { scale: 0.5, width: 5, alpha: 0.35 };
 // Route lines: one plain line in the person's colour, its pattern telling how
 // they travel (dash lengths are multiples of the line's width).
 const ROUTE = { width: 4.2 };
+// The streets for one zoom: bends of less than this many screen pixels are
+// straightened, and no piece is longer than maxLength pixels (so where two
+// floods meet along a long road is still drawn closely).
+const SIMPLIFY = { tolerance: 0.45, maxLength: 16 };
+// The floods pulling back (see prepareRetract): the screen in cells this many
+// pixels across, each going at its own time. Of the way from the furthest
+// streets to the route, the bright edge is `rim` + `fade` deep, and the
+// streets fade out over the last `fade` of it.
+const RETRACT = { cell: 2, rim: 0.05, fade: 0.05, rimAlpha: 0.55 };
 // How long the best routes take to draw from everyone's door to the meeting
 // point (at normal speed). Their pace is the same throughout: no easing in
 // or out (each line moves at its person's own speed along their trip).
@@ -2455,9 +2599,11 @@ class FloodAnimation {
     };
     this.baseCanvas = make('flood-layer flood-base');
     this.floodCanvas = make('flood-layer flood-fill');
+    this.glowCanvas = make('flood-layer flood-glow');
     this.canvas = make('growth-canvas');
     this.base = this.baseCanvas.getContext('2d');
     this.fill = this.floodCanvas.getContext('2d');
+    this.glowCtx = this.glowCanvas.getContext('2d');
     this.top = this.canvas.getContext('2d');
     this.resize = this.resize.bind(this);
     this.redraw = () => { this.clearTransform(); this.place(); this.redrawAll(); };
@@ -2488,10 +2634,11 @@ class FloodAnimation {
   resize() {
     const size = this.map.getSize();
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    for (const c of [this.baseCanvas, this.floodCanvas, this.canvas]) {
+    for (const c of [this.baseCanvas, this.floodCanvas, this.glowCanvas, this.canvas]) {
       if (!c.isConnected) continue;
-      c.width = Math.round(size.x * dpr);
-      c.height = Math.round(size.y * dpr);
+      const r = c === this.glowCanvas ? GLOW.scale : dpr;
+      c.width = Math.round(size.x * r);
+      c.height = Math.round(size.y * r);
       c.style.width = `${size.x}px`;
       c.style.height = `${size.y}px`;
     }
@@ -2504,7 +2651,7 @@ class FloodAnimation {
   /** Line the canvases up with the top left of the map's view (the pane moves with the map). */
   place() {
     const at = this.map.containerPointToLayerPoint([0, 0]);
-    for (const c of [this.baseCanvas, this.floodCanvas, this.canvas]) if (c.isConnected) L.DomUtil.setPosition(c, at);
+    for (const c of [this.baseCanvas, this.floodCanvas, this.glowCanvas, this.canvas]) if (c.isConnected) L.DomUtil.setPosition(c, at);
   }
 
   /** Map position → canvas pixels for the current view. */
@@ -2561,6 +2708,7 @@ class FloodAnimation {
     this.theme = th;
     for (const f of this.shown) { f.color = shade(this.people[f.i].color, th.shade); f.front = th.front(this.people[f.i].color); }
     for (const r of this.routes || []) r.glow = shade(r.color, th.shade);
+    if (!this.routes && this.shown.length) this.additive(true); // the floods are running
     this.redrawAll();
   }
 
@@ -2574,14 +2722,21 @@ class FloodAnimation {
     this.map.off('moveend zoomend', this.redraw);
     this.map.off('move zoom viewreset', this.onMove);
     this.map.off('zoomanim', this.onZoomAnim);
-    for (const c of [this.baseCanvas, this.floodCanvas, this.canvas]) c.remove();
+    for (const c of [this.baseCanvas, this.floodCanvas, this.glowCanvas, this.canvas]) c.remove();
   }
 
   // ------------------------------------------------ the streets
 
-  /** The streets to flood: as roads.js makes them, or a network prepared from them already (`net`). */
+  /**
+   * The streets to flood: as roads.js makes them, or a network prepared from
+   * them already (`net`). The floods run over the same streets in fewer,
+   * longer pieces for this zoom (see simplifyNetwork): the map holds still
+   * while they run, and drawing a frame costs by the piece.
+   */
   setRoads(roads, net = null) {
-    this.net = net || (roads && roads.A.length ? prepareNetwork(roads) : null);
+    const full = net || (roads && roads.A.length ? prepareNetwork(roads) : null);
+    const px = 1 / 2 ** this.map.getZoom(); // one screen pixel, in the network's map units
+    this.net = full ? simplifyNetwork(full, { tolerance: SIMPLIFY.tolerance * px, maxLength: SIMPLIFY.maxLength * px }) : null;
     this.drawBase();
   }
 
@@ -2660,28 +2815,37 @@ class FloodAnimation {
     ctx.globalCompositeOperation = 'source-over';
   }
 
-  /** Move a flood's clock on: newly settled streets go onto the flood canvas. */
+  /**
+   * Move a flood's clock on: the streets it has just finished go onto the
+   * flood canvas in its colour (the white of its front is drawn over them
+   * for a while yet: see drawFronts).
+   */
   advance(f, c, band) {
     const { fl } = f;
     f.c = c; f.band = band;
     while (f.p0 < fl.count && fl.t0[fl.byStart[f.p0]] <= c) f.active.push(fl.byStart[f.p0++]);
-    const from = f.s;
-    while (f.s < fl.count && fl.t1[fl.byEnd[f.s]] <= c - band) f.s++;
-    if (f.s > from) {
+    const from = f.e;
+    while (f.e < fl.count && fl.t1[fl.byEnd[f.e]] <= c) f.e++;
+    if (f.e > from) {
       const v = this.view(), paths = [new Path2D(), new Path2D()];
       this.fill.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-      this.trace(f, from, f.s, paths, v);
+      this.trace(f, from, f.e, paths, v);
       this.strokeFlood(this.fill, f, paths);
     }
-    if (f.e < f.s) f.e = f.s;
-    while (f.e < fl.count && fl.t1[fl.byEnd[f.e]] <= c) f.e++;
+    while (f.s < f.e && fl.t1[fl.byEnd[f.s]] <= c - band) f.s++;
   }
 
-  /** The bright front of each flood: the newest streets white, fading to the person's colour. */
+  /**
+   * The bright front of each flood: the newest streets white, fading to the
+   * person's colour (the streets finished already have it, on the flood
+   * canvas; the ones the front is moving along get it here, so far).
+   */
   drawFronts(fade = 1) {
-    const { top: ctx } = this;
+    const { top: ctx, glowCtx: gctx } = this;
     const v = this.view();
     const own = this.owner;
+    gctx.setTransform(GLOW.scale, 0, 0, GLOW.scale, 0, 0);
+    this.glowing = true;
     for (const f of this.shown) {
       if (f.frozen) continue;
       const { fl } = f;
@@ -2693,8 +2857,7 @@ class FloodAnimation {
         const q = fl.byEnd[j];
         if (own && own[fl.edge[q]] !== f.i) continue;
         const age = (f.c - fl.t1[q]) / f.band;
-        this.piece(fl, q, Infinity, colour[net.major[fl.edge[q]]], v);
-        const k = Math.min(FRONT.length - 1, Math.floor(age * FRONT.length));
+        const k = Math.max(0, Math.min(FRONT.length - 1, Math.floor(age * FRONT.length)));
         this.piece(fl, q, Infinity, white[k], v);
         if (k === 0) this.piece(fl, q, Infinity, glow, v);
       }
@@ -2710,17 +2873,32 @@ class FloodAnimation {
       }
       f.active.length = w;
       this.strokeFlood(ctx, f, colour);
+      // Flat ends: much quicker to draw than round ones on so many short
+      // pieces, and too thin (or too soft) for the difference to show.
+      gctx.globalCompositeOperation = this.theme.blend;
+      gctx.lineCap = 'butt';
+      gctx.strokeStyle = f.color;
+      gctx.globalAlpha = GLOW.alpha * fade;
+      gctx.lineWidth = GLOW.width;
+      gctx.stroke(glow);
       ctx.globalCompositeOperation = this.theme.blend;
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = f.color;
-      ctx.globalAlpha = 0.35 * fade;
-      ctx.lineWidth = 5;
-      ctx.stroke(glow);
+      ctx.lineCap = 'butt';
       ctx.strokeStyle = f.front;
       FRONT.forEach((a, k) => { ctx.globalAlpha = a * fade; ctx.lineWidth = k === 0 ? 1.6 : 1.2; ctx.stroke(white[k]); });
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
     }
+    gctx.globalAlpha = 1;
+    gctx.globalCompositeOperation = 'source-over';
+  }
+
+  /**
+   * The front's canvas adds its light to the floods below it (in the dark
+   * theme), as it did when the streets behind the front were drawn on it
+   * too. Only while the floods run: routes and travellers are painted.
+   */
+  additive(on) {
+    for (const c of [this.canvas, this.glowCanvas]) c.classList.toggle('adds', !!on && this.theme.blend === 'lighter');
   }
 
   /** Stop the floods where they are: the front fades and everything left settles. */
@@ -2728,25 +2906,52 @@ class FloodAnimation {
     const ok = await this.run(380, (t) => { this.clearTop(); this.drawFronts(1 - t); });
     for (const f of this.shown) this.freeze(f);
     this.clearTop();
+    if (ok) this.snapshotFloods();
     return ok;
   }
 
-  /** A flood that has stopped: its front goes onto the flood canvas in its colour. */
+  /** A flood that has stopped: the streets its front was part way along go onto the flood canvas in its colour. */
   freeze(f) {
     if (f.frozen) return;
     const v = this.view();
     const paths = [new Path2D(), new Path2D()];
-    this.trace(f, f.s, f.e, paths, v);
-    for (const q of f.active) if (!this.owner || this.owner[f.fl.edge[q]] === f.i) this.piece(f.fl, q, f.c, paths[this.net.major[f.fl.edge[q]]], v);
+    this.partial(f, paths, v);
     this.fill.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.strokeFlood(this.fill, f, paths);
     f.frozen = true;
   }
 
+  /** Add the streets a flood is part way along to paths, as far as it has got. */
+  partial(f, paths, v) {
+    const { fl } = f;
+    for (const q of f.active) if (fl.t1[q] > f.c && (!this.owner || this.owner[fl.edge[q]] === f.i)) this.piece(fl, q, f.c, paths[this.net.major[fl.edge[q]]], v);
+  }
+
+  /** Every flood as far as it has got, from scratch, on the flood canvas. */
+  drawFloods() {
+    const { fill, dpr, size } = this;
+    this.snap = null;
+    fill.setTransform(dpr, 0, 0, dpr, 0, 0);
+    fill.clearRect(0, 0, size.x, size.y);
+    const v = this.view();
+    for (const f of this.shown) {
+      const paths = [new Path2D(), new Path2D()];
+      this.trace(f, 0, f.e, paths, v);
+      if (f.frozen) this.partial(f, paths, v);
+      this.strokeFlood(fill, f, paths);
+    }
+  }
+
+  /** Clear the canvas the fronts, routes and travellers are drawn on (and the fronts' glow). */
   clearTop() {
     const { top: ctx, dpr, size } = this;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, size.x, size.y);
+    if (this.glowing) {
+      this.glowing = false;
+      this.glowCtx.setTransform(1, 0, 0, 1, 0, 0);
+      this.glowCtx.clearRect(0, 0, this.glowCanvas.width, this.glowCanvas.height);
+    }
   }
 
   // ------------------------------------------------ the phases
@@ -2780,10 +2985,11 @@ class FloodAnimation {
       return [i, Math.max(60, Number.isFinite(t) ? t : reachTime(this.net, fl, this.people.filter((_, j) => j !== i)) * 0.6)];
     }));
     this.showFloods(list, ownership(this.net, list.map((i) => [i, this.flood(i), trip.get(i)])));
+    this.additive(true);
     const END = 1.03;
     const ok = await this.run(2600, (t) => {
       const progress = END * (0.5 * t + 0.5 * easeInOut(t));
-      for (const f of this.shown) this.advance(f, progress * trip.get(f.i), 0.07 * trip.get(f.i));
+      for (const f of this.shown) this.advance(f, progress * trip.get(f.i), FRONT_BAND * trip.get(f.i));
       this.clearTop();
       this.drawFronts();
       onProgress?.(t);
@@ -2820,6 +3026,7 @@ class FloodAnimation {
     this.routeClock = 0;
     this.gather = 0;
     this.glow = 1;
+    this.additive(false);
     const total = Math.max(1, ...this.routes.map((r) => r.duration));
     this.prepareRetract();
     // The routes draw while the floods pull back: both on one clock, so the
@@ -2836,115 +3043,186 @@ class FloodAnimation {
   }
 
   /**
-   * How far each piece of a flood is from that person's route, for pulling
-   * the floods back towards it (the furthest first). Distances come from a coarse
-   * distance map (about 300 cells across) rather than street by street.
+   * Once the floods have stopped: their picture, to pull back from (see
+   * drawRetract), and which cells of the screen (RETRACT.cell pixels
+   * across) each person's streets cover. Done while nothing moves (the
+   * floods have settled and the routes are on their way), so the pulling
+   * back starts smoothly.
+   */
+  snapshotFloods() {
+    this.snap = null;
+    const { net, size } = this;
+    if (!net || !size || !this.floodCanvas.isConnected) return;
+    const cw = this.floodCanvas.width, ch = this.floodCanvas.height;
+    if (!cw || !ch) return;
+    const v = this.view(), own = this.owner, c = RETRACT.cell;
+    const W = Math.ceil(size.x / c), H = Math.ceil(size.y / c);
+    const cells = this.shown.map((f) => {
+      const { fl } = f;
+      let out = new Int32Array(4096), count = 0;
+      const sample = (q, upTo) => {
+        let fr = fl.frac[q];
+        if (upTo < fl.t1[q]) fr *= fl.t1[q] > fl.t0[q] ? Math.max(0, (upTo - fl.t0[q]) / (fl.t1[q] - fl.t0[q])) : 1;
+        const ax = v.X(net.nx[fl.from[q]]), ay = v.Y(net.ny[fl.from[q]]);
+        const bx = ax + (v.X(net.nx[fl.to[q]]) - ax) * fr, by = ay + (v.Y(net.ny[fl.to[q]]) - ay) * fr;
+        if (Math.max(ax, bx) < 0 || Math.min(ax, bx) >= size.x || Math.max(ay, by) < 0 || Math.min(ay, by) >= size.y) return;
+        const steps = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / c));
+        for (let s = 0; s <= steps; s++) {
+          const x = ax + ((bx - ax) * s) / steps, y = ay + ((by - ay) * s) / steps;
+          if (!(x >= 0 && y >= 0 && x < size.x && y < size.y)) continue;
+          if (count === out.length) { const o = new Int32Array(count * 2); o.set(out); out = o; }
+          out[count++] = Math.floor(y / c) * W + Math.floor(x / c);
+        }
+      };
+      for (let j = 0; j < f.e; j++) { const q = fl.byEnd[j]; if (!own || own[fl.edge[q]] === f.i) sample(q, Infinity); }
+      for (const q of f.active) if (fl.t1[q] > f.c && (!own || own[fl.edge[q]] === f.i)) sample(q, f.c);
+      return out.subarray(0, count);
+    });
+    const img = this.fill.getImageData(0, 0, cw, ch);
+    this.snap = {
+      W, H, cells, img, cw, orig: new Uint8ClampedArray(img.data),
+      // Each cell's edges in canvas pixels.
+      xs: Int32Array.from({ length: W + 1 }, (_, i) => Math.min(cw, Math.round((i * c * cw) / size.x))),
+      ys: Int32Array.from({ length: H + 1 }, (_, i) => Math.min(ch, Math.round((i * c * ch) / size.y))),
+    };
+  }
+
+  /**
+   * Ready for the floods to pull back towards everyone's route, the
+   * furthest streets first: each cell of the screen gets the moment its
+   * streets go, 0 for those furthest from that person's route … 1 for those
+   * right beside it (by a coarse distance map of the screen and a little
+   * past it). Each frame then changes only the pixels of the cells on the
+   * move (see drawRetract), however many streets there are.
    */
   prepareRetract() {
-    if (!this.net) return;
-    const net = this.net;
-    for (const f of this.shown) {
-      const { fl } = f;
-      const route = this.routes?.[f.i];
-      const ids = [];
-      for (let j = 0; j < f.e; j++) {
-        const q = fl.byEnd[j];
-        if (!this.owner || this.owner[fl.edge[q]] === f.i) ids.push(q);
-      }
-      if (!ids.length || !route?.segs.length) { f.retract = null; continue; }
-      // Where each piece is: the middle of the stretch drawn.
-      const mx = new Float64Array(ids.length), my = new Float64Array(ids.length);
-      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-      ids.forEach((q, k) => {
-        const a = fl.from[q], b = fl.to[q], h = fl.frac[q] / 2;
-        mx[k] = net.nx[a] + (net.nx[b] - net.nx[a]) * h;
-        my[k] = net.ny[a] + (net.ny[b] - net.ny[a]) * h;
-        x0 = Math.min(x0, mx[k]); x1 = Math.max(x1, mx[k]); y0 = Math.min(y0, my[k]); y1 = Math.max(y1, my[k]);
-      });
-      for (const sg of route.segs) {
-        x0 = Math.min(x0, sg.ax, sg.bx); x1 = Math.max(x1, sg.ax, sg.bx); y0 = Math.min(y0, sg.ay, sg.by); y1 = Math.max(y1, sg.ay, sg.by);
-      }
-      const cell = Math.max(x1 - x0, y1 - y0, 1e-9) / 300;
-      const W = Math.ceil((x1 - x0) / cell) + 1, H = Math.ceil((y1 - y0) / cell) + 1;
-      const D = new Float32Array(W * H).fill(Infinity);
-      const at = (x, y) => Math.min(H - 1, Math.max(0, Math.round((y - y0) / cell))) * W + Math.min(W - 1, Math.max(0, Math.round((x - x0) / cell)));
-      // The route itself is distance 0…
-      for (const sg of route.segs) {
-        const n = Math.max(1, Math.ceil(Math.hypot(sg.bx - sg.ax, sg.by - sg.ay) / (cell / 2)));
-        for (let i = 0; i <= n; i++) D[at(sg.ax + ((sg.bx - sg.ax) * i) / n, sg.ay + ((sg.by - sg.ay) * i) / n)] = 0;
-      }
-      // …and every other cell its distance from it (two sweeps, straight and diagonal steps).
-      const R2 = Math.SQRT2;
-      for (let y = 0; y < H; y++) {
-        for (let x = 0; x < W; x++) {
-          const i = y * W + x;
-          let d = D[i];
-          if (x > 0) d = Math.min(d, D[i - 1] + 1);
-          if (y > 0) {
-            d = Math.min(d, D[i - W] + 1);
-            if (x > 0) d = Math.min(d, D[i - W - 1] + R2);
-            if (x < W - 1) d = Math.min(d, D[i - W + 1] + R2);
-          }
-          D[i] = d;
+    this.mask = null;
+    if (!this.snap) this.snapshotFloods();
+    const sn = this.snap, { size } = this;
+    if (!sn) return;
+    const { W, H, cells } = sn;
+    const v = this.view();
+    const dc = 2 * RETRACT.cell, M = 24; // distances: cells twice as big, M of them past each edge
+    const DW = Math.ceil(W / 2) + 2 * M, DH = Math.ceil(H / 2) + 2 * M;
+    const V = new Float32Array(W * H).fill(-1), who = new Int16Array(W * H).fill(-1);
+    const D = new Float32Array(DW * DH);
+    this.shown.forEach((f, si) => {
+      // Distance 0 along the route (without one: at the meeting point)…
+      D.fill(Infinity);
+      let seeded = false;
+      const pad = M * dc;
+      for (const sg of this.routes?.[f.i]?.segs || []) {
+        const ax = v.X(sg.ax), ay = v.Y(sg.ay), bx = v.X(sg.bx), by = v.Y(sg.by);
+        if (Math.max(ax, bx) < -pad || Math.min(ax, bx) > size.x + pad || Math.max(ay, by) < -pad || Math.min(ay, by) > size.y + pad) continue;
+        const steps = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / (dc / 2)));
+        for (let s = 0; s <= steps; s++) {
+          const gx = Math.floor((ax + ((bx - ax) * s) / steps) / dc) + M, gy = Math.floor((ay + ((by - ay) * s) / steps) / dc) + M;
+          if (gx >= 0 && gy >= 0 && gx < DW && gy < DH) { D[gy * DW + gx] = 0; seeded = true; }
         }
       }
-      for (let y = H - 1; y >= 0; y--) {
-        for (let x = W - 1; x >= 0; x--) {
-          const i = y * W + x;
-          let d = D[i];
-          if (x < W - 1) d = Math.min(d, D[i + 1] + 1);
-          if (y < H - 1) {
-            d = Math.min(d, D[i + W] + 1);
-            if (x < W - 1) d = Math.min(d, D[i + W + 1] + R2);
-            if (x > 0) d = Math.min(d, D[i + W - 1] + R2);
-          }
-          D[i] = d;
+      if (!seeded && this.meetPt) {
+        const gx = Math.min(DW - 1, Math.max(0, Math.floor(v.X(this.meetPt.x) / dc) + M));
+        const gy = Math.min(DH - 1, Math.max(0, Math.floor(v.Y(this.meetPt.y) / dc) + M));
+        D[gy * DW + gx] = 0;
+      }
+      chamfer(D, DW, DH);
+      // …then each cell this flood covers, by its distance from there.
+      const list = cells[si];
+      const dist = (k) => D[(((k / W) | 0) >> 1) * DW + M * DW + ((k % W) >> 1) + M];
+      let max = 0;
+      for (let s = 0; s < list.length; s++) { const d = dist(list[s]); if (d > max && d < Infinity) max = d; }
+      for (let s = 0; s < list.length; s++) {
+        const k = list[s], d = dist(k);
+        if (!(d < Infinity)) continue;
+        const val = max > 0 ? 1 - d / max : 1;
+        if (val > V[k]) { V[k] = val; who[k] = si; }
+      }
+    });
+    // A street's line reaches a little into the cells beside it: each cell
+    // goes with the last of its neighbours to go (rows, then columns).
+    const spread = (src, srcWho, dst, dstWho, step, len, lines, stride) => {
+      for (let l = 0; l < lines; l++) {
+        for (let i = 0; i < len; i++) {
+          const k = l * stride + i * step;
+          let best = src[k], bw = srcWho[k];
+          if (i > 0 && src[k - step] > best) { best = src[k - step]; bw = srcWho[k - step]; }
+          if (i < len - 1 && src[k + step] > best) { best = src[k + step]; bw = srcWho[k + step]; }
+          dst[k] = best; dstWho[k] = bw;
         }
       }
-      const dist = Float32Array.from(ids, (_, k) => D[at(mx[k], my[k])]);
-      const order = Int32Array.from(ids.keys()).sort((a, b) => dist[a] - dist[b]);
-      f.retract = { ids: Int32Array.from(order, (k) => ids[k]), dist: Float32Array.from(order, (k) => dist[k]) };
-      f.retract.max = f.retract.dist[f.retract.dist.length - 1] || 0;
-    }
+    };
+    const V1 = new Float32Array(W * H), who1 = new Int16Array(W * H);
+    spread(V, who, V1, who1, 1, W, H, W);
+    spread(V1, who1, V, who, W, H, W, 1);
+    this.mask = {
+      ...sn, V, who, tints: this.shown.map((f) => rgbOf(f.front)),
+      alpha: new Uint8Array(W * H).fill(255), tint: new Uint8Array(W * H),
+    };
   }
 
   /**
    * The floods pulling back: p = 0 as they were, 1 all gone. The streets
    * furthest from each person's route go first, closing in on it behind a
-   * fading edge, until the last ones, right beside the route, go as it
-   * reaches the meeting point.
+   * bright edge (the front's colour, added as the front was drawn while the
+   * floods grew) where they fade out, until the last ones, right beside the
+   * route, go as it reaches the meeting point.
    */
   drawRetract(p) {
     this.retract = p;
     if (!this.floodCanvas.isConnected) return;
-    const { fill: ctx, dpr, size } = this;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, size.x, size.y);
-    if (!this.net || p >= 1) return;
-    const v = this.view(), net = this.net;
-    for (const f of this.shown) {
-      const r = f.retract;
-      if (!r) continue;
-      // Streets still there: nearer the route than this (sorted nearest first).
-      const reach = r.max * (1 - p), edge = reach - r.max * 0.08;
-      let k = 0;
-      { let lo = 0, hi = r.dist.length; while (lo < hi) { const mid = (lo + hi) >> 1; if (r.dist[mid] < reach) lo = mid + 1; else hi = mid; } k = lo; }
-      const paths = [new Path2D(), new Path2D()], front = new Path2D();
-      for (let j = 0; j < k; j++) {
-        const q = r.ids[j];
-        this.piece(f.fl, q, Infinity, paths[net.major[f.fl.edge[q]]], v);
-        if (r.dist[j] >= edge) this.piece(f.fl, q, Infinity, front, v);
-      }
-      this.strokeFlood(ctx, f, paths);
-      ctx.globalCompositeOperation = this.theme.blend;
-      ctx.globalAlpha = 0.55 * (1 - p);
-      ctx.strokeStyle = f.front;
-      ctx.lineWidth = 1.4;
-      ctx.lineCap = 'round';
-      ctx.stroke(front);
-      ctx.globalAlpha = 1;
-      ctx.globalCompositeOperation = 'source-over';
+    const mk = this.mask;
+    if (!this.net || p >= 1 || !mk) {
+      const { fill, dpr, size } = this;
+      fill.setTransform(dpr, 0, 0, dpr, 0, 0);
+      fill.clearRect(0, 0, size.x, size.y);
+      if (p >= 1) this.mask = this.snap = null;
+      return;
     }
+    const { W, H, V, who, img, orig, cw, xs, ys, tints, alpha, tint } = mk;
+    const data = img.data;
+    const F = RETRACT.fade, R = RETRACT.rim, adds = this.theme.blend === 'lighter';
+    const edge = -R + p * (1 + R); // cells at or below this have gone
+    const rim = RETRACT.rimAlpha * (1 - p) * Math.min(1, p / 0.08); // the edge's strength, coming in quickly at the start
+    let x0 = W, y0 = H, x1 = -1, y1 = -1;
+    for (let cy = 0, i = 0; cy < H; cy++) {
+      for (let cx = 0; cx < W; cx++, i++) {
+        const val = V[i];
+        if (val < 0) continue;
+        const u = val - edge;
+        let a = 0, t = 0;
+        if (u > 0) {
+          a = u >= F ? 255 : Math.round((255 * u) / F);
+          t = 8 * Math.round(32 * rim * Math.max(0, Math.min(1, (F + R - u) / (0.3 * R)))); // in steps, so the cells along the edge are redrawn only when it changes visibly
+        }
+        if (a === alpha[i] && t === tint[i]) continue;
+        alpha[i] = a; tint[i] = t;
+        if (cx < x0) x0 = cx;
+        if (cx > x1) x1 = cx;
+        if (cy < y0) y0 = cy;
+        y1 = cy;
+        const tc = tints[who[i]], k = t / 255, m = a / 255;
+        for (let py = ys[cy]; py < ys[cy + 1]; py++) {
+          for (let o = (py * cw + xs[cx]) * 4, end = (py * cw + xs[cx + 1]) * 4; o < end; o += 4) {
+            const oa = orig[o + 3];
+            if (!oa) continue;
+            // The edge's colour over the street (as much as the street covers
+            // the pixel): added to it in the dark theme, laid over it in the light.
+            const a0 = oa / 255, kc = k * Math.min(1, a0 / FLOOD.alpha);
+            let A, r, g, b;
+            if (adds) {
+              A = Math.min(1, a0 + kc);
+              r = orig[o] * a0 + tc[0] * kc; g = orig[o + 1] * a0 + tc[1] * kc; b = orig[o + 2] * a0 + tc[2] * kc;
+            } else {
+              A = kc + a0 * (1 - kc);
+              r = tc[0] * kc + orig[o] * a0 * (1 - kc); g = tc[1] * kc + orig[o + 1] * a0 * (1 - kc); b = tc[2] * kc + orig[o + 2] * a0 * (1 - kc);
+            }
+            data[o] = r / A; data[o + 1] = g / A; data[o + 2] = b / A;
+            data[o + 3] = 255 * A * m;
+          }
+        }
+      }
+    }
+    if (x1 >= 0) this.fill.putImageData(img, 0, 0, xs[x0], ys[y0], xs[x1 + 1] - xs[x0], ys[y1 + 1] - ys[y0]);
   }
 
   /** Back to the normal map, keeping the routes. */
@@ -2955,6 +3233,8 @@ class FloodAnimation {
     const ok = await this.run(550, (t) => { this.glow = 1 - t; this.drawTop(); });
     this.baseCanvas.remove();
     this.floodCanvas.remove();
+    this.glowCanvas.remove();
+    this.mask = this.snap = null;
     this.glow = 0;
     this.finished = true;
     this.drawTop();
@@ -3032,22 +3312,58 @@ class FloodAnimation {
   redrawAll() {
     if (!this.size) return;
     this.drawBase();
-    if (this.retract != null) this.drawRetract(this.retract);
-    else if (this.floodCanvas.isConnected && this.net) {
-      const { fill, dpr, size } = this;
-      fill.setTransform(dpr, 0, 0, dpr, 0, 0);
-      fill.clearRect(0, 0, size.x, size.y);
-      const v = this.view();
-      for (const f of this.shown) {
-        const paths = [new Path2D(), new Path2D()];
-        this.trace(f, 0, f.frozen ? f.e : f.s, paths, v);
-        if (f.frozen) for (const q of f.active) if (!this.owner || this.owner[f.fl.edge[q]] === f.i) this.piece(f.fl, q, f.c, paths[this.net.major[f.fl.edge[q]]], v);
-        this.strokeFlood(fill, f, paths);
-      }
-    }
+    const floods = this.floodCanvas.isConnected && this.net;
+    if (this.retract != null) {
+      // Pulling back: the floods again in full, to pull back from where they are now.
+      if (floods && this.retract < 1) { this.drawFloods(); this.snapshotFloods(); this.prepareRetract(); }
+      this.drawRetract(this.retract);
+    } else if (floods) this.drawFloods();
     if (this.routes) this.drawTop();
     else { this.clearTop(); this.drawFronts(); }
   }
+}
+
+/** Distances (in cells) from the cells at 0 to all the others: two sweeps, straight and diagonal steps. */
+function chamfer(D, W, H) {
+  const R2 = Math.SQRT2;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = y * W + x;
+      let d = D[i];
+      if (x > 0) d = Math.min(d, D[i - 1] + 1);
+      if (y > 0) {
+        d = Math.min(d, D[i - W] + 1);
+        if (x > 0) d = Math.min(d, D[i - W - 1] + R2);
+        if (x < W - 1) d = Math.min(d, D[i - W + 1] + R2);
+      }
+      D[i] = d;
+    }
+  }
+  for (let y = H - 1; y >= 0; y--) {
+    for (let x = W - 1; x >= 0; x--) {
+      const i = y * W + x;
+      let d = D[i];
+      if (x < W - 1) d = Math.min(d, D[i + 1] + 1);
+      if (y < H - 1) {
+        d = Math.min(d, D[i + W] + 1);
+        if (x < W - 1) d = Math.min(d, D[i + W + 1] + R2);
+        if (x > 0) d = Math.min(d, D[i + W - 1] + R2);
+      }
+      D[i] = d;
+    }
+  }
+}
+
+/** [r, g, b] of a colour written #rgb, #rrggbb or rgb(r, g, b) (white if neither). */
+function rgbOf(css) {
+  const s = String(css || '');
+  let m = /^#([0-9a-f]{6})$/i.exec(s);
+  if (m) { const v = parseInt(m[1], 16); return [v >> 16, (v >> 8) & 255, v & 255]; }
+  m = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec(s);
+  if (m) return [m[1], m[2], m[3]].map((h) => parseInt(h + h, 16));
+  m = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/i.exec(s);
+  if (m) return [+m[1], +m[2], +m[3]];
+  return [255, 255, 255];
 }
 
 /** Split a projected line into segments timed evenly by length between t0 and t1. */
@@ -3067,7 +3383,7 @@ function addTimed(out, raw, t0, t1, mode) {
   }
 }
 
-__m["flood"] = { costTable, prepareNetwork, nearestNode, floodFrom, ownership, roadsBy, reachTime, LINE_STYLE, FloodAnimation };
+__m["flood"] = { costTable, prepareNetwork, simplifyNetwork, nearestNode, floodFrom, ownership, roadsBy, reachTime, LINE_STYLE, FloodAnimation };
 })();
 // ---- localroute
 (() => {
@@ -6256,10 +6572,15 @@ async function findPlaces({ replay = false } = {}) {
     }));
     meetingP.catch(() => {});
     status(prev ? 'Replaying the search' : 'Finding the fairest spot…');
+    // The streets go onto the darkened map as soon as they are here, so they
+    // fade in with it (and are drawn before the floods start, not as they do).
+    const streetsP = netP.then((net) => { if (live()) fx.setRoads(null, net); });
     if (!(await fx.intro())) return;
-    const net = await netP;
+    await streetsP;
     if (!live()) return;
-    fx.setRoads(null, net);
+    // A frame to show them before the floods are worked out.
+    await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+    if (!live()) return;
     fx.prepare();
 
     const meeting = await meetingP;

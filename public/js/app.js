@@ -1037,10 +1037,15 @@ async function findPlaces({ replay = false } = {}) {
     }));
     meetingP.catch(() => {});
     status(prev ? 'Replaying the search' : 'Finding the fairest spot…');
+    // The streets go onto the darkened map as soon as they are here, so they
+    // fade in with it (and are drawn before the floods start, not as they do).
+    const streetsP = netP.then((net) => { if (live()) fx.setRoads(null, net); });
     if (!(await fx.intro())) return;
-    const net = await netP;
+    await streetsP;
     if (!live()) return;
-    fx.setRoads(null, net);
+    // A frame to show them before the floods are worked out.
+    await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+    if (!live()) return;
     fx.prepare();
 
     const meeting = await meetingP;
