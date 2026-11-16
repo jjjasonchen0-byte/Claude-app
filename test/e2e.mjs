@@ -24,6 +24,7 @@ const ADDRESSES = {
   home: { name: '12 Baker Street', city: 'London', lat: 51.5205, lon: -0.1568 },
   sam: { name: '40 Brick Lane', city: 'London', lat: 51.5215, lon: -0.0717 },
   jo: { name: '5 Clapham High St', city: 'London', lat: 51.4645, lon: -0.1302 },
+  camden: { name: '8 Camden Road', city: 'London', lat: 51.539, lon: -0.1426 },
 };
 const feature = (a) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [a.lon, a.lat] }, properties: { name: a.name, city: a.city, country: 'United Kingdom' } });
 
@@ -205,6 +206,46 @@ try {
   await page.keyboard.press('Escape');
   await page.locator('#add-search input').blur();
 
+  // Each row: a pencil beside the name and one beside the address, changing them right there.
+  const joRow = () => page.locator('.person', { hasText: 'Clapham' });
+  assert.equal(await joRow().locator('.p-name [data-action=edit]').count(), 1, 'a pencil beside the name');
+  assert.equal(await joRow().locator('.p-addr [data-action=edit]').count(), 1, 'a pencil beside the address');
+  assert.equal(await page.locator('.person.home .p-name [data-action=edit]').count(), 0, 'you have no name to change');
+  await joRow().locator('.p-name [data-action=edit]').click();
+  await page.waitForFunction(() => document.activeElement?.id === 'edit-nick');
+  await page.keyboard.press('Escape'); // leaves things as they were
+  await page.waitForSelector('.person-edit', { state: 'detached' });
+  await joRow().locator('.p-name [data-action=edit]').click();
+  await page.waitForFunction(() => document.activeElement?.id === 'edit-nick');
+  await page.fill('#edit-nick', 'Joanna');
+  await page.keyboard.press('Enter'); // on to the address
+  await page.waitForFunction(() => document.activeElement?.id === 'edit-address');
+  await page.keyboard.press('Enter'); // the address as it was: saved
+  await page.waitForFunction(() => [...document.querySelectorAll('.person .p-name')].some((e) => e.textContent.includes('Joanna')));
+  // A new address: picked from the suggestions, then Save. (And back again.)
+  for (const [q, street] of [['Camden', 'Camden Road'], ['Clapham', 'Clapham High St']]) {
+    await page.locator('.person', { hasText: 'Joanna' }).locator('.p-addr [data-action=edit]').click();
+    await page.waitForFunction(() => document.activeElement?.id === 'edit-address');
+    await page.fill('#edit-address', q);
+    await page.waitForSelector('#edit-search .suggestions li[data-i]:not(.saved)');
+    await page.keyboard.press('Enter');
+    await page.click('.person-edit [type=submit]');
+    await page.waitForFunction((st) => [...document.querySelectorAll('.person .p-addr')].some((e) => e.textContent.includes(st)), street);
+    if (q === 'Camden') await shot('03c-row-changed');
+  }
+  const joNow = await page.evaluate(() => JSON.parse(localStorage.getItem('meet-guest-v1')).places.find((x) => x.nickname === 'Joanna'));
+  assert.equal(joNow.address.startsWith('5 Clapham High St'), true, 'the address change is saved');
+  // The heart in a row keeps that address on this device (and forgets it again).
+  const rowHeart = page.locator('.person', { hasText: 'Joanna' }).locator('[data-action=heart-person]');
+  assert.equal(await rowHeart.getAttribute('aria-pressed'), 'false');
+  await rowHeart.click();
+  await page.waitForSelector('.person:has-text("Joanna") [data-action=heart-person][aria-pressed=true]');
+  assert.deepEqual((await page.evaluate(() => JSON.parse(localStorage.getItem('meet-guest-v1')).saved)).map((x) => x.nickname), ['Joanna', 'Sam']);
+  await page.locator('.person', { hasText: 'Joanna' }).locator('[data-action=heart-person]').click();
+  await page.waitForSelector('.person:has-text("Joanna") [data-action=heart-person][aria-pressed=false]');
+  assert.equal(await page.locator('.person:has-text("Sam") [data-action=heart-person][aria-pressed=true]').count(), 1, "Sam's address is kept");
+  await page.waitForTimeout(700);
+
   // Leaving: Now by default, or a chosen time, which the search asks public transport for.
   assert.equal(await page.locator('.leave-row [data-action=leave-now].active').count(), 1, 'leaving now by default');
   const later = new Date(Date.now() + 2 * 864e5);
@@ -216,9 +257,13 @@ try {
   assert.equal(await page.locator('.leave-row [data-action=leave-now].active').count(), 0);
 
   // Find places → the search animation: everyone's floods converge on the meeting point, then the routes.
+  // The map stays as it is (everyone is in sight): the lines are drawn on it.
+  const mapView = () => page.evaluate(() => { const m = window.__meet.map, c = m.getCenter(); return [c.lat.toFixed(6), c.lng.toFixed(6), m.getZoom()]; });
+  const viewBefore = await mapView();
   await page.click('[data-action=find]');
   await page.waitForSelector('.growth-canvas');
   await page.waitForSelector('#screen-main.flooding .flood-base.on', { timeout: 20000 });
+  assert.deepEqual(await mapView(), viewBefore, 'the map stays where it was when the search starts');
   assert.equal(await page.locator('#flood-hud').isHidden(), true, 'no heading while the floods run');
   assert.equal(await page.locator('#flood-city').count(), 0, 'no city name');
   assert.ok(streetTiles > 0, 'streets came from the map tiles');
@@ -230,7 +275,8 @@ try {
   await page.waitForTimeout(800);
   await shot('04c-meet');
   await page.waitForSelector('.panel:not(.away) .pills', { timeout: 30000 });
-  assert.equal(await page.locator('.flood-base').count(), 0, 'the dark map is gone');
+  assert.equal(await page.locator('.flood-base').count(), 0, 'the dimming is gone');
+  assert.deepEqual(await mapView(), viewBefore, 'and where it was with the results (nobody is behind the panel)');
   assert.equal(await page.locator('#screen-main.flooding').count(), 0);
   assert.deepEqual([...transitTimes], [later.toISOString()], 'public transport planned for the chosen time');
   assert.deepEqual(reachAsked, Array(3).fill(later.toISOString()), 'stops reached by each rider, leaving at the chosen time');
@@ -242,6 +288,10 @@ try {
   await shot('05-results');
   // Edit people sits right under the people; there is no "Surprise me" any more.
   assert.equal(await page.locator('.trip + li [data-action=edit-people]').count(), 1, 'Edit people right under the people');
+  // No "Similar travel times" heading; Your route and Send (with its paper aeroplane) instead of one row for both.
+  assert.doesNotMatch(await page.textContent('.panel'), /Similar travel times|Routes to this spot/);
+  assert.equal(await page.locator('.meet-actions [data-action=your-route]').count(), 1);
+  assert.equal(await page.locator('.meet-actions [data-action=send-meet] svg').count(), 1);
   assert.equal(await page.locator('[data-action=surprise]').count(), 0);
   assert.equal(await page.locator('.panel .modes').count(), 0, 'no travel-mode bar on the results screen');
   // How far to look: a slider from 100 m to 1 km, drawn as a circle around the meeting point.
@@ -275,6 +325,33 @@ try {
   await shot('05b-radius');
   const italian = page.locator('[data-action=group]', { hasText: 'Italian' });
   assert.equal((await italian.locator('.cell-end').textContent()).trim(), '4', 'Italian count');
+
+  // Going from page to page: the next page slides in over the last (counted as the page leaving gets its own layer).
+  await page.evaluate(() => {
+    window.__turns = 0;
+    new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.classList?.contains('page-leaving')) window.__turns++; })
+      .observe(document.getElementById('panel'), { childList: true });
+  });
+  // Your route: just your way to the meeting point (the others' lines leave the map), its steps open.
+  await page.click('[data-action=your-route]');
+  await page.waitForSelector('.dirs > li');
+  assert.equal(await page.locator('.dirs > li').count(), 1, 'only your route');
+  assert.match(await page.textContent('.dirs > li'), /You/);
+  assert.equal(await page.locator('.growth-canvas.away').count(), 1, 'the others’ routes give way to yours');
+  await page.waitForSelector('.dirs > li.open .itin');
+  await page.waitForTimeout(600);
+  assert.equal(await page.locator('.page-leaving').count(), 0, 'the page that left is gone once the new one is in');
+  await shot('05c-your-route');
+  await page.click('[data-action=back-results]');
+  await page.waitForSelector('.panel .pills');
+  assert.equal(await page.locator('.growth-canvas.away').count(), 0, 'everyone’s routes again');
+  // Send, straight from the results; Back comes back to them.
+  await page.click('[data-action=send-meet]');
+  await page.waitForSelector('#share-text');
+  assert.match(await page.inputValue('#share-text'), /Let's meet at/);
+  await page.click('[data-action=back-share]');
+  await page.waitForSelector('.panel .pills');
+  assert.equal(await page.evaluate(() => window.__turns), 4, 'each change of page slid');
 
   // Category → POI map
   await italian.click();
@@ -340,7 +417,7 @@ try {
   assert.equal(await page.locator('.person').count(), 3, 'addresses saved on the device');
   assert.match(await page.locator('.person', { hasText: 'Sam' }).locator('.mode-pill').textContent(), /Bike/, "Sam's travel mode is remembered");
   await page.click('#btn-menu');
-  assert.equal(await page.locator('#history-list [data-hid]').count(), 1, 'history saved on the device');
+  assert.equal(await page.locator('#history-list [data-hid]').count(), 2, 'history saved on the device (the meeting point and the place sent)');
   await page.click('#drawer-close');
 
   // Exclude Jo and search again with just two people.
@@ -356,16 +433,28 @@ try {
   await page.waitForTimeout(600);
   await shot('11-two-people-results');
   // Changing the meeting rule in the menu looks for a spot again straight away.
-  assert.match(await page.textContent('.result-head .eyebrow'), /Similar travel times · \d/);
+  assert.equal(await page.locator('.result-head[data-rule=similar]').count(), 1);
   await page.click('#btn-menu');
   await page.click('#set-mode [data-value=total]');
   await page.waitForSelector('#drawer', { state: 'hidden' });
-  await page.waitForFunction(() => /Least total travel/.test(document.querySelector('.panel:not(.away) .result-head .eyebrow')?.textContent || ''), null, { timeout: 45000 });
+  await page.waitForSelector('.panel:not(.away) .result-head[data-rule=total]', { timeout: 45000 });
 
   // Mobile layout check
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(400);
   await shot('12-mobile-results');
+  // The sheet pulled up stays up from page to page (and back again).
+  await page.focus('#panel-handle');
+  await page.keyboard.press('ArrowUp');
+  await page.waitForTimeout(450);
+  const pulledUp = await page.evaluate(() => document.getElementById('panel').offsetHeight);
+  assert.ok(pulledUp > 700, `pulled all the way up: ${pulledUp}px`);
+  await page.locator('[data-action=group]').first().click();
+  await page.waitForSelector('.poi');
+  await page.click('[data-action=back-results]');
+  await page.waitForSelector('.panel .pills');
+  await page.waitForTimeout(450);
+  assert.equal(await page.evaluate(() => document.getElementById('panel').offsetHeight), pulledUp, 'back keeps the size it was pulled to');
   await page.click('[data-action=edit-people]');
   await page.waitForSelector('.person');
   await page.waitForTimeout(500);

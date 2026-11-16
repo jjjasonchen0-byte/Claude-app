@@ -1,6 +1,5 @@
-// The search animation. The map goes quiet (dark or light, with the app's
-// theme) and its streets show faintly.
-// Then everyone's reach floods out along the streets at once, each in their
+// The search animation, drawn over the map as it is (only dimmed a little,
+// so the lines stand out). Everyone's reach floods out along the streets at once, each in their
 // colour behind a bright white front, converging until the floods meet at
 // the meeting point. Finally everyone's real route lights up and they
 // travel along it to the pin, while the floods pull back along their
@@ -11,7 +10,7 @@
 // in seconds at each person's way of travelling, so where the floods meet is
 // where travel times are similar: the meeting point.
 // Three canvases sit in their own map pane, above the map but below the
-// people and the meeting point: the dark backdrop with the streets, the
+// people and the meeting point: the dimming over the map, the
 // settled floods (drawn a little at a time, never cleared while a flood
 // grows), and the front, routes and travellers (redrawn every frame).
 import { fromEdgeList, dijkstra } from './graph.js';
@@ -311,20 +310,13 @@ export function reachTime(net, fl, others) {
 
 // ---------------------------------------------------------------- drawing
 
-// Colours for each theme. Dark: streets glow a dim gold, the floods glow and
-// their front is white. Light: a pale map with grey streets, the floods in
-// their colours with a deeper shade of it at the front.
+// Colours for each theme. The map stays as it is, a little dimmed so the
+// floods stand out on it. Dark: the floods glow and their front is white.
+// Light: the floods in their colours with a deeper shade of it at the front.
 const THEMES = {
-  dark: {
-    scrim: 'rgba(2,2,5,0.95)', minor: 'rgba(196,158,86,0.26)', major: 'rgba(222,178,98,0.46)',
-    blend: 'lighter', shade: 0.22, front: () => '#fff', traveller: '#0b0b10',
-  },
-  light: {
-    scrim: 'rgba(246,244,240,0.94)', minor: 'rgba(120,112,100,0.24)', major: 'rgba(110,100,85,0.42)',
-    blend: 'source-over', shade: -0.08, front: (hex) => shade(hex, -0.42), traveller: '#ffffff',
-  },
+  dark: { dim: 'rgba(0,0,0,0.32)', blend: 'lighter', shade: 0.22, front: () => '#fff', traveller: '#0b0b10' },
+  light: { dim: 'rgba(255,255,255,0.24)', blend: 'source-over', shade: -0.08, front: (hex) => shade(hex, -0.42), traveller: '#ffffff' },
 };
-const BASE = { minorW: 0.7, majorW: 1.2 };
 const FLOOD = { minorW: 1.05, majorW: 1.7, alpha: 0.88 };
 // The front: its colour over the newest … oldest third of it, which is this
 // much of each person's trip long; and its glow, drawn small and scaled up
@@ -405,8 +397,12 @@ export class FloodAnimation {
     this.resize = this.resize.bind(this);
     this.redraw = () => { this.clearTransform(); this.place(); this.redrawAll(); };
     // Once back to the normal map the routes follow it as it moves; while the
-    // map is dark it stays still, and is drawn again only when it settles.
-    this.onMove = () => { if (this.finished) { this.clearTransform(); this.place(); this.drawTop(); } };
+    // floods run it is drawn again only when the map settles (the dimming
+    // stays over the whole map meanwhile).
+    this.onMove = () => {
+      if (this.finished) { this.clearTransform(); this.place(); this.drawTop(); }
+      else if (this.baseCanvas.isConnected) L.DomUtil.setPosition(this.baseCanvas, this.map.containerPointToLayerPoint([0, 0]));
+    };
     this.onZoomAnim = (e) => this.followZoom(e.center, e.zoom);
     map.on('resize', this.resize);
     map.on('moveend zoomend', this.redraw);
@@ -542,25 +538,14 @@ export class FloodAnimation {
     return this.floods[i];
   }
 
+  /** The map dimmed a little (its own streets show through: the floods run along them). */
   drawBase() {
-    const { base: ctx, dpr, size, net } = this;
+    const { base: ctx, dpr, size } = this;
     if (!size || !this.baseCanvas.isConnected) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, size.x, size.y);
-    ctx.fillStyle = this.theme.scrim;
+    ctx.fillStyle = this.theme.dim;
     ctx.fillRect(0, 0, size.x, size.y);
-    if (!net) return;
-    const { X, Y } = this.view();
-    const minor = new Path2D(), major = new Path2D();
-    for (let k = 0; k < net.m; k++) {
-      const a = net.A[k], b = net.B[k];
-      const p = net.major[k] ? major : minor;
-      p.moveTo(X(net.nx[a]), Y(net.ny[a]));
-      p.lineTo(X(net.nx[b]), Y(net.ny[b]));
-    }
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = this.theme.minor; ctx.lineWidth = BASE.minorW; ctx.stroke(minor);
-    ctx.strokeStyle = this.theme.major; ctx.lineWidth = BASE.majorW; ctx.stroke(major);
   }
 
   // ------------------------------------------------ floods
@@ -753,7 +738,7 @@ export class FloodAnimation {
 
   // ------------------------------------------------ the phases
 
-  /** The map goes dark and the streets appear. */
+  /** The map dims a little. */
   intro() {
     this.baseCanvas.classList.add('on');
     return this.run(450);

@@ -21,7 +21,7 @@
   --hud: rgba(28, 28, 30, 0.88);
   --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.08);
   --shadow-2: 0 12px 40px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06);
-  --panel-w: 380px;
+  --panel-w: 400px;
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
   color-scheme: light;
@@ -186,15 +186,18 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
   position: absolute; z-index: 1001; display: flex; flex-direction: column; box-shadow: var(--shadow-2);
   background: var(--material); -webkit-backdrop-filter: saturate(180%) blur(30px); backdrop-filter: saturate(180%) blur(30px);
 }
-.panel-body { overflow: auto; padding: 16px; flex: 1; min-height: 0; overscroll-behavior: contain; }
+.panel-body { overflow-x: hidden; overflow-y: auto; padding: 20px; flex: 1; min-height: 0; overscroll-behavior: contain; }
 .panel-handle { display: none; }
-.panel.away { opacity: 0; pointer-events: none; }
-.panel.pop { animation: pop 0.45s cubic-bezier(0.2, 1.15, 0.4, 1); }
+/* Out of the way while the search runs: it slides away gradually (and back up once there are results). */
+.panel.away { pointer-events: none; }
 @keyframes pop { from { transform: translateY(24px) scale(0.98); opacity: 0; } }
+/* Going from page to page: the page leaving, in a layer of its own where it was, as the next one slides in (see turnPage in app.js). */
+.panel.paging { overflow: hidden; }
+.page-leaving { position: absolute; left: 0; right: 0; overflow: hidden; pointer-events: none; }
 
 @media (min-width: 760px) {
-  .panel { top: 72px; left: 14px; max-height: calc(100% - 86px); width: var(--panel-w); border-radius: 24px; transition: transform 0.35s cubic-bezier(0.2, 0.9, 0.3, 1), opacity 0.2s; }
-  .panel.away { transform: translateX(-30px); }
+  .panel { top: 72px; left: 14px; max-height: calc(100% - 86px); width: var(--panel-w); border-radius: 24px; transition: transform 0.7s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.5s; }
+  .panel.away { transform: translateX(calc(-100% - 30px)); opacity: 0; transition: transform 0.8s cubic-bezier(0.45, 0, 0.25, 1), opacity 0.8s ease-in; }
   .leaflet-left { left: calc(var(--panel-w) + 14px); }
 }
 @media (max-width: 759px) {
@@ -202,10 +205,11 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
      rounded top (the same curve), not by a straight edge below the tab. */
   .panel {
     left: 0; right: 0; bottom: 0; border-radius: 24px 24px 0 0; height: 50%; overflow: hidden;
-    padding-bottom: env(safe-area-inset-bottom, 0px); transition: height 0.32s cubic-bezier(0.2, 0.9, 0.3, 1), transform 0.3s, opacity 0.2s;
+    padding-bottom: env(safe-area-inset-bottom, 0px); transition: height 0.32s cubic-bezier(0.2, 0.9, 0.3, 1), transform 0.7s cubic-bezier(0.32, 0.72, 0, 1);
   }
   .panel.dragging { transition: none; }
-  .panel.away { transform: translateY(40px); }
+  /* (Down off the screen at an even pace, not all at once.) */
+  .panel.away { transform: translateY(calc(100% + 24px)); transition: height 0.32s cubic-bezier(0.2, 0.9, 0.3, 1), transform 0.85s cubic-bezier(0.45, 0, 0.25, 1); }
   .panel-handle {
     position: absolute; top: 0; left: 0; right: 0; z-index: 3; display: flex; justify-content: center; align-items: center;
     height: 24px; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
@@ -213,10 +217,10 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
   .panel-handle span { width: 36px; height: 5px; border-radius: 3px; background: var(--text-3); }
   .panel-handle:active { cursor: grabbing; }
   /* (and fades as it goes, so the pull tab stays clear) */
-  .panel-body {
-    padding-top: 28px;
+  .panel-body, .page-leaving {
     -webkit-mask-image: linear-gradient(to bottom, transparent 2px, #000 24px); mask-image: linear-gradient(to bottom, transparent 2px, #000 24px);
   }
+  .panel-body { padding-top: 30px; }
   .leaflet-control-zoom { display: none; }
 }
 
@@ -297,29 +301,29 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .gmap-credit b { display: block; color: var(--text); font: 700 12.5px/1.2 var(--font-display); letter-spacing: -0.01em; }
 
 /* ---------------------------------------------------------------- inset grouped lists */
-.sheet-title { display: flex; align-items: center; gap: 12px; margin: 2px 4px 14px; }
+.sheet-title { display: flex; align-items: center; gap: 12px; margin: 4px 4px 20px; }
 .sheet-title h2 { flex: 1; min-width: 0; }
 .badge { font-size: 13px; font-weight: 600; color: var(--text-2); background: var(--fill); padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
 .eyebrow { font-size: 13px; font-weight: 600; color: var(--accent); margin-bottom: 2px; }
-.section-title { font-size: 13px; color: var(--text-2); margin: 18px 16px 7px; text-transform: uppercase; letter-spacing: 0.02em; }
-.group { list-style: none; margin: 0 0 14px; padding: 0; background: var(--card); border-radius: 14px; overflow: hidden; }
+.section-title { font-size: 13px; color: var(--text-2); margin: 26px 16px 9px; text-transform: uppercase; letter-spacing: 0.02em; }
+.group { list-style: none; margin: 0 0 22px; padding: 0; background: var(--card); border-radius: 16px; overflow: hidden; }
 .group > li { position: relative; }
 .group > li + li::before { content: ""; position: absolute; top: 0; right: 0; left: var(--inset, 16px); height: 0.5px; background: var(--sep); transform: scaleY(1); }
-.group.icons { --inset: 60px; }
-.cell { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 50px; padding: 9px 14px 9px 14px; background: none; border: 0; text-align: left; color: var(--text); }
+.group.icons { --inset: 70px; }
+.cell { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 58px; padding: 13px 16px; background: none; border: 0; text-align: left; color: var(--text); }
 .cell-btn { transition: background 0.15s; }
 .cell-btn:hover { background: var(--fill); }
 .cell-btn:active { background: var(--fill-2); }
 .cell-main { flex: 1; min-width: 0; display: block; }
 .cell-title { display: block; font-size: 16px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cell-sub { display: block; font-size: 13px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.cell-sub { display: block; font-size: 13px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px; }
 .cell-end { font-size: 13px; color: var(--text-2); white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
 .cell-end b { display: block; color: var(--text); font-weight: 600; font-size: 15px; }
 .cell-end.count { font-size: 15px; }
 .chev { color: var(--text-3); flex: none; }
 .avatar {
-  --c: var(--accent); width: 36px; height: 36px; border-radius: 50%; flex: none; display: grid; place-items: center;
-  background: var(--c); color: #fff; font: 600 15px/1 var(--font-display);
+  --c: var(--accent); width: 40px; height: 40px; border-radius: 50%; flex: none; display: grid; place-items: center;
+  background: var(--c); color: #fff; font: 600 16px/1 var(--font-display);
 }
 .avatar.sm { width: 30px; height: 30px; font-size: 13px; }
 .tile { --c: var(--accent); width: 32px; height: 32px; border-radius: 9px; flex: none; display: grid; place-items: center; background: var(--c); color: #fff; }
@@ -329,37 +333,63 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .tile.grey { background: #8e8e93; }
 .num { --c: var(--accent); width: 30px; height: 30px; border-radius: 50%; background: var(--c); color: #fff; display: grid; place-items: center; font: 700 13px/1 var(--font-display); flex: none; }
 
-/* people */
-.person .cell { padding-right: 10px; }
-.person.inactive .avatar, .person.inactive .cell-main { opacity: 0.4; }
-.person-actions { display: flex; align-items: center; gap: 6px; }
-.edit-inline { display: flex; gap: 6px; margin-top: 8px; }
-.edit-inline input { padding: 7px 10px; font-size: 15px; border-radius: 9px; }
-.edit-inline .btn { min-height: 34px; padding: 6px 12px; font-size: 14px; border-radius: 9px; }
-.add-box { background: var(--card); border-radius: 14px; padding: 10px; display: grid; gap: 8px; margin-bottom: 8px; }
+/* people: a row each, with their name and address (a pencil beside each), the switch that leaves
+   them out, and below, how they travel, the heart that keeps their address, and removing them. */
+.person-cell { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; column-gap: 14px; row-gap: 2px; padding: 14px 14px 12px 16px; }
+.person-cell .avatar { grid-column: 1; grid-row: 1 / span 2; cursor: pointer; }
+.p-line { grid-column: 2; display: flex; align-items: center; gap: 2px; min-width: 0; }
+.p-line > span { flex: 0 1 auto; min-width: 0; cursor: pointer; }
+.p-name { grid-row: 1; }
+.p-addr { grid-row: 2; }
+.p-addr.alone { grid-row: 1 / span 2; } /* no name: just the address, beside the avatar */
+.person.home .p-line { grid-column: 2 / 4; }
+.p-switch { grid-column: 3; grid-row: 1 / span 2; }
+.p-tools { grid-column: 2 / 4; grid-row: 3; display: flex; align-items: center; gap: 10px; margin-top: 10px; min-height: 30px; }
+.p-end { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.inline-edit {
+  flex: none; width: 30px; height: 30px; margin: -6px 0; border: 0; padding: 0; background: none; color: var(--text-3);
+  display: grid; place-items: center; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.inline-edit:hover { color: var(--accent); }
+.p-heart { width: 30px; height: 30px; border: 0; padding: 0; display: grid; place-items: center; cursor: pointer; }
+.person.inactive .avatar, .person.inactive .p-line { opacity: 0.4; }
+/* Changing someone's name and address, in their row. */
+.person-edit { display: flex; align-items: flex-start; gap: 14px; padding: 14px 14px 14px 16px; }
+.person-edit .avatar { margin-top: 2px; }
+.edit-fields { flex: 1; min-width: 0; display: grid; gap: 8px; }
+.edit-fields input { background-color: var(--fill); }
+.edit-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px; }
+.edit-buttons .btn { min-height: 40px; padding: 8px 16px; }
+/* (The suggestions open in the row, pushing what's below down: a list in a rounded group would be cut off.) */
+.suggestions.inline { position: static; margin-top: 6px; box-shadow: 0 0 0 0.5px var(--sep); }
+.add-box { background: var(--card); border-radius: 16px; padding: 14px; display: grid; gap: 10px; margin-bottom: 12px; }
 .add-box input { background-color: var(--fill); }
 #add-search input { padding-right: 48px; } /* room for the heart */
 /* The heart in the address box: keeps the address on this device (filled once kept). */
-.heart-btn { color: var(--heart); }
-.heart-btn:hover:not(:disabled) { background: rgba(255, 45, 85, 0.12); }
+.heart-btn, .heart-btn:hover, .heart-btn:active, .heart-btn:focus, .heart-btn:focus-visible {
+  color: var(--heart); background: none !important; box-shadow: none; outline: none; -webkit-tap-highlight-color: transparent;
+}
 .heart-btn:disabled { color: var(--text-3); cursor: default; }
-.heart-btn.on svg { animation: heart-pop 0.35s cubic-bezier(0.3, 1.6, 0.5, 1); }
-@keyframes heart-pop { 50% { transform: scale(1.25); } }
 /* Their name, then Add. */
 .add-row { display: flex; gap: 8px; }
 .add-row input { flex: 1; min-width: 0; }
 .add-row .btn { flex: none; min-width: 76px; min-height: 44px; }
-.cta { position: sticky; bottom: -16px; padding: 12px 0 4px; margin-top: 10px; background: linear-gradient(transparent, var(--material) 35%); }
+.cta { position: sticky; bottom: -20px; padding: 16px 0 8px; margin-top: 18px; background: linear-gradient(transparent, var(--material) 35%); }
 /* Typing an address on a phone: the sheet is fully open with the box at its top (room to scroll it there, no button in the way). */
 .panel.typing .panel-content { padding-bottom: 900px; }
 .panel.typing .cta { display: none; }
 
 /* results */
-.result-head { display: flex; align-items: center; gap: 14px; margin: 2px 4px 14px; }
+.result-head { display: flex; align-items: center; gap: 14px; margin: 4px 4px 22px; }
+/* Your route, and Send (the meeting point): side by side under the people. */
+.meet-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 0 0 24px; }
+.group + .meet-actions { margin-top: -8px; }
+.times-note { margin: -10px 6px 16px; } /* (under the times it is about) */
+.meet-actions .btn { min-height: 46px; font-size: 16px; }
 .meet-badge { width: 48px; height: 48px; border-radius: 50%; background: var(--accent-tint); display: grid; place-items: center; flex: none; }
 .meet-badge i { width: 18px; height: 18px; border-radius: 50%; background: var(--accent); border: 3.5px solid #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); }
-.notice { font-size: 13px; color: var(--text-2); background: var(--card); border-radius: 12px; padding: 10px 12px; margin: 0 0 14px; }
-.pills { display: flex; gap: 8px; overflow-x: auto; margin: 0 -16px 12px; padding: 2px 16px 6px; scrollbar-width: none; }
+.notice { font-size: 13px; color: var(--text-2); background: var(--card); border-radius: 14px; padding: 12px 14px; margin: 0 0 20px; }
+.pills { display: flex; gap: 8px; overflow-x: auto; margin: 4px -20px 16px; padding: 2px 20px 8px; scrollbar-width: none; }
 .pills::-webkit-scrollbar { display: none; }
 .pill {
   display: inline-flex; align-items: center; gap: 7px; flex: none; border: 0; border-radius: 999px; padding: 5px 13px 5px 5px;
@@ -373,9 +403,9 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .pill.active .pill-ico { background: rgba(255, 255, 255, 0.25); }
 .pill.active .count { color: rgba(255, 255, 255, 0.8); }
 .pill:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
-.empty { text-align: center; color: var(--text-2); padding: 28px 14px; font-size: 15px; background: var(--card); border-radius: 14px; margin-bottom: 14px; }
+.empty { text-align: center; color: var(--text-2); padding: 30px 16px; font-size: 15px; background: var(--card); border-radius: 16px; margin-bottom: 20px; }
 /* How far to look: "23 places within 800 m" (a spinner while they load) over a slider from 100 m to 1 km. */
-.radius-row { margin: 6px 4px 16px; }
+.radius-row { margin: 14px 4px 22px; }
 .radius-label { display: flex; align-items: center; gap: 5px; min-height: 22px; font-size: 14px; color: var(--text-2); font-variant-numeric: tabular-nums; }
 .radius-label b { color: var(--text); font-weight: 600; }
 .radius-spin { width: 14px; height: 14px; border-width: 2px; margin-right: 2px; }
@@ -394,7 +424,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .radius-ends { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-3); }
 .radius-ring { animation: ring-in 0.45s cubic-bezier(0.2, 0.9, 0.3, 1); transform-box: fill-box; transform-origin: center; }
 @keyframes ring-in { from { opacity: 0; transform: scale(0.8); } }
-.actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; }
+.actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; margin-top: 6px; }
 .actions .btn { width: 100%; font-size: 14px; }
 
 /* place */
@@ -552,7 +582,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 }
 
 /* When everyone leaves: Now, or a chosen time (above the Find button). */
-.leave-row { display: flex; align-items: center; gap: 8px; margin: 14px 4px 0; }
+.leave-row { display: flex; align-items: center; gap: 10px; margin: 22px 4px 0; }
 .leave-label { font-weight: 600; font-size: 15px; margin-right: 2px; }
 .leave-opt {
   border: 0; border-radius: 10px; padding: 8px 12px; font: inherit; font-size: 15px; color: var(--text-2); background: var(--fill);
@@ -611,10 +641,6 @@ input.leave-opt { flex: 1; min-width: 0; width: auto; padding: 8px 10px; }
 /* ---------------------------------------------------------------- per-person travel mode */
 .title-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .title-row .cell-title { flex: 0 1 auto; min-width: 0; }
-/* In the people list the buttons leave little room on a phone: the name comes first, and the
-   way of travelling moves to a line of its own when the two don't fit side by side. */
-.person .title-row { flex-wrap: wrap; row-gap: 3px; }
-.person .title-row .cell-title { max-width: 100%; }
 .mode-pill {
   flex: none; display: inline-flex; align-items: center; gap: 4px; border: 0; border-radius: 999px; padding: 3px 8px 3px 7px;
   background: var(--accent-tint); color: var(--accent); font-size: 12px; font-weight: 600; line-height: 1.2; white-space: nowrap;
@@ -622,7 +648,7 @@ input.leave-opt { flex: 1; min-width: 0; width: auto; padding: 8px 10px; }
 .mode-pill:hover { filter: brightness(0.96); }
 .mode-pill .caret { opacity: 0.7; transition: transform 0.2s; }
 .mode-pill[aria-expanded="true"] .caret { transform: rotate(180deg); }
-.mode-picker { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 2px 12px 12px 60px; animation: pop 0.25s cubic-bezier(0.2, 1.15, 0.4, 1); }
+.mode-picker { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 2px 14px 14px 70px; animation: pop 0.25s cubic-bezier(0.2, 1.15, 0.4, 1); }
 .mode-opt {
   display: grid; justify-items: center; gap: 3px; border: 0; border-radius: 12px; padding: 8px 4px; background: var(--fill);
   color: var(--text); font-size: 12px; font-weight: 600;
@@ -650,7 +676,7 @@ img.broken { display: none; }
 .st.closed { color: var(--red); font-weight: 600; }
 
 /* list of places with pictures */
-.group.places { --inset: 92px; }
+.group.places { --inset: 98px; }
 .poi { align-items: center; gap: 12px; padding: 10px 14px 10px 10px; }
 .thumb { position: relative; width: 68px; height: 68px; flex: none; border-radius: 12px; overflow: hidden; background: var(--fill); }
 .thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.3s; z-index: 1; }
@@ -665,7 +691,7 @@ img.broken { display: none; }
 .poi .cell-title { font-weight: 600; }
 
 /* place page */
-.gallery { display: flex; gap: 6px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 -16px 14px; padding: 0 16px; scrollbar-width: none; }
+.gallery { display: flex; gap: 6px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 -20px 18px; padding: 0 20px; scrollbar-width: none; }
 .gallery::-webkit-scrollbar { display: none; }
 .g-item { position: relative; flex: none; width: 62%; aspect-ratio: 4 / 3; border: 0; padding: 0; border-radius: 14px; overflow: hidden; scroll-snap-align: start; background: var(--fill); }
 .g-item + .g-item { width: 40%; }
@@ -773,3 +799,9 @@ img.broken { display: none; }
   .avatar, .avatar-pin { background: linear-gradient(180deg, color-mix(in srgb, var(--c) 78%, #fff), var(--c)); }
   .thumb-art { background: radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--c) 55%, #fff), var(--c)); }
   .hero-art { background: radial-gradient(circle at 25% 20%, color-mix(in srgb, var(--c) 50%, #fff), var(--c) 70%); }
+}
+
+/* Typing on an iPhone: it zooms in on a box whose text is under 16px, so on a touch screen none is. */
+@media (pointer: coarse) {
+  input.leave-opt, .share-form input[type=datetime-local], .share-form textarea, .when-row select, .when-row input { font-size: 16px; }
+}

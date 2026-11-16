@@ -3,25 +3,25 @@
 Find somewhere that's roughly as close for everyone in a group, with a press of a button.
 
 1. **Enter where you're starting from.** The start screen is just the logo and an address bar; the arrow at its end uses your current location. The map centres on your address.
-2. **Add the people you're meeting**: pick their address (type it, or tap the map), give them a name if you like, then **Add**. The **heart** keeps an address on your device, to pick again another time (saved addresses show when the address box is empty). Drag a dot to move someone. Everyone has their own **way of travelling** (public transport, walk, bike or drive): tap the pill next to a name to change it. It's remembered.
+2. **Add the people you're meeting**: pick their address (type it, or tap the map), give them a name if you like, then **Add**. The **heart** keeps an address on your device, to pick again another time (saved addresses show when the address box is empty); each person's row has one too. The **pencils** beside a name and an address change them right there in the row. Drag a dot to move someone. Everyone has their own **way of travelling** (public transport, walk, bike or drive): tap the pill next to a name to change it. It's remembered.
 3. Choose when everyone leaves (**Now**, or a date and time), then press **Let’s meet.** Meet looks for the spot where everyone's **travel times are as similar as possible**, without making anyone's trip much longer than it has to be (the longest trip may grow by about 12% at most): someone driving is asked to go further than someone walking.
    - Walking, cycling and driving: travel times to a grid of spots around the group, zooming in around the best one. They are worked out in your browser over the streets of the map's own tiles (the same streets the search animation floods), with speeds fitted to the routing service's own times, so finding the spot asks no service for anything. Directions to the place you pick come from the routing service.
    - Public transport: real times from each rider to every stop in the area at that time, so the spot is picked among stops everyone can reach (a bigger station wins a tie). The three best are then checked against the actual journeys people will be shown.
    - Then the pin moves to **somewhere a group can meet**: the liveliest café, restaurant, pub, park, museum or shops within 500 m (never a motorway, railway line or car park), and the results are named after it. With no such place nearby, the spot stays on a street you can walk along.
 
-   Meanwhile the search plays out on a **quiet map of the area's streets** (dark or light, following the app's theme):
+   Meanwhile the panel slides down out of the way and the search plays out **on the map as it is**, dimmed a little so the lines stand out (it only moves, smoothly, if someone is out of sight):
    - Everyone's reach floods out along the streets together, each in their colour behind a bright front, converging on the meeting point. Each flood is timed as progress through that person's own trip, so the map divides into territories that meet at the pin.
    - A pin drops, labelled with a park or landmark right there (or the street). Everyone's real route lights up and they travel along it, gathering above the pin with their trip times on their name tags.
 
-   Then the map turns back to normal with the routes on it. The floods are shortest-path searches over the streets in view, which come from the same OpenFreeMap vector tiles as the map. **Skip** jumps to the end, and the animation speed is in the menu.
-4. A panel lists what's nearby in tabs (Food, Drinks, Fun, Culture, Outdoors, Shopping). Each tab has listings with counts, e.g. `Italian 4`.
+   Then the dimming lifts, leaving the routes on the map, and the panel slides back up with the results. The floods are shortest-path searches over the streets in view, which come from the same OpenFreeMap vector tiles as the map. **Skip** jumps to the end, and the animation speed is in the menu.
+4. A panel shows everyone's travel time to the spot, **Your route** (just your way there, step by step) and **Send**, and lists what's nearby in tabs (Food, Drinks, Fun, Culture, Outdoors, Shopping). Each tab has listings with counts, e.g. `Italian 4`.
 5. Pick a listing to see the places **with a photo, rating, opening status and address**, and as numbered pins on the map. Sort by nearest, fairest for everyone, or top rated.
 6. Open a place for a **full page like a search result**: photos (tap to view full screen), rating with a breakdown, reviews, opening hours, phone, website and menu, what it offers (outdoor seating, takeaway, step-free…), and **real directions for everyone, each in their own way of travelling**: public transport (lines in their official colours, times, changes, walking legs, with *Leave now* or *Arrive by*), walking, cycling or driving.
 7. **Send the location** by share sheet, WhatsApp, Messages, Email, Telegram, copy, a calendar invite, or Google/Apple Maps.
 
 **No sign-in.** Your starting point, the people you meet, addresses you've kept with the heart, past meetups and settings are all saved on your device, in the browser's storage. Nothing about you is kept on the server. (They don't move between devices, and clearing the browser's site data clears them.)
 
-The look follows Apple's design language: a quiet map with white streets and no shop icons, system font, frosted-glass panels, inset grouped lists, coloured category tiles, iOS-style switches and segmented controls. On phones the panel is a bottom sheet. Drag its handle to resize it, or tap the handle to collapse and expand it.
+The look follows Apple's design language: a quiet map with white streets and no shop icons, system font, frosted-glass panels, inset grouped lists, coloured category tiles, iOS-style switches and segmented controls. On phones the panel is a bottom sheet. Drag its handle to resize it, or tap the handle to collapse and expand it; every page opens at the size it was last pulled to. Going from page to page, the next page slides in from the right (and back again), as in an iPhone app.
 
 ## Run it
 
@@ -152,10 +152,10 @@ The Sydney data comes from OpenStreetMap via [OpenFreeMap](https://openfreemap.o
 
 ## Extras
 
-- Leave people out of a search without deleting them. Rename them, and undo a delete.
+- Leave people out of a search without deleting them. Change their name or address with the pencils beside them, and undo a delete.
 - Address suggestions are biased towards your starting point and work with the keyboard.
 - **Two ways to pick the meeting point** (in the menu; changing it looks again straight away):
-  - *Similar times* (default): everyone's trip takes about as long. To even things out, the longest trip may grow by up to 30% (or 5 minutes) over the shortest it could be. People travelling very differently (one walking, one driving) can't always be evened out; the results show the range, e.g. "35–42 min".
+  - *Similar times* (default): everyone's trip takes about as long. To even things out, the longest trip may grow by up to 30% (or 5 minutes) over the shortest it could be. People travelling very differently (one walking, one driving) can't always be evened out; the results show each person's time.
   - *Least travel*: everyone's trips add up to the least overall.
 - Travel time and distance for each person in their own mode. The menu sets the default mode for people you add.
 - Opening hours read from OpenStreetMap: "Open · Closes 22:00", "Closes soon", "Closed · Opens Tue 09:00", and a weekly table.

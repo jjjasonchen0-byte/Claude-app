@@ -44,7 +44,7 @@ const GLYPH = {
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
   phone: '<path d="M6.6 3.5h2.6l1.5 4.2-2 1.3a11 11 0 0 0 6.3 6.3l1.3-2 4.2 1.5v2.6a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.6 5.7a2 2 0 0 1 2-2.2z"/>',
   globe: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.3 3.5 5.2 3.5 8.5s-1.1 6.2-3.5 8.5c-2.4-2.3-3.5-5.2-3.5-8.5s1.1-6.2 3.5-8.5z"/>',
-  send: '<path d="M20.5 3.5L3.5 10.6l7.3 2.6 2.6 7.3z"/>',
+  send: '<path d="M21 3L10.5 13.5M21 3l-6.5 18-4-7.5L3 9.5z"/>', // a paper aeroplane
   route: '<circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="6" r="2.2"/><path d="M8 18h6.5a3.5 3.5 0 0 0 0-7h-5a3.5 3.5 0 0 1 0-7H16"/>',
   menu: '<path d="M6 3.5h12v17H6zM9 8h6M9 12h6M9 16h4"/>',
   photo: '<rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><circle cx="9" cy="10.5" r="1.8"/><path d="M20.5 15.5l-5-5-8.5 8"/>',
@@ -68,10 +68,12 @@ const state = {
   settings: { ...DEFAULT_SETTINGS },
   view: 'people',
   search: null,
-  editingId: null,
+  edit: null, // someone's name or address being changed in their row: { id, field: 'name' | 'address', nick, text, loc }
   leaveAt: '', // when everyone leaves: '' for now, or a local date and time ("2026-11-14T09:00")
 };
-const sheet = { snap: 'mid', target: 0 };
+// On a phone: the size the sheet is at (snap), its height in pixels (target), and the size it
+// was last pulled to (chosen), which each page then opens at.
+const sheet = { snap: 'mid', target: 0, chosen: null };
 
 let map, baseLayer, peopleLayer, resultLayer, poiLayer, fxLayer, anim, searchAbort, homeSearchCtl;
 
@@ -185,6 +187,18 @@ function followKeyboard() {
   vv.addEventListener('scroll', update);
   document.addEventListener('focusin', () => setTimeout(update, 0));
   document.addEventListener('focusout', () => setTimeout(update, 60));
+}
+
+/**
+ * An iPhone or iPad zooms the page in when a box with small text is tapped,
+ * and leaves it zoomed. Every box's text is big enough on a touch screen
+ * (styles.css), and on these the page is also told not to zoom for typing:
+ * Safari still lets a person pinch to zoom whatever it is told.
+ */
+function noZoomForTyping() {
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const meta = document.querySelector('meta[name=viewport]');
+  if (ios && meta && !/maximum-scale/.test(meta.content)) meta.content += ', maximum-scale=1';
 }
 
 /** "Sam · 12 King St, Newtown" for an address kept with the heart. */
@@ -626,30 +640,81 @@ async function moveAddress(p, ll) {
   render();
 }
 
-/** Fit the map to points, leaving room for the panel. */
-/** The map's margins (top left, bottom right) left clear of the panel and the heading: [x, y] pixels each. */
+/**
+ * The map's margins (top left, bottom right) left clear of the panel and the
+ * headings: [x, y] pixels each. `cover`: how far the panel itself reaches in
+ * from the left (beside the map) or up from the bottom (a phone's sheet).
+ */
 function mapPadding() {
   const panel = $('#panel');
   const hidden = panel.classList.contains('away');
   // While searching, the heading sits at the top and the status at the bottom.
   const searching = state.view === 'searching';
   let tl = [40, searching ? 130 : 80], br = [40, searching ? 120 : 40];
+  const cover = { left: 0, bottom: 0 };
   if (!hidden) {
-    if (isMobile()) br = [30, (sheet.target || panel.offsetHeight) + 24];
-    else tl = [panel.offsetWidth + 50, 80];
+    if (isMobile()) { cover.bottom = sheet.target || panel.offsetHeight; br = [30, cover.bottom + 24]; }
+    else { cover.left = panel.offsetLeft + panel.offsetWidth; tl = [panel.offsetWidth + 50, 80]; }
   }
-  return { tl, br };
+  return { tl, br, cover };
 }
 
-function fitTo(latlngs, { maxZoom = 16, animate = true } = {}) {
+/** Fit the map to points, leaving room for the panel. With `fly`, the map glides there (more slowly). */
+function fitTo(latlngs, { maxZoom = 16, animate = true, fly = false } = {}) {
   if (!latlngs.length) return;
   const { tl, br } = mapPadding();
   const b = L.latLngBounds(latlngs);
   if (latlngs.length === 1 || b.getNorthEast().equals(b.getSouthWest())) {
-    map.setView(latlngs[0], Math.min(maxZoom, 15), { animate });
+    if (fly) map.flyTo(latlngs[0], Math.min(maxZoom, 15), { duration: 0.8 });
+    else map.setView(latlngs[0], Math.min(maxZoom, 15), { animate });
     return;
   }
-  map.fitBounds(b, { paddingTopLeft: tl, paddingBottomRight: br, maxZoom, animate });
+  if (fly) map.flyToBounds(b, { paddingTopLeft: tl, paddingBottomRight: br, maxZoom, duration: 0.8 });
+  else map.fitBounds(b, { paddingTopLeft: tl, paddingBottomRight: br, maxZoom, animate });
+}
+
+/**
+ * Are these points all in sight beside (or above) the panel and clear of the
+ * headings? With `share` under 1, only that much of each margin needs to be
+ * clear (never any of the panel's own room), so the map moves only for
+ * someone at the very edge or beyond it. Or with `margins`: [left, top,
+ * right, bottom] pixels.
+ */
+function inSight(latlngs, { share = 1, margins = null } = {}) {
+  let left, top, right, bottom;
+  if (margins) [left, top, right, bottom] = margins;
+  else {
+    const { tl, br, cover } = mapPadding();
+    left = Math.max(tl[0] * share, cover.left ? cover.left + 8 : 0);
+    top = tl[1] * share;
+    right = br[0] * share;
+    bottom = Math.max(br[1] * share, cover.bottom ? cover.bottom + 8 : 0);
+  }
+  const size = map.getSize();
+  return latlngs.every((ll) => {
+    const p = map.latLngToContainerPoint(ll);
+    return p.x >= left && p.y >= top && p.x <= size.x - right && p.y <= size.y - bottom;
+  });
+}
+// While searching (the panel away): on the screen, and not up under the heading. Anyone the map
+// was fitted to before (see mapPadding) is well inside these.
+const SEARCH_MARGINS = [20, 64, 20, 30];
+
+/**
+ * Before the search animation: the map stays just as it is when everyone is
+ * in sight, and otherwise glides to them. (The animation is drawn for one
+ * view of the map, so it starts once the map has settled.)
+ */
+function bringIntoSight(latlngs, signal) {
+  if (inSight(latlngs, { margins: SEARCH_MARGINS })) return Promise.resolve();
+  return new Promise((resolve) => {
+    let timer = 0;
+    const done = () => { clearTimeout(timer); map.off('moveend', done); signal?.removeEventListener('abort', done); resolve(); };
+    timer = setTimeout(done, 1600);
+    map.on('moveend', done);
+    signal?.addEventListener('abort', done);
+    fitTo(latlngs, { maxZoom: 16, fly: !reducedMotion(), animate: false });
+  });
 }
 
 // ---------------------------------------------------------------- bottom sheet (phones)
@@ -688,7 +753,8 @@ function typingSheet(on) {
 }
 /** While typing: the address box at the top of the sheet (again after the screen changes size, as when a keyboard opens). */
 function typingBoxToTop() {
-  const body = $('#panel-body'), box = $('.add-box', body);
+  const body = $('#panel-body');
+  const box = document.activeElement?.closest?.('.add-box, .person-edit') || $('.add-box', body);
   if (!box || !$('#panel').classList.contains('typing')) return;
   // Just below the pull tab (what scrolls goes on up under it).
   const under = $('#panel-handle')?.offsetHeight || 0;
@@ -736,14 +802,17 @@ function initSheet() {
       snap = order.reduce((a, b) => (Math.abs(s[b] - cur) < Math.abs(s[a] - cur) ? b : a));
     }
     drag = null;
+    sheet.chosen = snap;
     setSheet(snap);
   };
   handle.addEventListener('pointerup', end);
   handle.addEventListener('pointercancel', end);
   handle.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSheet(sheet.snap === 'peek' ? 'mid' : 'peek'); }
-    if (e.key === 'ArrowUp') setSheet(sheet.snap === 'peek' ? 'mid' : 'full');
-    if (e.key === 'ArrowDown') setSheet(sheet.snap === 'full' ? 'mid' : 'peek');
+    let snap = null;
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); snap = sheet.snap === 'peek' ? 'mid' : 'peek'; }
+    if (e.key === 'ArrowUp') snap = sheet.snap === 'peek' ? 'mid' : 'full';
+    if (e.key === 'ArrowDown') snap = sheet.snap === 'full' ? 'mid' : 'peek';
+    if (snap) { sheet.chosen = snap; setSheet(snap); }
   });
   window.addEventListener('resize', () => {
     setSheet(sheet.snap);
@@ -770,16 +839,16 @@ function enterMain(recentre = false) {
   setView('people');
 }
 
-function setView(view, { pop = false } = {}) {
+function setView(view) {
   state.view = view;
   state.modeMenu = null;
   if (view !== 'people') map?.closePopup(); // an "Add this address" bubble belongs to the people list
-  const panel = $('#panel');
-  panel.classList.toggle('away', view === 'searching');
+  // While the search runs the panel slides away (down off a phone's screen), and back up with the results.
+  $('#panel').classList.toggle('away', view === 'searching');
   showSearchRoutes();
-  if (pop) { panel.classList.remove('pop'); void panel.offsetWidth; panel.classList.add('pop'); }
   render();
-  if (SHEET_DEFAULT[view]) setSheet(SHEET_DEFAULT[view]);
+  // On a phone each page opens at the size the sheet was last pulled to (until it has been, the page's own size).
+  if (SHEET_DEFAULT[view]) setSheet(sheet.chosen || SHEET_DEFAULT[view]);
 }
 
 /**
@@ -838,28 +907,87 @@ function showWholeRadius(r) {
   if (!s?.meet || !map) return;
   const dLat = r / 111320, dLon = r / (111320 * Math.cos((s.meet.lat * Math.PI) / 180));
   const corners = [[s.meet.lat - dLat, s.meet.lon - dLon], [s.meet.lat + dLat, s.meet.lon + dLon]];
-  const { tl, br } = mapPadding();
-  const size = map.getSize();
-  const inSight = corners.every(([lat, lon]) => {
-    const p = map.latLngToContainerPoint([lat, lon]);
-    return p.x >= tl[0] && p.y >= tl[1] && p.x <= size.x - br[0] && p.y <= size.y - br[1];
-  });
-  if (!inSight) fitTo(corners, { maxZoom: 17 });
+  if (!inSight(corners)) fitTo(corners, { maxZoom: 17 });
 }
 
 const afterRender = {};
+// The panel's pages in order: going on to a later one slides it in from the right, going back slides the page away again.
+const PAGE_ORDER = ['people', 'results', 'group', 'place', 'share'];
+let shownView = null; // the page the panel shows (null while it is away)
 function render({ keepScroll = false } = {}) {
   const body = $('#panel-body');
   const scroll = body.scrollTop;
   const views = { people: renderPeople, results: renderResults, group: renderGroup, place: renderPlace, share: renderShare };
   if (views[state.view]) {
+    const from = shownView;
+    const leaving = from && from !== state.view ? liftPage(body, scroll) : null;
     body.innerHTML = `<div class="panel-content">${views[state.view]()}</div>`;
+    shownView = state.view;
     afterRender[state.view]?.();
     body.scrollTop = keepScroll ? scroll : 0;
     if (isMobile() && sheet.snap) setSheet(sheet.snap);
+    if (leaving) turnPage(leaving, PAGE_ORDER.indexOf(state.view) < PAGE_ORDER.indexOf(from));
+  } else {
+    shownView = null; // (the results come back up with the panel, not as a page turn)
   }
   drawPeople();
   drawRadius();
+}
+
+const reducedMotion = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+const PAGE_TURN = { duration: 420, easing: 'cubic-bezier(0.32, 0.72, 0, 1)' };
+let pageTurn = null; // { layer, anims } while one page slides over another
+
+/**
+ * The page on show, lifted out of the panel into a layer of its own just
+ * where it was (scrolled as it was), to move away as the next page comes in.
+ * Null when there would be nothing to see move.
+ */
+function liftPage(body, scroll) {
+  const panel = $('#panel');
+  const content = body.firstElementChild;
+  if (pageTurn) { for (const a of pageTurn.anims) a.finish(); pageTurn.layer.remove(); } // one turn at a time
+  if (!content || reducedMotion() || panel.classList.contains('away') || $('#screen-main').hidden || !body.offsetHeight) return null;
+  const cs = getComputedStyle(body);
+  const layer = document.createElement('div');
+  layer.className = 'page-leaving';
+  layer.setAttribute('aria-hidden', 'true');
+  layer.inert = true;
+  Object.assign(layer.style, {
+    top: `${body.offsetTop}px`, height: `${body.offsetHeight}px`,
+    paddingTop: cs.paddingTop, paddingRight: cs.paddingRight, paddingBottom: cs.paddingBottom, paddingLeft: cs.paddingLeft,
+  });
+  content.style.width = `${content.offsetWidth}px`;
+  for (const el of content.querySelectorAll('[id]')) el.removeAttribute('id'); // (the next page may use the same ones)
+  layer.append(content);
+  panel.append(layer);
+  layer.scrollTop = scroll;
+  return layer;
+}
+
+/**
+ * The next page slides in from the right over the one leaving, which moves
+ * a little way left as it fades (like turning a page in an iPhone app). Going
+ * back, the page leaving slides away to the right, uncovering the one before.
+ */
+function turnPage(layer, back) {
+  const body = $('#panel-body'), panel = $('#panel');
+  panel.classList.add('paging');
+  layer.style.zIndex = back ? '2' : '-1'; // over the page coming back; under the page coming in
+  const anims = back
+    ? [body.animate([{ transform: 'translateX(-30%)', opacity: 0 }, { transform: 'none', opacity: 1 }], PAGE_TURN),
+      layer.animate([{ transform: 'none' }, { transform: 'translateX(100%)' }], PAGE_TURN)]
+    : [body.animate([{ transform: 'translateX(100%)' }, { transform: 'none' }], PAGE_TURN),
+      // (gone before the next page is far in: the pages are see-through, and two at once would be a jumble)
+      layer.animate([{ transform: 'none', opacity: 1 }, { opacity: 0, offset: 0.55 }, { transform: 'translateX(-30%)', opacity: 0 }], PAGE_TURN)];
+  const turn = pageTurn = { layer, anims };
+  const done = () => {
+    layer.remove();
+    if (pageTurn !== turn) return;
+    pageTurn = null;
+    panel.classList.remove('paging');
+  };
+  anims[1].finished.then(done, done);
 }
 
 // ------------------------------------------------ people view
@@ -867,37 +995,108 @@ function render({ keepScroll = false } = {}) {
 function renderPeople() {
   const all = everyone();
   const active = all.filter((p) => p.active).length;
-  const rows = all.map((p) => {
-    const editing = state.editingId === p.id;
-    return `<li class="person${p.active ? '' : ' inactive'}" data-id="${esc(p.id)}">
-      <div class="cell">
-        <span class="avatar" style="--c:${p.color}">${esc(initial(p.name))}</span>
-        <div class="cell-main" data-action="focus" style="cursor:pointer">
-          <span class="title-row"><span class="cell-title">${esc(p.isHome ? (state.user.name ? `You (${state.user.name})` : 'You') : p.name)}</span>${modePill(p)}</span>
-          <span class="cell-sub" title="${esc(p.address)}">${esc(shortAddr(p.address))}</span>
-          ${editing ? `<form class="edit-inline" data-action="save-nick"><input id="nick-${esc(p.id)}" name="nick" value="${esc(p.nickname || '')}" maxlength="60" placeholder="Name"><button class="btn btn-primary">Save</button></form>` : ''}
-        </div>
-        <div class="person-actions">
-          ${p.isHome
-            ? '<button class="btn btn-plain" data-action="edit-home" aria-label="Change your starting point">Edit</button>'
-            : `<button class="icon-circle" data-action="edit" aria-label="Rename ${esc(p.name)}">${glyph('pencil', 14)}</button>
-               <button class="icon-circle" data-action="delete" aria-label="Remove ${esc(p.name)}">${glyph('close', 13, 2.6)}</button>
-               <label class="switch" title="${p.active ? 'Included' : 'Left out'}">
-                 <input type="checkbox" data-action="toggle" ${p.active ? 'checked' : ''} aria-label="Include ${esc(p.name)}"><span></span></label>`}
-        </div>
-      </div>
-      ${modePicker(p)}
-    </li>`;
-  }).join('');
+  const rows = all.map((p) => (state.edit?.id === p.id ? personEditor(p) : personRow(p))).join('');
   return `
     <div class="sheet-title"><h2>Who's meeting</h2><span class="badge">${active} of ${all.length}</span></div>
-    <ul class="group icons">${rows}</ul>
+    <ul class="group icons people">${rows}</ul>
     ${addBox()}
     <p class="footnote" style="margin:0 6px">Or tap the map to drop a pin. Drag any pin to move it.</p>
     ${leaveRow()}
     <div class="cta">
       <button class="btn btn-primary btn-block btn-lg" data-action="find" ${active < 2 ? 'disabled' : ''}>Let’s meet</button>
     </div>`;
+}
+
+/** A pencil beside someone's name or address, to change it there in their row. */
+const pencil = (field, label) => `<button class="inline-edit" type="button" data-action="edit" data-field="${field}" aria-label="${esc(label)}" title="${esc(label)}">${glyph('pencil', 13, 2.1)}</button>`;
+
+/**
+ * Someone in the list: their name and their address, each with a pencil
+ * beside it (someone without a name: just the address and its pencil), the
+ * switch that leaves them out, and below, how they travel, the heart that
+ * keeps their address on this device, and removing them.
+ */
+function personRow(p) {
+  const kept = !!savedMatch(p);
+  const title = p.isHome ? (state.user.name ? `You (${state.user.name})` : 'You') : p.nickname;
+  const heartLabel = kept ? 'Saved on this device. Tap to forget it' : 'Save this address on this device';
+  return `<li class="person${p.active ? '' : ' inactive'}${p.isHome ? ' home' : ''}" data-id="${esc(p.id)}">
+      <div class="cell person-cell">
+        <span class="avatar" data-action="focus" style="--c:${p.color}">${esc(initial(p.name))}</span>
+        ${title ? `<div class="p-line p-name"><span class="cell-title" data-action="focus">${esc(title)}</span>${p.isHome ? '' : pencil('name', `Rename ${p.name}`)}</div>` : ''}
+        <div class="p-line p-addr${title ? '' : ' alone'}"><span class="${title ? 'cell-sub' : 'cell-title'}" data-action="focus" title="${esc(p.address)}">${esc(shortAddr(p.address))}</span>${pencil('address', p.isHome ? 'Change your starting point' : `Change ${p.name}’s address`)}</div>
+        ${p.isHome ? '' : `<label class="switch p-switch" title="${p.active ? 'Included' : 'Left out'}">
+          <input type="checkbox" data-action="toggle" ${p.active ? 'checked' : ''} aria-label="Include ${esc(p.name)}"><span></span></label>`}
+        <div class="p-tools">${modePill(p)}<span class="p-end">
+          <button class="heart-btn p-heart${kept ? ' on' : ''}" type="button" data-action="heart-person" aria-pressed="${kept}" aria-label="${heartLabel}" title="${heartLabel}">${heart(kept, 19)}</button>
+          ${p.isHome ? '' : `<button class="icon-circle" type="button" data-action="delete" aria-label="Remove ${esc(p.name)}" title="Remove">${glyph('close', 13, 2.6)}</button>`}
+        </span></div>
+      </div>
+      ${modePicker(p)}
+    </li>`;
+}
+
+/** Changing someone's name and address in their row (your own row: your starting point). */
+function personEditor(p) {
+  const ed = state.edit;
+  return `<li class="person editing${p.isHome ? ' home' : ''}" data-id="${esc(p.id)}">
+      <form class="cell person-edit" data-action="save-edit" autocomplete="off">
+        <span class="avatar" style="--c:${p.color}">${esc(initial(p.name))}</span>
+        <div class="edit-fields">
+          ${p.isHome ? '' : `<input id="edit-nick" name="nick" value="${esc(ed.nick ?? p.nickname ?? '')}" maxlength="60" placeholder="Name (optional)" aria-label="Name" autocomplete="off" enterkeyhint="next">`}
+          <div class="search searchfield" id="edit-search">
+            <input id="edit-address" type="search" value="${esc(ed.text ?? p.address)}" placeholder="${p.isHome ? 'Where you’re starting from' : 'Their address'}" aria-label="Address" autocomplete="off" enterkeyhint="done">
+            <ul class="suggestions inline" role="listbox" hidden></ul>
+          </div>
+          <div class="edit-buttons">
+            <button class="btn btn-plain" type="button" data-action="edit-cancel">Cancel</button>
+            <button class="btn btn-primary" type="submit">Save</button>
+          </div>
+        </div>
+      </form>
+    </li>`;
+}
+
+/** Save what was changed in someone's row: their name, and their address if a new one was picked. */
+async function saveEdit() {
+  const ed = state.edit;
+  const p = ed && everyone().find((x) => x.id === ed.id);
+  if (!p) { state.edit = null; render({ keepScroll: true }); return; }
+  const text = ($('#edit-address')?.value ?? ed.text ?? p.address).trim();
+  const loc = ed.loc && text === ed.loc.address ? ed.loc : null;
+  if (!loc && text !== p.address) {
+    toast('Pick the new address from the list');
+    $('#edit-address')?.focus();
+    return;
+  }
+  const nickname = ($('#edit-nick')?.value ?? ed.nick ?? p.nickname ?? '').trim();
+  state.edit = null;
+  document.activeElement?.blur(); // done: the keyboard goes down
+  if (p.isHome) {
+    if (loc) await moveHome(loc);
+    else render({ keepScroll: true });
+    return;
+  }
+  const patch = {};
+  if (nickname !== (p.nickname || '')) patch.nickname = nickname;
+  if (loc) Object.assign(patch, { address: loc.address, lat: loc.lat, lon: loc.lon });
+  if (!Object.keys(patch).length) { render({ keepScroll: true }); return; }
+  await patchPlace(p.id, patch);
+  if (loc) fitTo(activePeople().map((x) => [x.lat, x.lon]), { maxZoom: 15 });
+}
+
+/** Your starting point moved (with the pencil beside it). */
+async function moveHome(loc) {
+  try {
+    state.user = (await api.updateMe({ home: { ...state.user.home, address: loc.address, lat: loc.lat, lon: loc.lon } })).user;
+    state.sharePlace = null;
+    render({ keepScroll: true });
+    fitTo(activePeople().map((x) => [x.lat, x.lon]), { maxZoom: 15 });
+    toast('Moved your starting point');
+  } catch (err) {
+    toast(err.message, { error: true });
+    render({ keepScroll: true });
+  }
 }
 
 /**
@@ -960,24 +1159,36 @@ async function addFromBox() {
   await addPlace({ ...d.loc, nickname });
 }
 
-/** The heart: keep the picked address on this device (with the name typed), or forget it again. */
-async function toggleSavedAddress() {
-  const loc = state.addDraft?.loc;
-  if (!loc) return;
+/** Keep an address on this device (with a name, if it has one), or forget it again if it is kept already. */
+async function toggleSaved(loc, nickname = '') {
   const kept = savedMatch(loc);
   try {
     if (kept) {
       await forgetAddress(kept.id);
       toast(`Forgot ${savedTitle(kept)}`);
     } else {
-      const nickname = ($('#add-nick')?.value || '').trim();
-      const { saved } = await api.saveAddress({ ...loc, nickname });
+      const { saved } = await api.saveAddress({ address: loc.address, lat: loc.lat, lon: loc.lon, nickname });
       state.saved = [saved, ...state.saved.filter((s) => s.id !== saved.id && !(s.address === saved.address && haversine(s.lat, s.lon, saved.lat, saved.lon) < 15))];
       toast(`Saved ${savedTitle(saved)} on this device`);
       warnIfUnsaved();
     }
   } catch (err) { toast(err.message, { error: true }); }
+}
+
+/** The heart in the add box: the picked address (with the name typed). */
+async function toggleSavedAddress() {
+  const loc = state.addDraft?.loc;
+  if (!loc) return;
+  await toggleSaved(loc, ($('#add-nick')?.value || '').trim());
   refreshAddBox();
+}
+
+/** The heart in someone's row: their address (with their name). */
+async function toggleSavedPerson(id) {
+  const p = everyone().find((x) => x.id === id);
+  if (!p) return;
+  await toggleSaved(p, p.isHome ? '' : p.nickname || '');
+  render({ keepScroll: true });
 }
 
 /** Forget a saved address. */
@@ -1039,21 +1250,50 @@ afterRender.people = () => {
   nickBox.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); if (state.addDraft?.loc) addFromBox(); else add.input.focus(); } });
   // The heart keeps the keyboard where it is (tapping it doesn't take the cursor from the box).
   $('[data-action=save-address]').addEventListener('mousedown', (e) => e.preventDefault());
+  const fields = [add.input, nickBox];
+  const editor = editPerson();
+  if (editor) fields.push(...editor.fields);
   // On a phone the sheet opens all the way for typing (see typingSheet). A list drawn
   // again (someone added) starts out of that state.
   typingSheet(false);
-  const stay = () => ['add-input', 'add-nick'].includes(document.activeElement?.id);
-  for (const el of [add.input, nickBox]) {
+  const stay = () => fields.includes(document.activeElement);
+  for (const el of fields) {
     el.addEventListener('focus', () => {
       if (!isMobile()) return;
       typingSheet(true);
-      setTimeout(() => { typingBoxToTop(); add.fit(); }, 350); // once the sheet has grown
+      setTimeout(() => { typingBoxToTop(); fitSuggestions?.(); }, 350); // once the sheet has grown
     });
     el.addEventListener('blur', () => setTimeout(() => { if (!stay()) typingSheet(false); }, 200));
   }
-  const nick = $('.edit-inline input');
-  if (nick) { nick.focus(); nick.select(); }
+  editor?.focus();
 };
+
+/** The boxes in a row being changed: a new address picked from suggestions, the name kept as it is typed. */
+function editPerson() {
+  const form = $('.person-edit');
+  const ed = state.edit;
+  const p = ed && everyone().find((x) => x.id === ed.id);
+  if (!form || !p) return null;
+  const nick = $('#edit-nick');
+  const ctl = attachSearch($('#edit-search'), {
+    near: () => p,
+    onPick: (r) => { ed.loc = { address: r.address, lat: Number(r.lat), lon: Number(r.lon) }; ed.text = r.address; },
+    saved: () => state.saved,
+    onUnsave: forgetAddress,
+  });
+  ctl.input.addEventListener('input', () => { ed.text = ctl.input.value; });
+  nick?.addEventListener('input', () => { ed.nick = nick.value; });
+  // Enter in the name goes on to the address; Escape (with no suggestions open) leaves things as they were.
+  nick?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); ctl.input.focus(); } });
+  form.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && $('.suggestions', form).hidden) { e.preventDefault(); state.edit = null; render({ keepScroll: true }); }
+  }, true);
+  const first = ed.field === 'name' && nick ? nick : ctl.input;
+  return {
+    fields: [nick, ctl.input].filter(Boolean),
+    focus: () => { if (document.activeElement !== first) { first.focus(); first.select(); } },
+  };
+}
 
 async function addPlace(loc) {
   try {
@@ -1096,9 +1336,9 @@ async function patchPlace(id, patch) {
   if (!p) return;
   const before = { ...p };
   Object.assign(p, patch);
-  render();
+  render({ keepScroll: true }); // (the list stays where it was scrolled to)
   try { await api.updatePlace(id, patch); }
-  catch (err) { Object.assign(p, before); render(); toast(err.message, { error: true }); }
+  catch (err) { Object.assign(p, before); render({ keepScroll: true }); toast(err.message, { error: true }); }
 }
 
 // ------------------------------------------------ search flow
@@ -1242,13 +1482,16 @@ async function findPlaces({ replay = false } = {}) {
   searchAbort = ctrl;
   clearSearchVisuals();
   setView('searching');
-  fitTo(people.map((p) => [p.lat, p.lon]), { maxZoom: 16, animate: false });
+  setStatus(prev ? 'Replaying the search' : 'Finding the fairest spot…');
+  // The map stays as it was (it moves, smoothly, only to bring someone into sight): the lines are drawn on it.
+  await bringIntoSight(people.map((p) => [p.lat, p.lon]), ctrl.signal);
+  if (ctrl.signal.aborted) return;
   const rule = prev?.rule || (state.settings.mode === 'total' ? 'total' : 'similar');
   // Everyone leaves now, or at the time chosen above the Find button (public transport timetables use it).
   const leaveAt = prev ? prev.leaveAt : leaveTime();
   const at = leaveAt ? { time: leaveAt } : {};
   const fx = anim = new FloodAnimation(map, { people, pace: PACE[state.settings.speed] || PACE.normal, theme: isDark() ? 'dark' : 'light' });
-  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) fx.skip();
+  if (reducedMotion()) fx.skip();
   const live = () => !ctrl.signal.aborted && anim === fx;
   floodMode(true, people);
   const status = (text) => setStatus(text, { skip: true });
@@ -1290,8 +1533,9 @@ async function findPlaces({ replay = false } = {}) {
     const spot = meeting.meet;
     if (!Number.isFinite(spot?.lat) || !Number.isFinite(spot?.lon)) throw new Error('Couldn’t place a meeting point. Try again, or move someone’s pin.');
     let meet = prev ? prev.meet : spot;
-    // Keep the meeting point in view (it can lie a little outside the group).
-    if (!map.getBounds().pad(-0.06).contains([meet.lat, meet.lon])) fitTo([...people.map((p) => [p.lat, p.lon]), [meet.lat, meet.lon]], { maxZoom: 16, animate: false });
+    // Keep the meeting point in view (it can lie a little outside the group): the map glides to take it in.
+    await bringIntoSight([...people.map((p) => [p.lat, p.lon]), [meet.lat, meet.lon]], ctrl.signal);
+    if (!live()) return;
     const search = state.search = {
       people, meeting, meet, local, anchor: prev?.anchor || null, routes: prev?.routes || null, rule, leaveAt,
       pois: prev?.pois || null, grouped: prev?.grouped || null, radius: prev?.radius || null, loaded: prev?.loaded || null, tab: prev?.tab || null,
@@ -1364,8 +1608,10 @@ async function findPlaces({ replay = false } = {}) {
     await poisPromise;
     if (ctrl.signal.aborted) return;
     setStatus('');
-    setView('results', { pop: true });
-    fitTo([...people.map((p) => [p.lat, p.lon]), [meet.lat, meet.lon]], { maxZoom: 16 });
+    // The panel slides back up with the results; the map moves only if the panel would cover someone.
+    setView('results');
+    const pts = [...people.map((p) => [p.lat, p.lon]), [meet.lat, meet.lon]];
+    if (!inSight(pts, { share: 0.6 })) fitTo(pts, { maxZoom: 16 });
   } catch (err) {
     if (ctrl.signal.aborted) return;
     console.error(err);
@@ -1470,9 +1716,8 @@ const tripRow = (person, d, sec, approx = false) => `<li class="trip"><div class
   <span class="cell-main"><span class="title-row"><span class="cell-title">${esc(person.name)}</span>${modePill(person)}</span></span>
   <span class="cell-end"><b>${sec != null ? `${approx ? '≈ ' : ''}${mins(sec)}` : `≈ ${fmtTime(travelMinutes(d, person.mode))}`}</b>${fmtDist(d)}</span></div>${modePicker(person)}</li>`;
 
-/** Everyone-at-once bar; shows the shared mode, or nothing selected when people differ. */
-function modeSwitch(action) {
-  const people = state.search?.people || activePeople();
+/** Everyone-at-once bar (or one person's); shows the shared mode, or nothing selected when people differ. */
+function modeSwitch(action, people = state.search?.people || activePeople()) {
   const common = people.length && people.every((p) => p.mode === people[0].mode) ? people[0].mode : null;
   return `<div class="segmented modes" role="group" aria-label="Set how everyone travels">
   ${MODES.map((m) => `<button class="seg${m.id === common ? ' active' : ''}" data-action="${action}" data-mode="${m.id}" aria-pressed="${m.id === common}">${glyph(m.id, 15)}<span>${m.label}</span></button>`).join('')}
@@ -1501,13 +1746,14 @@ function loadMeetTimes() {
 
 // ------------------------------------------------ results view
 
-/** " · 35–42 min": the shortest and longest trip to the meeting point. */
-function tripRange(s) {
-  const t = s.people.map((p, i) => s.meetTimes?.values[i] ?? s.meeting.times[i]).filter((x) => x != null);
-  if (!t.length) return '';
-  const lo = Math.max(1, Math.round(Math.min(...t) / 60)), hi = Math.max(1, Math.round(Math.max(...t) / 60));
-  return lo === hi ? ` · ${fmtTime(hi)} each` : ` · ${hi < 60 ? `${lo}–${hi} min` : `${fmtTime(lo)} – ${fmtTime(hi)}`}`;
-}
+/**
+ * The meeting point as a place of its own, to send or to see the way to.
+ * With onlyYou it is "Your route": just your way there.
+ */
+const meetPlace = (s, { onlyYou = false } = {}) => ({
+  id: 'meet', name: s.anchor ? s.anchor.name : s.area ? shortAddr(s.area) : 'Meeting point', lat: s.meet.lat, lon: s.meet.lon,
+  tab: 'meet', group: 'Meeting point', address: s.area || '', fromCenter: 0, onlyYou,
+});
 
 /** The address under the meeting place's name: the street and area, without the name said again. */
 function areaLine(s) {
@@ -1537,19 +1783,21 @@ function renderResults() {
     : `<div class="empty">${s.poiError ? esc(s.poiError) : s.poiLoading ? 'Looking for places…' : `Nothing found within ${fmtRadius(s.radius || RADIUS.start)}. Slide the distance further.`}</div>`;
 
   return `
-    <div class="result-head">
+    <div class="result-head" data-rule="${s.rule}">
       <span class="meet-badge"><i></i></span>
       <div style="min-width:0">
-        <div class="eyebrow">${s.rule === 'total' ? 'Least total travel' : 'Similar travel times'}${tripRange(s)}</div>
         <h2>${esc(s.anchor ? s.anchor.name : s.area ? shortAddr(s.area) : 'Your meeting point')}</h2>
         ${s.anchor && areaLine(s) ? `<div class="footnote">${esc(areaLine(s))}</div>` : ''}
       </div>
     </div>
     <ul class="group icons">${s.people.map((p, i) => tripRow(p, s.routes?.[i]?.distance ?? s.meeting.dists[i], s.meetTimes?.values[i], s.meetTimes?.approx?.[i])).join('')}
-      <li><button class="cell cell-btn" data-action="edit-people">${tile('pencil')}<span class="cell-main cell-title">Edit people</span>${CHEV}</button></li>
-      <li><button class="cell cell-btn" data-action="meet-place">${tile('meet')}<span class="cell-main cell-title">Routes to this spot &amp; send it</span>${CHEV}</button></li></ul>
-    ${s.leaveAt ? `<p class="footnote" style="margin:-4px 6px 12px">Times for leaving at ${esc(fmtLeave(s.leaveAt))}.</p>` : ''}
+      <li><button class="cell cell-btn" data-action="edit-people">${tile('pencil')}<span class="cell-main cell-title">Edit people</span>${CHEV}</button></li></ul>
+    ${s.leaveAt ? `<p class="footnote times-note">Times for leaving at ${esc(fmtLeave(s.leaveAt))}.</p>` : ''}
     ${s.meeting.approx ? '<p class="notice">Travel times could not be checked right now, so this spot is estimated from distance.</p>' : ''}
+    <div class="meet-actions">
+      ${s.people.some((p) => p.isHome) ? `<button class="btn btn-tinted" data-action="your-route">${glyph('route', 17)}<span>Your route</span></button>` : ''}
+      <button class="btn btn-primary" data-action="send-meet">${glyph('send', 16)}<span>Send</span></button>
+    </div>
     <div class="pills" role="tablist">${tabs}</div>
     ${list}
     ${radiusRow(s, total)}
@@ -1947,18 +2195,22 @@ function renderPlace() {
   const s = state.search;
   const p = s.place;
   const ds = distancesTo(p);
-  if (s.placeDrawn !== p.id) {
-    s.placeDrawn = p.id;
+  if (s.placeDrawn !== placeKey(p)) {
+    s.placeDrawn = placeKey(p);
     s.markersKey = null;
     poiLayer.clearLayers();
-    L.marker([p.lat, p.lon], {
-      icon: L.divIcon({ className: '', html: `<div class="poi-pin hl" style="--c:${TAB_COLOR[p.tab] || '#007aff'}">${glyph(p.tab, 15)}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] }),
-      zIndexOffset: 1200,
-    }).bindTooltip(esc(p.name), { permanent: true, direction: 'right', className: 'label', offset: [18, 0] }).addTo(poiLayer);
-    requestAnimationFrame(() => fitTo([...s.people.map((x) => [x.lat, x.lon]), [p.lat, p.lon]], { maxZoom: 16 }));
+    // (The meeting point has its own pin already.)
+    if (p.id !== 'meet') {
+      L.marker([p.lat, p.lon], {
+        icon: L.divIcon({ className: '', html: `<div class="poi-pin hl" style="--c:${TAB_COLOR[p.tab] || '#007aff'}">${glyph(p.tab, 15)}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] }),
+        zIndexOffset: 1200,
+      }).bindTooltip(esc(p.name), { permanent: true, direction: 'right', className: 'label', offset: [18, 0] }).addTo(poiLayer);
+    }
+    requestAnimationFrame(() => fitTo([...routePeople(s).map((i) => [s.people[i].lat, s.people[i].lon]), [p.lat, p.lon]], { maxZoom: 16 }));
   }
   loadPlaceDirections();
   drawDirections();
+  if (p.onlyYou) return renderYourRoute(p, ds);
 
   const d = p.details || { photos: [], reviews: [] };
   const r = d.rating != null ? d : p.rating;
@@ -2007,11 +2259,38 @@ function renderPlace() {
     ${p.id !== 'meet' ? `<p class="footnote attrib">Place details from <a href="https://www.openstreetmap.org/${esc(p.id)}" target="_blank" rel="noopener">OpenStreetMap</a>${d.source === 'tripadvisor' ? ' and Tripadvisor' : d.source === 'google' ? ' and Google Maps' : ''}</p>` : ''}`;
 }
 
+/** Which page a place's routes and pin were drawn for: a place, or the meeting point (everyone's way there, or just yours). */
+const placeKey = (p) => `${p.id}${p.onlyYou ? ':you' : ''}`;
+/** Whose routes the open place shows (their places in the search's list): everyone's, or with "Your route" just yours. */
+function routePeople(s) {
+  const you = s.people.findIndex((x) => x.isHome);
+  return s.place?.onlyYou && you >= 0 ? [you] : s.people.map((_, i) => i);
+}
+
+/** "Your route": your way to the meeting point, step by step, and sending the spot. */
+function renderYourRoute(p, ds) {
+  const s = state.search;
+  const me = s.people[routePeople(s)[0]];
+  return `
+    ${backBtn('back-results', 'Back')}
+    <div class="sheet-title">
+      <span class="avatar" style="--c:${me.color}">${esc(initial(me.name))}</span>
+      <div style="flex:1;min-width:0"><h2>Your route</h2><div class="footnote">To ${esc(p.name)}${p.address && p.address !== p.name ? `, ${esc(shortAddr(p.address))}` : ''}</div></div>
+    </div>
+    ${placeOverview(p, {}, null, ds)}
+    <div class="actions">
+      <button class="btn btn-tinted" data-action="open-maps">Open in Maps</button>
+      <button class="btn btn-primary" data-action="choose">${glyph('send', 15)}<span>Send</span></button>
+    </div>`;
+}
+
 function placeOverview(p, d, r, ds) {
   const s = state.search;
   const when = state.when || { type: 'now' };
-  const anyTransit = s.people.some((x) => x.mode === 'transit');
-  const anyRoad = s.people.some((x) => x.mode !== 'transit');
+  const shown = routePeople(s);
+  const people = shown.map((i) => s.people[i]);
+  const anyTransit = people.some((x) => x.mode === 'transit');
+  const anyRoad = people.some((x) => x.mode !== 'transit');
   const fromGoogle = (state.dir?.results || []).some((r) => r.status === 'ok' && r.data?.provider === 'google');
   const credits = [fromGoogle && ATTRIBUTION.google, !fromGoogle && anyTransit && ATTRIBUTION.transit, !fromGoogle && anyRoad && ATTRIBUTION.routing].filter(Boolean)
     .map((a) => `<a href="${a.url}" target="_blank" rel="noopener">${esc(a.text)}</a>`).join(' · ');
@@ -2025,8 +2304,8 @@ function placeOverview(p, d, r, ds) {
   const summary = d.ranking || d.description || p.description;
   return `
     ${summary ? `<p class="place-summary">${esc(d.ranking ? d.ranking : '')}${d.ranking && (d.description || p.description) ? '<br>' : ''}${esc(truncate(d.description || p.description || '', 600))}</p>` : ''}
-    <div class="section-title" id="getting-there">Getting there</div>
-    ${modeSwitch('dir-mode')}
+    ${p.onlyYou ? '' : '<div class="section-title" id="getting-there">Getting there</div>'}
+    ${p.onlyYou ? modeSwitch('you-mode', people) : modeSwitch('dir-mode')}
     ${anyTransit ? `<div class="when-row">
       <select id="dir-when-type" aria-label="When">
         <option value="now"${when.type === 'now' ? ' selected' : ''}>${s.leaveAt ? `Leave at ${esc(clock(s.leaveAt))}` : 'Leave now'}</option>
@@ -2034,7 +2313,7 @@ function placeOverview(p, d, r, ds) {
       </select>
       ${when.type === 'arrive' ? `<input type="datetime-local" id="dir-when-time" value="${esc(when.time || '')}" aria-label="Arrive by">` : ''}
     </div>` : ''}
-    <ul class="group icons dirs">${s.people.map((person, i) => dirRow(person, i, ds[i])).join('')}</ul>
+    <ul class="group icons dirs">${shown.map((i) => dirRow(s.people[i], i, ds[i])).join('')}</ul>
     <p class="footnote attrib">${credits}</p>
     <div class="section-title">Details</div>
     <ul class="group kv">
@@ -2208,16 +2487,20 @@ function openLightbox(photos, start) {
 function loadPlaceDirections() {
   const s = state.search;
   const p = s.place;
-  const modes = s.people.map((x) => x.mode);
+  const shown = routePeople(s);
+  const modes = shown.map((i) => s.people[i].mode);
   const when = modes.includes('transit') ? state.when || { type: 'now' } : { type: 'now' };
-  const key = [p.id, modes.join(','), when.type, when.time || '', s.leaveAt || ''].join('|');
+  const key = [placeKey(p), modes.join(','), when.type, when.time || '', s.leaveAt || ''].join('|');
   if (state.dir?.key === key) return;
   const prev = state.dir;
   // The lines drawn for the old ways of travelling (or the old time) go: the new ones replace them.
   if (prev?.layer) poiLayer.removeLayer(prev.layer);
-  const dir = state.dir = { key, results: s.people.map(() => ({ status: 'loading' })), expanded: prev?.key?.startsWith(`${p.id}|`) ? prev.expanded : -1, fitted: false };
+  // Your route opens with its steps showing; a place keeps the person opened (if any) when the way of travelling changes.
+  const expanded = prev?.key?.startsWith(`${placeKey(p)}|`) ? prev.expanded : p.onlyYou ? shown[0] : -1;
+  const dir = state.dir = { key, results: s.people.map((_, i) => ({ status: shown.includes(i) ? 'loading' : 'none' })), expanded, fitted: false };
   const opts = when.type === 'arrive' && when.time ? { time: new Date(when.time), arriveBy: true } : s.leaveAt ? { time: s.leaveAt } : {};
-  s.people.forEach((person, i) => {
+  shown.forEach((i) => {
+    const person = s.people[i];
     getDirections(person.mode, person, p, person.mode === 'transit' ? opts : {})
       .then((data) => { dir.results[i] = { status: 'ok', data, option: 0 }; })
       .catch((err) => { dir.results[i] = { status: 'error', message: friendlyError(err, person.mode) }; })
@@ -2228,7 +2511,7 @@ function loadPlaceDirections() {
         if (!dir.fitted && dir.results.every((r) => r.status !== 'loading')) {
           dir.fitted = true;
           const pts = dir.results.flatMap((r) => (r.status === 'ok' ? routeGeometry(r) : []));
-          if (pts.length) fitTo([...pts, ...s.people.map((x) => [x.lat, x.lon]), [p.lat, p.lon]], { maxZoom: 16 });
+          if (pts.length) fitTo([...pts, ...shown.map((k) => [s.people[k].lat, s.people[k].lon]), [p.lat, p.lon]], { maxZoom: 16 });
         }
       });
   });
@@ -2251,7 +2534,9 @@ const routeGeometry = (r) => (r.data.options ? currentOption(r).legs.flatMap((l)
  */
 function showSearchRoutes() {
   const view = state.view;
-  const rerouted = ['place', 'share'].includes(view) && state.dir?.results.some((r) => r.status === 'ok');
+  const p = state.search?.place;
+  const own = ['place', 'share'].includes(view) && !!p && !!state.dir?.key.startsWith(`${placeKey(p)}|`);
+  const rerouted = own && (p.onlyYou || state.dir.results.some((r) => r.status === 'ok'));
   anim?.canvas.classList.toggle('away', !!rerouted);
   anim?.canvas.classList.toggle('dim', !rerouted && ['group', 'place', 'share'].includes(view));
 }
@@ -2265,6 +2550,7 @@ function drawDirections() {
   const layer = dir.layer = L.layerGroup().addTo(poiLayer);
   s.people.forEach((person, i) => {
     const r = dir.results[i];
+    if (r.status === 'none') return; // (Your route: just yours)
     const dim = dir.expanded >= 0 && dir.expanded !== i;
     const opacity = dim ? 0.3 : 1;
     if (r.status !== 'ok') {
@@ -2362,7 +2648,7 @@ function renderShare() {
   const msg = messagingLinks(text, `Meet at ${p.name}?`);
   const links = mapLinks(p);
   return `
-    ${backBtn(state.search?.place ? 'back-place' : 'back-people', 'Back')}
+    ${backBtn('back-share', 'Back')}
     <div class="eyebrow" style="margin-left:4px">Send location</div>
     <div class="sheet-title" style="margin-top:0"><h2>${esc(p.name)}</h2></div>
     <p class="footnote" style="margin:-8px 4px 14px">${esc(p.address || `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`)}</p>
@@ -2434,20 +2720,17 @@ function initPanel() {
         if (p) map.flyTo([p.lat, p.lon], Math.max(map.getZoom(), 15), { duration: 0.6 });
         break;
       }
-      case 'edit': state.editingId = state.editingId === id ? null : id; render(); break;
-      case 'edit-home': showHomeScreen(true); break;
+      case 'edit': state.edit = { id, field: el.dataset.field === 'address' ? 'address' : 'name' }; render({ keepScroll: true }); break;
+      case 'edit-cancel': state.edit = null; render({ keepScroll: true }); break;
+      case 'heart-person': toggleSavedPerson(id); break;
       case 'delete': deletePlace(id); break;
       case 'toggle': patchPlace(id, { active: el.checked }); break;
       case 'tab': s.tab = el.dataset.tab; render(); break;
       case 'group': s.markersKey = null; s.group = el.dataset.group; s.sort = s.sort || 'near'; setView('group'); break;
       case 'replay': findPlaces({ replay: true }); break;
-      case 'meet-place': {
-        const m = s.meet;
-        s.place = { id: 'meet', name: s.anchor ? s.anchor.name : s.area ? shortAddr(s.area) : 'Meeting point', lat: m.lat, lon: m.lon, tab: 'meet', group: 'Meeting point', address: s.area || '', fromCenter: 0 };
-        s.placeDrawn = null;
-              setView('place');
-        break;
-      }
+      case 'your-route': s.place = meetPlace(s, { onlyYou: true }); s.placeDrawn = null; setView('place'); break;
+      case 'send-meet': s.place = meetPlace(s); state.shareFrom = 'results'; enterShare(); break;
+      case 'you-mode': setPersonMode(s.people[routePeople(s)[0]].id, el.dataset.mode); break;
       case 'edit-people': cancelSearch(); break;
       case 'back-results':
         poiLayer.clearLayers();
@@ -2481,17 +2764,21 @@ function initPanel() {
         render({ keepScroll: true });
         break;
       }
-      case 'choose': enterShare(); break;
+      case 'choose': state.shareFrom = 'place'; enterShare(); break;
       case 'jump': { // to a part of a place's page (Directions, its reviews)
-        if (isMobile() && sheet.snap === 'peek') setSheet('mid');
+        if (isMobile() && sheet.snap === 'peek') { sheet.chosen = 'mid'; setSheet('mid'); }
         document.getElementById(el.dataset.to)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         break;
       }
       case 'open-maps': chooseMapsApp(s.place); break;
       case 'photo': openLightbox(s.place.details?.photos || [], Number(el.dataset.i)); break;
       case 'rv-more': el.classList.toggle('open'); break;
-      case 'back-place': setView('place'); break;
-      case 'back-people': state.sharePlace = null; poiLayer.clearLayers(); setView('people'); break;
+      case 'back-share': // to the page Send was pressed on
+        if (s) { setView(state.shareFrom || 'place'); break; }
+        state.sharePlace = null;
+        poiLayer.clearLayers();
+        setView('people');
+        break;
       case 'native-share': {
         const ok = await nativeShare(shareContext(), state.shareText);
         if (!ok && await copyText(state.shareText)) toast('Copied. Paste it into your group chat.');
@@ -2516,12 +2803,9 @@ function initPanel() {
     if ((e.key === 'Enter' || e.key === ' ') && t.getAttribute?.('role') === 'button' && t.tagName !== 'BUTTON') { e.preventDefault(); t.click(); }
   });
   body.addEventListener('submit', (e) => {
-    const form = e.target.closest('[data-action="save-nick"]');
-    if (!form) return;
+    if (!e.target.closest('[data-action="save-edit"]')) return;
     e.preventDefault();
-    const id = form.closest('[data-id]').dataset.id;
-    state.editingId = null;
-    patchPlace(id, { nickname: form.nick.value });
+    saveEdit();
   });
 
   $('#btn-skip').onclick = () => anim?.skip();
@@ -2652,6 +2936,7 @@ function initDrawer() {
 // ---------------------------------------------------------------- boot
 
 async function boot() {
+  noZoomForTyping();
   followKeyboard();
   initHome();
   initPanel();
