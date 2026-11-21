@@ -906,6 +906,7 @@ function initSheet() {
   });
   pullFromContent(panel);
   window.addEventListener('resize', () => {
+    placeThumbs(document, null, { animate: false });
     if (held.on) return; // (a finger is on it)
     setSheet(sheet.snap);
     // Typing with the sheet fully open: keep the address box at its top, now and once the sheet has settled.
@@ -1097,11 +1098,16 @@ function render({ keepScroll = false } = {}) {
   const views = { people: renderPeople, results: renderResults, group: renderGroup, place: renderPlace, share: renderShare };
   if (views[state.view]) {
     const from = shownView;
+    // The same page drawn again: its highlights slide on from where they were, its tabs stay scrolled as they were.
+    const was = from === state.view ? thumbsIn(body) : null;
+    const tabsScroll = from === state.view ? $('.pills', body)?.scrollLeft || 0 : 0;
     const leaving = from && from !== state.view ? liftPage(body, scroll) : null;
     body.innerHTML = `<div class="panel-content">${views[state.view]()}</div>`;
     shownView = state.view;
     afterRender[state.view]?.();
     body.scrollTop = keepScroll ? scroll : 0;
+    if (tabsScroll && $('.pills', body)) $('.pills', body).scrollLeft = tabsScroll;
+    placeThumbs(body, was);
     if (isMobile() && sheet.snap) setSheet(sheet.snap);
     if (leaving) turnPage(leaving, PAGE_ORDER.indexOf(state.view) < PAGE_ORDER.indexOf(from));
   } else {
@@ -1112,6 +1118,56 @@ function render({ keepScroll = false } = {}) {
 }
 
 const reducedMotion = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * In a row of choices (a segmented control, the tabs, Leaving: Now or a
+ * time) the highlight is a thumb of its own behind the choices, which slides
+ * from the old choice to the new one and takes its width, as on an iPhone. It
+ * is placed whenever the row is drawn or its choice changes; a row drawn
+ * afresh is given where its thumb was (`was`, from thumbsIn) by its data-seg.
+ */
+const THUMBED = [
+  { group: '.segmented', item: '.seg', thumb: 'seg-thumb' },
+  { group: '.pills', item: '.pill', thumb: 'pill-thumb' },
+  { group: '.leave-row', item: '.leave-opt', thumb: 'leave-thumb' },
+];
+const THUMB_SLIDE = { duration: 440, easing: 'cubic-bezier(0.3, 1.22, 0.45, 1)' };
+const thumbKey = (g) => g.dataset.seg || g.id || '';
+function thumbsIn(root) {
+  const at = new Map();
+  for (const t of $$('.seg-thumb, .pill-thumb, .leave-thumb', root)) {
+    const key = thumbKey(t.parentElement);
+    if (key && t.dataset.x) at.set(key, { x: Number(t.dataset.x), w: Number(t.dataset.w) });
+  }
+  return at;
+}
+function placeThumbs(root = document, was = null, { animate = true } = {}) {
+  for (const { group, item, thumb: cls } of THUMBED) {
+    for (const g of $$(group, root)) {
+      if (!g.offsetParent) continue; // (out of sight: placed once shown)
+      const on = $(`:scope > ${item}.active`, g);
+      let t = $(`:scope > .${cls}`, g);
+      if (!on) { if (t) t.hidden = true; g.classList.remove('thumbed'); continue; }
+      if (!t) {
+        t = document.createElement('span');
+        t.className = cls;
+        t.setAttribute('aria-hidden', 'true');
+        g.prepend(t);
+      }
+      const from = !t.hidden && t.dataset.x ? { x: Number(t.dataset.x), w: Number(t.dataset.w) } : was?.get(thumbKey(g));
+      t.hidden = false;
+      const x = on.offsetLeft, w = on.offsetWidth;
+      Object.assign(t.style, { top: `${on.offsetTop}px`, height: `${on.offsetHeight}px`, width: `${w}px`, transform: `translateX(${x}px)` });
+      t.dataset.x = x;
+      t.dataset.w = w;
+      g.classList.add('thumbed');
+      if (animate && from && (Math.abs(from.x - x) > 0.5 || Math.abs(from.w - w) > 0.5) && !reducedMotion()) {
+        t.getAnimations().forEach((a) => a.cancel());
+        t.animate([{ transform: `translateX(${from.x}px)`, width: `${from.w}px` }, { transform: `translateX(${x}px)`, width: `${w}px` }], THUMB_SLIDE);
+      }
+    }
+  }
+}
 
 /**
  * Something going away plays its way out (as it came in, backwards) rather
@@ -1518,7 +1574,7 @@ function leaveRow() {
   if (state.leaveAt && !leaveTime()) state.leaveAt = ''; // the chosen time has passed: back to "Now"
   // The box shows the time chosen, or (leaving now) the time it is now.
   const shown = state.leaveAt || toLocalInput(new Date());
-  return `<div class="leave-row" role="group" aria-label="When everyone leaves">
+  return `<div class="leave-row" data-seg="leave" role="group" aria-label="When everyone leaves">
     <span class="leave-label">Leaving</span>
     <button class="leave-opt${state.leaveAt ? '' : ' active'}" data-action="leave-now" aria-pressed="${!state.leaveAt}">Now</button>
     <input type="datetime-local" id="leave-at" class="leave-opt${state.leaveAt ? ' active' : ''}" value="${esc(shown)}" min="${esc(toLocalInput(new Date()))}" aria-label="Leave at a date and time">
@@ -1582,6 +1638,7 @@ afterRender.people = () => {
       now.classList.toggle('active', !state.leaveAt);
       now.setAttribute('aria-pressed', String(!state.leaveAt));
       at.classList.toggle('active', !!state.leaveAt);
+      placeThumbs(at.parentElement.parentElement);
     };
     const reset = resetsToNow(at, () => { state.leaveAt = ''; show(); });
     at.addEventListener('change', () => {
@@ -2097,7 +2154,7 @@ const tripRow = (person, d, sec, approx = false) => `<li class="trip"><div class
 /** Everyone-at-once bar (or one person's); shows the shared mode, or nothing selected when people differ. */
 function modeSwitch(action, people = state.search?.people || activePeople()) {
   const common = people.length && people.every((p) => p.mode === people[0].mode) ? people[0].mode : null;
-  return `<div class="segmented modes" role="group" aria-label="Set how everyone travels">
+  return `<div class="segmented modes" data-seg="${action}" role="group" aria-label="Set how everyone travels">
   ${MODES.map((m) => `<button class="seg${m.id === common ? ' active' : ''}" data-action="${action}" data-mode="${m.id}" aria-pressed="${m.id === common}">${glyph(m.id, 15)}<span>${m.label}</span></button>`).join('')}
 </div>`;
 }
@@ -2176,7 +2233,7 @@ function renderResults() {
       ${s.people.some((p) => p.isHome) ? `<button class="btn btn-tinted" data-action="your-route">${glyph('route', 17)}<span>Your route</span></button>` : ''}
       <button class="btn btn-primary" data-action="send-meet">${glyph('send', 16)}<span>Send</span></button>
     </div>
-    <div class="pills" role="tablist">${tabs}</div>
+    <div class="pills" data-seg="tabs" role="tablist">${tabs}</div>
     ${list}
     ${radiusRow(s, total)}
     <div class="actions">
@@ -2473,7 +2530,7 @@ function renderGroup() {
   return `
     ${backBtn('back-results', 'Categories')}
     <div class="sheet-title">${s.group === '*' ? tile(s.tab, 'lg') : groupTile(s.tab, s.group, 'lg')}<div style="flex:1;min-width:0"><h2>${esc(title)}</h2><div class="footnote">${items.length} place${items.length === 1 ? '' : 's'} nearby</div></div></div>
-    <div class="segmented" style="margin-top:0">
+    <div class="segmented" data-seg="sort" style="margin-top:0">
       <button class="seg${!['fair', 'top'].includes(s.sort) ? ' active' : ''}" data-action="sort" data-sort="near">Nearest</button>
       <button class="seg${s.sort === 'fair' ? ' active' : ''}" data-action="sort" data-sort="fair">Fairest</button>
       ${ratingsOn ? `<button class="seg${s.sort === 'top' ? ' active' : ''}" data-action="sort" data-sort="top">Top rated</button>` : ''}
@@ -3252,6 +3309,7 @@ function syncSettingsUI() {
   for (const [id, key] of [['#set-mode', 'mode'], ['#set-travel', 'travel'], ['#set-speed', 'speed'], ['#set-theme', 'theme']]) {
     for (const b of $$('.seg', $(id))) b.classList.toggle('active', b.dataset.value === state.settings[key]);
   }
+  placeThumbs($('#drawer-settings'));
   $('#mode-hint').textContent = state.settings.mode === 'total'
     ? 'Everyone’s trips add up to the least time, even if some take longer than others.'
     : 'Everyone’s trip takes about as long, without making anyone travel much further than needed.';
