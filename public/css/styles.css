@@ -680,10 +680,12 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
   100% { transform: none; opacity: 0.3; }
 }
 .meet-dot {
-  width: 22px; height: 22px; border-radius: 50%; background: var(--accent); border: 4px solid #fff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 0 rgba(0, 122, 255, 0.45); animation: halo 2s ease-out infinite;
+  position: relative; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); border: 4px solid #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
-@keyframes halo { 70% { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 26px rgba(0, 122, 255, 0); } 100% { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 0 rgba(0, 122, 255, 0); } }
+/* Its pulse: a ring of its own that grows and fades (moved and faded by the graphics chip, never repainted). */
+.meet-halo { position: absolute; left: 0; top: 0; width: 22px; height: 22px; border-radius: 50%; background: rgba(0, 122, 255, 0.45); animation: halo 2s ease-out infinite; }
+@keyframes halo { from { transform: scale(1); opacity: 1; } 70%, to { transform: scale(3.4); opacity: 0; } }
 .poi-pin {
   --c: var(--accent); width: 26px; height: 26px; border-radius: 50%; background: var(--c); color: #fff; display: grid; place-items: center;
   font: 700 12px/1 var(--font-display); border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); transition: transform 0.2s cubic-bezier(0.3, 1.4, 0.5, 1);
@@ -833,6 +835,8 @@ img.broken { display: none; }
 
 /* list of places with pictures */
 .group.places { --inset: 98px; }
+/* A long list: rows out of sight are left undrawn until scrolled to (so a page of 200 places opens and slides in smoothly). */
+.group.places > li { content-visibility: auto; contain-intrinsic-size: auto 88px; }
 .poi { align-items: center; gap: 12px; padding: 10px 14px 10px 10px; }
 .thumb { position: relative; width: 68px; height: 68px; flex: none; border-radius: 16px; overflow: hidden; background: var(--fill); }
 .thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.3s; z-index: 1; }
@@ -932,6 +936,7 @@ img.broken { display: none; }
 /* photo viewer */
 .lightbox { position: fixed; inset: 0; z-index: 2500; background: rgba(0, 0, 0, 0.92); display: grid; place-items: center; animation: fade 0.2s; touch-action: pan-y; }
 .lightbox figure { margin: 0; max-width: min(1100px, 94vw); display: grid; gap: 10px; justify-items: center; }
+.lightbox figure { animation: fade 0.25s; } /* (each photo fades in) */
 .lightbox img { max-width: 100%; max-height: calc(100vh - 140px); border-radius: 18px; object-fit: contain; user-select: none; -webkit-user-drag: none; }
 .lightbox figcaption { color: rgba(255, 255, 255, 0.75); font-size: 13px; text-align: center; padding: 0 16px; }
 .lightbox figcaption a { color: #64d2ff; }

@@ -1346,10 +1346,12 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
   100% { transform: none; opacity: 0.3; }
 }
 .meet-dot {
-  width: 22px; height: 22px; border-radius: 50%; background: var(--accent); border: 4px solid #fff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 0 rgba(0, 122, 255, 0.45); animation: halo 2s ease-out infinite;
+  position: relative; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); border: 4px solid #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
-@keyframes halo { 70% { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 26px rgba(0, 122, 255, 0); } 100% { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 0 rgba(0, 122, 255, 0); } }
+/* Its pulse: a ring of its own that grows and fades (moved and faded by the graphics chip, never repainted). */
+.meet-halo { position: absolute; left: 0; top: 0; width: 22px; height: 22px; border-radius: 50%; background: rgba(0, 122, 255, 0.45); animation: halo 2s ease-out infinite; }
+@keyframes halo { from { transform: scale(1); opacity: 1; } 70%, to { transform: scale(3.4); opacity: 0; } }
 .poi-pin {
   --c: var(--accent); width: 26px; height: 26px; border-radius: 50%; background: var(--c); color: #fff; display: grid; place-items: center;
   font: 700 12px/1 var(--font-display); border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); transition: transform 0.2s cubic-bezier(0.3, 1.4, 0.5, 1);
@@ -1499,6 +1501,8 @@ img.broken { display: none; }
 
 /* list of places with pictures */
 .group.places { --inset: 98px; }
+/* A long list: rows out of sight are left undrawn until scrolled to (so a page of 200 places opens and slides in smoothly). */
+.group.places > li { content-visibility: auto; contain-intrinsic-size: auto 88px; }
 .poi { align-items: center; gap: 12px; padding: 10px 14px 10px 10px; }
 .thumb { position: relative; width: 68px; height: 68px; flex: none; border-radius: 16px; overflow: hidden; background: var(--fill); }
 .thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.3s; z-index: 1; }
@@ -1598,6 +1602,7 @@ img.broken { display: none; }
 /* photo viewer */
 .lightbox { position: fixed; inset: 0; z-index: 2500; background: rgba(0, 0, 0, 0.92); display: grid; place-items: center; animation: fade 0.2s; touch-action: pan-y; }
 .lightbox figure { margin: 0; max-width: min(1100px, 94vw); display: grid; gap: 10px; justify-items: center; }
+.lightbox figure { animation: fade 0.25s; } /* (each photo fades in) */
 .lightbox img { max-width: 100%; max-height: calc(100vh - 140px); border-radius: 18px; object-fit: contain; user-select: none; -webkit-user-drag: none; }
 .lightbox figcaption { color: rgba(255, 255, 255, 0.75); font-size: 13px; text-align: center; padding: 0 16px; }
 .lightbox figcaption a { color: #64d2ff; }
@@ -4173,6 +4178,112 @@ async function photonPois(center, radiusM, { signal, timeoutMs = 8000 } = {}) {
 
 __m["pois"] = { OVERPASS_ENDPOINTS, overpass, TABS, cuisineLabels, googleKinds, summaryOf, categorize, POI_LIMIT, poiQuery, parsePois, groupPois, findPois, PHOTON_GROUPS, photonUrl, photonElements };
 })();
+// ---- kinds
+(() => {
+// What each kind of place looks like: a small line drawing for each listing
+// (Fast food, Bakeries, Pubs…) and for each place, in the same 24-unit grid,
+// stroke and rounded ends as the app's other icons.
+
+const KIND_GLYPHS = {
+  // ---- food
+  restaurant: '<path d="M7 3v7a2 2 0 0 0 2 2v9M5 3v5M9 3v5M17 21V3c-2.2 1.2-3.5 4-3.5 7.5h3.5"/>', // fork and knife
+  fries: '<path d="M6.5 10.5h11l-1.6 10H8.1zM8.6 10.5L7.8 4.5M11 10.5V3.5M13.4 10.5l.6-6M15.6 10.5l1.4-5"/>',
+  croissant: '<path d="M2.5 17C4.5 10.5 8 6.5 12 6.5s7.5 4 9.5 10.5c-1.2.9-2.7 1-4 .4L15 14.3c-1-.4-2-.6-3-.6s-2 .2-3 .6L6.5 17.4c-1.3.6-2.8.5-4-.4zM9 7.5l1.5 6.3M15 7.5l-1.5 6.3"/>',
+  pizza: '<path d="M4 7.5c5.3-2.6 10.7-2.6 16 0L12 21zM5.6 10.4c4.3-1.9 8.5-1.9 12.8 0"/><circle cx="10.2" cy="12.6" r="1"/><circle cx="13.6" cy="15.4" r="1"/>',
+  burger: '<path d="M4.5 11c0-3.6 3.4-6 7.5-6s7.5 2.4 7.5 6zM4 14.2h16M5 17h14v.4a2.6 2.6 0 0 1-2.6 2.6H7.6A2.6 2.6 0 0 1 5 17.4z"/>',
+  noodles: '<path d="M3.5 12h17c0 4.4-3.8 8-8.5 8s-8.5-3.6-8.5-8zM12.5 12l6-8.5M9.5 12l5.5-8M7 12c0-1.5 1-2.5 2.5-2.5"/>',
+  sushi: '<ellipse cx="12" cy="8.5" rx="7" ry="3.5"/><ellipse cx="12" cy="8.5" rx="2.8" ry="1.3"/><path d="M5 8.5v7c0 1.9 3.1 3.5 7 3.5s7-1.6 7-3.5v-7"/>',
+  dumpling: '<path d="M4 15.5c0-4 3.6-7 8-7s8 3 8 7c0 1.7-1.3 3-3 3H7c-1.7 0-3-1.3-3-3zM12 8.5c-1.1-1.4-1.1-3 0-4.5 1.1 1.5 1.1 3.1 0 4.5zM8.6 9.6l1.3 2.2M15.4 9.6l-1.3 2.2"/>',
+  drumstick: '<path d="M9.8 14.2c-2.4-2.5-2.1-6.4.6-8.6 2.5-2 6-1.6 8 .8 1.9 2.4 1.5 5.8-.9 7.7-2.3 1.8-5.6 2.2-7.7.1zM9.8 14.2l-3.4 3.4M6.4 17.6a1.7 1.7 0 1 0-1.3 2.9 1.7 1.7 0 1 0 2.9-1.3"/>',
+  fish: '<path d="M7.5 12c2-3.3 4.8-5 7.8-5 2.6 0 4.6 1.8 5.7 5-1.1 3.2-3.1 5-5.7 5-3 0-5.8-1.7-7.8-5zM7.5 12L3 8v8zM16.5 11h.01"/>',
+  sandwich: '<path d="M3.5 16L18 5.5l2.5 10.5zM3.5 16v3h17v-3M7 14.5c2.2-.8 4.6-.8 6.8 0s4.4.8 6.4 0"/>',
+  hotdog: '<path d="M3.5 12.5c0 3.2 1.8 5.5 4.5 5.5h8c2.7 0 4.5-2.3 4.5-5.5M6 8.5h12a2 2 0 0 1 0 4H6a2 2 0 0 1 0-4zM8 10.5l1.5-1 1.5 1 1.5-1 1.5 1 1.5-1"/>',
+  chili: '<path d="M15.5 7.5c-3.6.2-5.4 3.3-6.8 6.6C7.3 17.3 5.6 19.5 3.5 20c4.9.8 10.2-1.6 12.4-6 .9-1.9 1.2-3.9.8-5.5zM15.5 7.5c.4-1.6 1.4-2.8 3-3.5M16.7 8.6c1.3-.6 2.6-.4 3.8.4"/>',
+  kebab: '<path d="M2.5 12h19"/><rect x="5" y="8" width="3.6" height="8" rx="1.6"/><rect x="10.2" y="8" width="3.6" height="8" rx="1.6"/><rect x="15.4" y="8" width="3.6" height="8" rx="1.6"/>',
+  cupcake: '<path d="M6.5 13h11l-1.6 7H8.1zM5.5 13c0-3.8 2.9-6.5 6.5-6.5s6.5 2.7 6.5 6.5M12 6.5V4M10 17v1.5M14 17v1.5"/>',
+  donut: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.8"/><path d="M8.2 7.6l1 .7M15.2 7.4l-.7 1M17.2 13.3l-1.1.4M7.4 15.2l1-.6"/>',
+  egg: '<path d="M4.6 13c-1.4-3.6 1.2-7.5 5-7.5 1.8 0 2.8.8 4.4.8 3 0 5.5 2.3 5.5 5.3 0 3.6-2.6 6.6-6.6 6.6-1.6 0-2.6.8-4.6.8-2.9 0-5.1-2.9-3.7-6z"/><circle cx="12" cy="11.8" r="2.6"/>',
+  leaf: '<path d="M5 19c0-8 5-14 14-14 0 9-6 14-14 14zM5 19l8-8"/>',
+  flame: '<path d="M12 21c-3.9 0-6.5-2.6-6.5-6.2 0-3.7 3.2-5.7 3.8-9.8 2.3 1.4 3.4 3.3 3.5 5 1-.6 1.7-1.6 2-3 1.9 1.6 3.7 4.4 3.7 7.8 0 3.6-2.6 6.2-6.5 6.2z"/>',
+  // ---- drinks
+  coffee: '<path d="M5 9h11v4a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5zM16 10.5h1.5a2.5 2.5 0 0 1 0 5H16M8 3.5v2.5M11.5 3.5v2.5"/>',
+  boba: '<path d="M6.5 8h11l-1.4 12.5H7.9zM6 8h12M12.5 8l1.5-5.5M9.6 16.8h.01M12 17.6h.01M14.4 16.8h.01M10.8 14.6h.01M13.2 14.6h.01"/>',
+  juice: '<path d="M7 7.5h10l-1.4 13H8.4zM12.5 7.5l1.5-4.5h3M7.5 11.5h9"/>',
+  icecream: '<path d="M7.5 10.5a4.5 4.5 0 0 1 9 0zM7.8 10.5l4.2 10 4.2-10"/>',
+  wine: '<path d="M8 3.5h8l.4 4a4.4 4.4 0 0 1-8.8 0zM12 12v8M8.5 20.5h7"/>',
+  cocktail: '<path d="M4.5 5h15L12 13zM12 13v7M8.5 20.5h7M14.5 9.5l4-6.5"/>',
+  beer: '<path d="M5.5 8h10v11a1.5 1.5 0 0 1-1.5 1.5H7A1.5 1.5 0 0 1 5.5 19zM15.5 10h1.5a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-1.5M8.5 11.5v5.5M12.5 11.5v5.5M5.5 8c0-2 1.3-3.5 3-3.5.7-.9 1.8-1.3 3-1.1 1.3.1 2.6 1 3.2 2.2.5.5.8 1.4.8 2.4"/>',
+  // ---- fun
+  film: '<path d="M4 10.5h16v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM3.6 10.5L3 7.3 18.3 4.6l.6 3.2zM7.6 6.6l2.3 3.1M12.4 5.7l2.3 3.2"/>',
+  music: '<path d="M9 18V5.5l10-2V16"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>',
+  bowling: '<path d="M12 3c1.3 0 2 1 2 2.3 0 1.2-.8 2-.8 3.2 0 1.4 2.3 3 2.3 6.3 0 3-1.4 6.2-3.5 6.2s-3.5-3.2-3.5-6.2c0-3.3 2.3-4.9 2.3-6.3 0-1.2-.8-2-.8-3.2C10 4 10.7 3 12 3zM10.7 9h2.6"/>',
+  key: '<circle cx="8" cy="12" r="4"/><path d="M12 12h8.5M17.5 12v3M20.5 12v2.5"/>',
+  gamepad: '<path d="M7 8h10a4 4 0 0 1 3.9 4.8l-.8 3.6a2.5 2.5 0 0 1-4.3 1.1L14 15.5h-4l-1.8 2a2.5 2.5 0 0 1-4.3-1.1l-.8-3.6A4 4 0 0 1 7 8zM8 10.5v3.5M6.25 12.25h3.5M15.5 11.5h.01M17.5 13.5h.01"/>',
+  golf: '<path d="M8 20V3.5l8.5 3.5L8 10.5M4.5 20.5c2.2-.8 4.8-1.2 7.5-1.2s4.8.4 6.5 1"/>',
+  dumbbell: '<path d="M4 9.5v5M7 7v10M17 7v10M20 9.5v5M7 12h10"/>',
+  snowflake: '<path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9M9.5 4.5L12 6l2.5-1.5M9.5 19.5L12 18l2.5 1.5"/>',
+  wave: '<path d="M3 10c1.5 0 1.5-1.5 3-1.5s1.5 1.5 3 1.5 1.5-1.5 3-1.5 1.5 1.5 3 1.5 1.5-1.5 3-1.5 1.5 1.5 3 1.5M3 15c1.5 0 1.5-1.5 3-1.5s1.5 1.5 3 1.5 1.5-1.5 3-1.5 1.5 1.5 3 1.5 1.5-1.5 3-1.5 1.5 1.5 3 1.5"/>',
+  ferris: '<circle cx="12" cy="10" r="6.5"/><path d="M12 3.5v13M5.5 10h13M7.4 5.4l9.2 9.2M16.6 5.4l-9.2 9.2M12 10l-4 10.5M12 10l4 10.5M6.5 20.5h11"/>',
+  paw: '<path d="M8 16.5c0-2.6 1.8-4.5 4-4.5s4 1.9 4 4.5c0 1.5-.9 2.5-2.2 2.5-.8 0-1.2-.4-1.8-.4s-1 .4-1.8.4C8.9 19 8 18 8 16.5z"/><circle cx="6" cy="11" r="1.6"/><circle cx="9.5" cy="6.8" r="1.6"/><circle cx="14.5" cy="6.8" r="1.6"/><circle cx="18" cy="11" r="1.6"/>',
+  mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M9 21h6"/>',
+  // ---- culture
+  museum: '<path d="M3.5 9.5L12 4.5l8.5 5M5.5 10v8M10 10v8M14 10v8M18.5 10v8M3.5 20h17"/>',
+  palette: '<path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.4 0 2-1 1.4-2.2-.6-1.3.2-2.8 1.7-2.8H17a3.5 3.5 0 0 0 3.5-3.5c0-4.8-3.8-8.5-8.5-8.5zM7.5 11h.01M9.5 7.3h.01M14.5 7.3h.01"/>',
+  mask: '<path d="M5 5c4.6 1.2 9.4 1.2 14 0v5.5c0 4.4-3.1 8.5-7 8.5s-7-4.1-7-8.5zM8.3 10.3h2M13.7 10.3h2M9.5 14c1.6 1.3 3.4 1.3 5 0"/>',
+  book: '<path d="M12 6.5c-2-1.6-4.5-2-8-2v13c3.5 0 6 .4 8 2 2-1.6 4.5-2 8-2v-13c-3.5 0-6 .4-8 2zM12 6.5v13"/>',
+  camera: '<path d="M4 8.5h3.5L9 6h6l1.5 2.5H20V19H4z"/><circle cx="12" cy="13.3" r="3.2"/>',
+  people: '<circle cx="9" cy="8" r="3"/><circle cx="16.5" cy="9" r="2.4"/><path d="M3.5 19c0-3.3 2.4-5.5 5.5-5.5s5.5 2.2 5.5 5.5M14.5 14c3.4-.5 6 1.5 6 4.5"/>',
+  // ---- outdoors
+  tree: '<path d="M12 21v-5M12 3.5l6.5 9h-13zM12 8.5l7 8h-14z"/>',
+  flower: '<path d="M12 21v-8M12 13c-3.3 0-5.5-2.3-5.5-5.8V4l2.7 2L12 3.5 14.8 6l2.7-2v3.2c0 3.5-2.2 5.8-5.5 5.8zM12 18.5c-2.3 0-4.1-1.3-4.6-3.4 2.3 0 4.1 1.3 4.6 3.4zM12 18.5c2.3 0 4.1-1.3 4.6-3.4-2.3 0-4.1 1.3-4.6 3.4z"/>',
+  swing: '<path d="M5 20V4.5M19 20V4.5M3.5 4.5h17M9.5 4.5v9M14.5 4.5v9M8.5 13.5h7"/>',
+  mountain: '<path d="M3 19.5l6.5-11 4 6 2.5-3.5 5 8.5zM8 11l1.5 1.5L11 11"/>',
+  picnic: '<path d="M4 9.5h16M7 9.5L4.5 19M17 9.5l2.5 9.5M5.6 14.5h12.8"/>',
+  umbrella: '<path d="M3.5 11.5a8.5 8.5 0 0 1 17 0zM12 11.5v7.5a1.5 1.5 0 0 0 3 0M12 3v1.5"/>',
+  // ---- shopping
+  bag: '<path d="M5.5 8.5h13l-1 12h-11zM9 8.5V7a3 3 0 0 1 6 0v1.5"/>',
+  gift: '<path d="M4 9h16v3.5H4zM5.5 12.5h13V20h-13zM12 9v11M12 9c-1.5-3.5-5.5-4-5.5-1.5S10.5 9 12 9c1.5-3.5 5.5-4 5.5-1.5S13.5 9 12 9z"/>',
+  shirt: '<path d="M8.5 4L4 6.5l1.8 4 2.2-1V20h8V9.5l2.2 1 1.8-4L15.5 4c-.5 1.5-1.8 2.5-3.5 2.5S9 5.5 8.5 4z"/>',
+  cart: '<path d="M3 4.5h2.5l2.2 11h10l2-8H6.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="16.5" cy="19" r="1.5"/>',
+  store: '<path d="M4 9.5L5.5 4h13L20 9.5c0 1.4-1.1 2.5-2.7 2.5S14.7 10.9 14.7 9.5c0 1.4-1.2 2.5-2.7 2.5s-2.7-1.1-2.7-2.5c0 1.4-1.2 2.5-2.6 2.5S4 10.9 4 9.5zM5.5 12v8h13v-8M10 20v-4.5h4V20"/>',
+};
+
+// A listing's drawing. (Any other cuisine is a restaurant; anything else, its tab's.)
+const GROUP_ICON = {
+  Restaurants: 'restaurant', 'Fast food': 'fries', Bakeries: 'croissant', Pizza: 'pizza', Burgers: 'burger',
+  Sushi: 'sushi', Japanese: 'sushi', Ramen: 'noodles', Noodles: 'noodles', Chinese: 'noodles', Vietnamese: 'noodles',
+  Thai: 'noodles', Asian: 'noodles', Malaysian: 'noodles', Taiwanese: 'noodles', 'Hot pot': 'noodles', Soup: 'noodles',
+  Dumplings: 'dumpling', 'Dim sum': 'dumpling', Chicken: 'drumstick', Seafood: 'fish', 'Fish & chips': 'fish', Poké: 'fish',
+  Sandwiches: 'sandwich', Bagels: 'sandwich', 'Hot dogs': 'hotdog', Mexican: 'chili', Kebab: 'kebab', Shawarma: 'kebab',
+  Falafel: 'kebab', Desserts: 'cupcake', Crêpes: 'cupcake', Doughnuts: 'donut', 'Breakfast & brunch': 'egg', Salads: 'leaf',
+  Vegetarian: 'leaf', Vegan: 'leaf', BBQ: 'flame', Steakhouse: 'flame',
+  Cafés: 'coffee', 'Coffee & tea shops': 'coffee', Tea: 'coffee', 'Bubble tea': 'boba', 'Juice & smoothies': 'juice',
+  'Ice cream': 'icecream', Bars: 'wine', 'Cocktail bars': 'cocktail', Pubs: 'beer', 'Beer gardens': 'beer',
+  Cinemas: 'film', Nightclubs: 'music', Bowling: 'bowling', 'Escape rooms': 'key', Arcades: 'gamepad', 'Mini golf': 'golf',
+  'Sports & fitness': 'dumbbell', 'Ice skating': 'snowflake', 'Water parks': 'wave', 'Theme parks': 'ferris', Zoos: 'paw',
+  Aquariums: 'fish', 'Karaoke Box': 'mic',
+  Museums: 'museum', 'Galleries & arts': 'palette', Theatres: 'mask', Libraries: 'book', Attractions: 'camera', 'Community centres': 'people',
+  Parks: 'tree', Gardens: 'flower', Playgrounds: 'swing', 'Nature reserves': 'leaf', Viewpoints: 'mountain', 'Picnic spots': 'picnic', Beaches: 'umbrella',
+  'Malls & department stores': 'bag', Bookshops: 'book', 'Games & toys': 'gamepad', Music: 'music', Gifts: 'gift', Fashion: 'shirt',
+  Groceries: 'cart', Markets: 'store',
+};
+const TAB_ICON = { food: 'restaurant', drinks: 'coffee', fun: null, culture: 'museum', outdoors: 'tree', shopping: 'bag' };
+
+/** The drawing for a listing ("Fast food", "Pubs", "Italian"); null for one with none of its own (its tab's is used). */
+function groupIcon(tab, group) {
+  return GROUP_ICON[group] || (tab === 'food' ? 'restaurant' : TAB_ICON[tab] || null);
+}
+
+/** The drawing for a place: its listing's, except a fast-food place listed by a cuisine with no drawing of its own. */
+function placeIcon(p) {
+  const icon = groupIcon(p.tab, p.group);
+  if (icon === 'restaurant' && p.kind === 'Fast food') return 'fries';
+  if (icon === 'restaurant' && p.kind === 'Food court') return 'restaurant';
+  return icon;
+}
+
+__m["kinds"] = { KIND_GLYPHS, groupIcon, placeIcon };
+})();
 // ---- anchor
 (() => {
 // The meeting point has to be somewhere a group can stand and wait for each
@@ -6091,6 +6202,7 @@ const { FloodAnimation, LINE_STYLE, prepareNetwork } = __m["flood"];
 const { createLocalRouter } = __m["localroute"];
 const { loadRoads } = __m["roads"];
 const { TABS, findPois, groupPois, summaryOf, cuisineLabels } = __m["pois"];
+const { KIND_GLYPHS, groupIcon, placeIcon } = __m["kinds"];
 const { getConfig, ratingsSource, rateAll, thumbFor, detailsFor } = __m["rated"];
 const { openStatus, weekTable } = __m["hours"];
 const { haversine } = __m["geo"];
@@ -6137,8 +6249,13 @@ const GLYPH = {
 /** A heart: filled for an address kept on this device. */
 const heart = (on, size = 20) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">${GLYPH.heart}</svg>`;
 GLYPH.meet = GLYPH.pin;
+for (const [k, v] of Object.entries(KIND_GLYPHS)) GLYPH[k] ??= v; // (each kind of place: Fast food, Bakeries, Pubs…)
 const glyph = (id, size = 16, width = 2.2) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${GLYPH[id]}</svg>`;
-const tile = (id, size = '') => `<span class="tile ${size}${id === 'all' ? ' grey' : ''}" style="--c:${TAB_COLOR[id] || '#8e8e93'}">${glyph(id)}</span>`;
+const tile = (id, size = '', c = TAB_COLOR[id]) => `<span class="tile ${size}${id === 'all' ? ' grey' : ''}" style="--c:${c || '#8e8e93'}">${glyph(id)}</span>`;
+/** A listing's tile: its own drawing (a croissant for Bakeries, a beer for Pubs) in its tab's colour. */
+const groupTile = (tab, group, size = '') => tile(groupIcon(tab, group) || tab, size, TAB_COLOR[tab]);
+/** What a place is, drawn: its listing's drawing, or the pin for the meeting point. */
+const placeGlyph = (p) => (p.tab === 'meet' ? 'pin' : placeIcon(p) || p.tab);
 const CHEV = '<svg class="chev" viewBox="0 0 8 14" width="8" height="14" aria-hidden="true"><path d="M1.5 1.5L6.5 7l-5 5.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const backBtn = (action, label) => `<button class="back" data-action="${action}">${CHEV}<span>${esc(label)}</span></button>`;
 
@@ -6195,12 +6312,13 @@ function toast(msg, { error = false, action, onAction, ms = 3600 } = {}) {
   if (action) {
     const b = document.createElement('button');
     b.textContent = action;
-    b.onclick = () => { onAction?.(); el.remove(); };
+    b.onclick = () => { onAction?.(); dismissToast(el); };
     el.appendChild(b);
   }
   $('#toasts').appendChild(el);
-  setTimeout(() => el.remove(), ms);
+  setTimeout(() => dismissToast(el), ms);
 }
+const dismissToast = (el) => leave(el, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(0.94)' }], { duration: 200, remove: true });
 
 /** Said once if this browser won't let Meet save (private browsing, storage blocked or full). */
 let warnedUnsaved = false;
@@ -6211,7 +6329,15 @@ function warnIfUnsaved() {
 }
 
 function showScreen(id) {
-  for (const s of $$('.screen')) s.hidden = s.id !== id;
+  for (const s of $$('.screen')) {
+    if (s.id === id) { stay(s); s.style.zIndex = ''; s.hidden = false; continue; }
+    if (s.hidden) continue;
+    // The screen left fades away over the next one (the start screen opening up as it goes), rather than vanishing.
+    s.style.zIndex = '5';
+    leave(s, s.id === 'screen-home' ? [{ opacity: 1 }, { opacity: 0, transform: 'scale(1.06)' }] : [{ opacity: 1 }, { opacity: 0 }], {
+      duration: 420, easing: 'cubic-bezier(0.32, 0.72, 0, 1)', hide: true, then: () => { s.style.zIndex = ''; },
+    });
+  }
 }
 
 /** A person's way of travelling: their own if it is one the app knows, otherwise the default. */
@@ -6906,7 +7032,17 @@ const afterRender = {};
 // The panel's pages in order: going on to a later one slides it in from the right, going back slides the page away again.
 const PAGE_ORDER = ['people', 'results', 'group', 'place', 'share'];
 let shownView = null; // the page the panel shows (null while it is away)
+let redrawAfterTurn = false;
 function render({ keepScroll = false } = {}) {
+  // The page sliding in is drawn again (with what has just arrived for it) once it is in, not under the slide.
+  if (pageTurn && keepScroll && state.view === shownView) {
+    if (!redrawAfterTurn) {
+      redrawAfterTurn = true;
+      const again = () => { redrawAfterTurn = false; render({ keepScroll: true }); };
+      pageTurn.anims[1].finished.then(again, again);
+    }
+    return;
+  }
   const body = $('#panel-body');
   const scroll = body.scrollTop;
   const views = { people: renderPeople, results: renderResults, group: renderGroup, place: renderPlace, share: renderShare };
@@ -6927,6 +7063,57 @@ function render({ keepScroll = false } = {}) {
 }
 
 const reducedMotion = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * Something going away plays its way out (as it came in, backwards) rather
+ * than vanishing. With `hide` it counts as hidden at once (for the rest of the
+ * app) but stays in sight until it has gone; with `remove` it is taken out
+ * afterwards. Wanted again meanwhile, `stay` brings it straight back.
+ */
+function leave(el, keyframes, { duration = 220, easing = 'cubic-bezier(0.4, 0, 1, 1)', hide = false, remove = false, then } = {}) {
+  if (!el?.isConnected || el.hidden) { if (remove) el?.remove(); then?.(); return; }
+  stay(el);
+  if (reducedMotion()) { if (hide) el.hidden = true; if (remove) el.remove(); then?.(); return; }
+  if (hide) {
+    el.style.setProperty('display', getComputedStyle(el).display, 'important');
+    el.hidden = true;
+  }
+  el.inert = true;
+  el.style.pointerEvents = 'none';
+  const a = el.__leaving = el.animate(keyframes, { duration, easing, fill: 'forwards' });
+  a.finished.then(() => {
+    if (el.__leaving !== a) return;
+    el.__leaving = null;
+    el.inert = false;
+    el.style.removeProperty('display');
+    el.style.removeProperty('pointer-events');
+    if (remove) el.remove();
+    then?.();
+    a.cancel();
+  }, () => {});
+}
+function stay(el) {
+  const a = el?.__leaving;
+  if (!a) return;
+  el.__leaving = null;
+  a.cancel();
+  el.inert = false;
+  el.style.removeProperty('display');
+  el.style.removeProperty('pointer-events');
+}
+
+/**
+ * Heavier changes to the map (a list's pins, moving to fit them) wait for the
+ * page now sliding in, so the slide has the phone to itself. Straight after
+ * this task when no page is turning.
+ */
+function afterPageTurn(fn) {
+  queueMicrotask(() => {
+    const turn = pageTurn;
+    if (!turn) return fn();
+    turn.anims[1].finished.then(fn, fn);
+  });
+}
 const PAGE_TURN = { duration: 420, easing: 'cubic-bezier(0.32, 0.72, 0, 1)' };
 let pageTurn = null; // { layer, anims } while one page slides over another
 
@@ -7090,7 +7277,7 @@ function personTap(id) {
 const ROW_MOVE = { duration: 340, easing: 'cubic-bezier(0.32, 0.72, 0, 1)' };
 function togglePersonOpen(id) {
   if (state.view !== 'people') return;
-  if (state.modeMenu) { state.modeMenu = null; render({ keepScroll: true }); return; } // (a tap away from an open menu closes it)
+  if (state.modeMenu) { closeModeMenu(() => render({ keepScroll: true })); return; } // (a tap away from an open menu closes it)
   const open = state.open === id ? null : id;
   state.open = open;
   const rows = $$('#panel-body .person').filter((li) => li.classList.contains('open') !== (li.dataset.id === open));
@@ -7452,8 +7639,12 @@ async function patchPlace(id, patch) {
 
 function setStatus(text, { skip = false, spinner = true } = {}) {
   const chip = $('#search-status');
-  chip.hidden = !text;
-  if (!text) return;
+  if (!text) {
+    leave(chip, [{ opacity: 1 }, { opacity: 0, transform: 'translateX(-50%) scale(0.94)' }], { duration: 200, hide: true });
+    return;
+  }
+  stay(chip);
+  chip.hidden = false;
   $('.status-text', chip).textContent = text;
   $('.spinner', chip).hidden = !spinner;
   $('#btn-skip').hidden = !skip;
@@ -7530,8 +7721,10 @@ function setPill(i, text) {
 /** The line of text at the top of the search map (empty hides it). */
 function setHud(text) {
   const h = $('#flood-hud');
-  h.hidden = !text;
-  h.textContent = text || '';
+  if (!text) { leave(h, [{ opacity: 1 }, { opacity: 0 }], { duration: 300, hide: true }); return; }
+  stay(h);
+  h.hidden = false;
+  h.textContent = text;
 }
 
 /** The streets the animation floods: what's on screen and a little more. */
@@ -7691,7 +7884,7 @@ async function findPlaces({ replay = false } = {}) {
     // The meeting point, then everyone travels there along their route.
     const name = meetName(search);
     const pin = L.marker([meet.lat, meet.lon], {
-      icon: L.divIcon({ className: 'meet-pin', html: '<i class="meet-shadow"></i><div class="meet-jump"><div class="meet-dot"></div></div>', iconSize: [22, 22], iconAnchor: [11, 11] }),
+      icon: L.divIcon({ className: 'meet-pin', html: '<i class="meet-shadow"></i><div class="meet-jump"><i class="meet-halo"></i><div class="meet-dot"></div></div>', iconSize: [22, 22], iconAnchor: [11, 11] }),
       zIndexOffset: 1000,
     }).bindTooltip(esc(name === 'the middle' ? 'Meeting point' : name), { permanent: true, direction: 'bottom', className: 'label meet-label', offset: [0, 14] }).addTo(resultLayer);
     const times = people.map((p, i) => tripSeconds(search.routes[i], meeting.times[i]));
@@ -7798,10 +7991,19 @@ function afterModeChange() {
 }
 
 function setPersonMode(id, mode) {
-  state.modeMenu = null;
   const changed = applyMode(id, mode);
-  render({ keepScroll: true });
-  if (changed) afterModeChange();
+  closeModeMenu(() => {
+    render({ keepScroll: true });
+    if (changed) afterModeChange();
+  });
+}
+
+/** The travel menu closing: it shrinks back into its pill and fades, then `then` (drawing the rows without it). */
+function closeModeMenu(then) {
+  const menu = $('#panel-body .menu');
+  state.modeMenu = null;
+  if (!menu) return then();
+  leave(menu, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(0.94)' }], { duration: 160, then });
 }
 
 /** The Transit / Walk / Bike / Drive bar: everyone travels the same way. */
@@ -7884,7 +8086,7 @@ function renderResults() {
   const tabCount = groups.reduce((a, g) => a + g.items.length, 0);
   const list = groups.length
     ? `<ul class="group icons">
-        ${groups.map((g) => `<li><button class="cell cell-btn" data-action="group" data-group="${esc(g.group)}">${tile(s.tab)}<span class="cell-main cell-title">${esc(g.group)}</span><span class="cell-end count">${g.items.length}</span>${CHEV}</button></li>`).join('')}
+        ${groups.map((g) => `<li><button class="cell cell-btn" data-action="group" data-group="${esc(g.group)}">${groupTile(s.tab, g.group)}<span class="cell-main cell-title">${esc(g.group)}</span><span class="cell-end count">${g.items.length}</span>${CHEV}</button></li>`).join('')}
         ${groups.length > 1 ? `<li><button class="cell cell-btn" data-action="group" data-group="*">${tile('all')}<span class="cell-main cell-title">All ${esc(tabMeta.label.toLowerCase())}</span><span class="cell-end count">${tabCount}</span>${CHEV}</button></li>` : ''}
       </ul>`
     : `<div class="empty">${s.poiError ? esc(s.poiError) : s.poiLoading ? 'Looking for places…' : `Nothing found within ${fmtRadius(s.radius || RADIUS.start)}. Slide the distance further.`}</div>`;
@@ -8003,7 +8205,7 @@ let ratingsOn = false; // the server has ratings (checked at start)
 let ratingsName = ''; // who they come from, for the credit line
 let placesKitKey = null; // a browser key for Google's place card, when the server offers one
 
-const thumbArt = (p) => `<span class="thumb-art" style="--c:${TAB_COLOR[p.tab] || '#8e8e93'}">${glyph(p.tab === 'meet' ? 'pin' : p.tab, 22, 1.9)}</span>`;
+const thumbArt = (p) => `<span class="thumb-art" style="--c:${TAB_COLOR[p.tab] || '#8e8e93'}">${glyph(placeGlyph(p), 22, 1.9)}</span>`;
 const stars = (x) => `<span class="stars" style="--r:${Math.max(0, Math.min(100, (x / 5) * 100))}%" aria-hidden="true">★★★★★</span>`;
 
 /** "4.5 ●●●●◐ (1,234)": Tripadvisor's bubble picture when we have it, else stars. */
@@ -8187,7 +8389,11 @@ function renderGroup() {
   s.groupList = items.map((x) => x.p);
   const title = s.group === '*' ? `All ${TABS.find((t) => t.id === s.tab).label.toLowerCase()}` : s.group;
   const markersKey = `${s.tab}|${s.group}|${s.sort}|${items.map((x) => x.p.id).join(',')}`;
-  if (s.markersKey !== markersKey) { s.markersKey = markersKey; drawPoiMarkers(items.map((x) => x.p)); }
+  if (s.markersKey !== markersKey) {
+    s.markersKey = markersKey;
+    const list = items.map((x) => x.p);
+    afterPageTurn(() => { if (state.view === 'group' && s.markersKey === markersKey) drawPoiMarkers(list); });
+  }
   const anyTa = items.some((x) => x.p.rating?.rating != null);
   const anyFree = items.some((x) => x.p.thumbFrom === 'commons');
   const credits = [
@@ -8197,7 +8403,7 @@ function renderGroup() {
   ].filter(Boolean).join(' · ');
   return `
     ${backBtn('back-results', 'Categories')}
-    <div class="sheet-title">${tile(s.tab, 'lg')}<div style="flex:1;min-width:0"><h2>${esc(title)}</h2><div class="footnote">${items.length} place${items.length === 1 ? '' : 's'} nearby</div></div></div>
+    <div class="sheet-title">${s.group === '*' ? tile(s.tab, 'lg') : groupTile(s.tab, s.group, 'lg')}<div style="flex:1;min-width:0"><h2>${esc(title)}</h2><div class="footnote">${items.length} place${items.length === 1 ? '' : 's'} nearby</div></div></div>
     <div class="segmented" style="margin-top:0">
       <button class="seg${!['fair', 'top'].includes(s.sort) ? ' active' : ''}" data-action="sort" data-sort="near">Nearest</button>
       <button class="seg${s.sort === 'fair' ? ' active' : ''}" data-action="sort" data-sort="fair">Fairest</button>
@@ -8229,7 +8435,7 @@ function drawPoiMarkers(items) {
     poiMarkers.set(p.id, m);
   });
   const s = state.search;
-  requestAnimationFrame(() => fitTo([...items.map((p) => [p.lat, p.lon]), [s.meet.lat, s.meet.lon]], { maxZoom: 17 }));
+  fitTo([...items.map((p) => [p.lat, p.lon]), [s.meet.lat, s.meet.lon]], { maxZoom: 17 });
 }
 
 function highlightPoi(id, on) {
@@ -8309,11 +8515,11 @@ function renderPlace() {
     // (The meeting point has its own pin already.)
     if (p.id !== 'meet') {
       L.marker([p.lat, p.lon], {
-        icon: L.divIcon({ className: '', html: `<div class="poi-pin hl" style="--c:${TAB_COLOR[p.tab] || '#007aff'}">${glyph(p.tab, 15)}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] }),
+        icon: L.divIcon({ className: '', html: `<div class="poi-pin hl" style="--c:${TAB_COLOR[p.tab] || '#007aff'}">${glyph(placeGlyph(p), 15)}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] }),
         zIndexOffset: 1200,
       }).bindTooltip(esc(p.name), { permanent: true, direction: 'right', className: 'label', offset: [18, 0] }).addTo(poiLayer);
     }
-    requestAnimationFrame(() => fitTo([...routePeople(s).map((i) => [s.people[i].lat, s.people[i].lon]), [p.lat, p.lon]], { maxZoom: 16 }));
+    afterPageTurn(() => { if (state.view === 'place' && s.place === p) fitTo([...routePeople(s).map((i) => [s.people[i].lat, s.people[i].lon]), [p.lat, p.lon]], { maxZoom: 16 }); });
   }
   loadPlaceDirections();
   drawDirections();
@@ -8336,7 +8542,7 @@ function renderPlace() {
     : photos.length
     ? `<div class="gallery${photos.length === 1 ? ' single' : ''}">${photos.slice(0, 8).map((ph, k) => `<button class="g-item" data-action="photo" data-i="${k}" aria-label="Photo ${k + 1} of ${photos.length}"><img src="${esc(ph.url)}" alt="${esc(ph.caption || '')}" ${k > 1 ? 'loading="lazy"' : ''} decoding="async"></button>`).join('')}</div>`
     : loading ? '<div class="gallery"><span class="g-item skel"></span><span class="g-item skel"></span></div>'
-      : `<div class="hero-art" style="--c:${TAB_COLOR[p.tab] || '#007aff'}">${glyph(p.tab === 'meet' ? 'pin' : p.tab, 40, 1.6)}</div>`;
+      : `<div class="hero-art" style="--c:${TAB_COLOR[p.tab] || '#007aff'}">${glyph(placeGlyph(p), 40, 1.6)}</div>`;
   const meta = [p.id === 'meet' ? 'Meeting point' : p.group, PRICE[r?.priceLevel], p.id === 'meet' ? '' : `${fmtDist(p.fromCenter)} from the meeting point`].filter(Boolean);
   const quick = [
     `<button class="q primary" data-action="choose">${glyph('send', 19)}<span>Send</span></button>`,
@@ -8465,7 +8671,11 @@ function chooseMapsApp(p) {
       ${apps.map((a) => `<a class="choice-btn" data-app="${a.id}" href="${esc(a.url)}"${a.id === 'geo' ? '' : ' target="_blank" rel="noopener"'}>${esc(a.name)}${a.id === last ? '<span class="choice-note">Last used</span>' : ''}</a>`).join('')}
     </div>
     <button class="choice-btn choice-cancel" type="button">Cancel</button>`;
-  const close = () => { back.remove(); box.remove(); document.removeEventListener('keydown', onKey); };
+  const close = () => {
+    document.removeEventListener('keydown', onKey);
+    leave(back, [{ opacity: 1 }, { opacity: 0 }], { duration: 220, remove: true });
+    leave(box, [{ opacity: 1, translate: '0 0' }, { opacity: 0, translate: '0 28px' }], { duration: 240, remove: true });
+  };
   const onKey = (e) => { if (e.key === 'Escape') close(); };
   back.addEventListener('click', close);
   $('.choice-cancel', box).addEventListener('click', close);
@@ -8576,7 +8786,7 @@ function openLightbox(photos, start) {
       ].filter(Boolean).join(' · ')}
       ${ph.link ? ` · <a href="${linkOf(ph.link)}" target="_blank" rel="noopener">Licence &amp; source</a>` : ''}<span class="lb-count">${i + 1} / ${photos.length}</span></figcaption></figure>`;
   };
-  const close = () => { box.remove(); document.removeEventListener('keydown', onKey); };
+  const close = () => { document.removeEventListener('keydown', onKey); leave(box, [{ opacity: 1 }, { opacity: 0 }], { duration: 220, remove: true }); };
   const step = (k) => { i = (i + k + photos.length) % photos.length; show(); };
   const onKey = (e) => {
     if (e.key === 'Escape') close();
@@ -8618,7 +8828,7 @@ function loadPlaceDirections() {
     getDirections(person.mode, person, p, person.mode === 'transit' ? opts : {})
       .then((data) => { dir.results[i] = { status: 'ok', data, option: 0 }; })
       .catch((err) => { dir.results[i] = { status: 'error', message: friendlyError(err, person.mode) }; })
-      .finally(() => {
+      .finally(() => afterPageTurn(() => {
         if (state.dir !== dir || state.view !== 'place') return;
         drawDirections();
         render({ keepScroll: true });
@@ -8627,7 +8837,7 @@ function loadPlaceDirections() {
           const pts = dir.results.flatMap((r) => (r.status === 'ok' ? routeGeometry(r) : []));
           if (pts.length) fitTo([...pts, ...shown.map((k) => [s.people[k].lat, s.people[k].lon]), [p.lat, p.lon]], { maxZoom: 16 });
         }
-      });
+      }));
   });
 }
 
@@ -8865,8 +9075,8 @@ function initPanel() {
         setEveryoneMode(el.dataset.mode);
         break;
       case 'mode-menu':
-        state.modeMenu = state.modeMenu === el.dataset.id ? null : el.dataset.id;
-        render({ keepScroll: true });
+        if (state.modeMenu === el.dataset.id) closeModeMenu(() => render({ keepScroll: true }));
+        else { state.modeMenu = el.dataset.id; render({ keepScroll: true }); }
         break;
       case 'set-mode': setPersonMode(el.dataset.id, el.dataset.mode); break;
       case 'dir-toggle': {
@@ -8987,9 +9197,16 @@ function renderHistory() {
 }
 
 function openDrawer(open) {
-  $('#drawer').hidden = !open;
-  $('#drawer-backdrop').hidden = !open;
-  if (!open) return;
+  const drawer = $('#drawer'), back = $('#drawer-backdrop');
+  if (!open) {
+    leave(drawer, [{ transform: 'none' }, { transform: 'translateX(calc(100% + 20px))' }], { duration: 300, easing: 'cubic-bezier(0.4, 0, 0.7, 1)', hide: true });
+    leave(back, [{ opacity: 1 }, { opacity: 0 }], { duration: 260, hide: true });
+    return;
+  }
+  stay(drawer);
+  stay(back);
+  drawer.hidden = false;
+  back.hidden = false;
   $('#drawer-home').textContent = state.user.home?.address || 'Not set';
   syncSettingsUI();
   renderHistory();

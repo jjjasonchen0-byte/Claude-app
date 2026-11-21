@@ -90,6 +90,7 @@ const modules = [
   ['flood', 'public/js/flood.js'],
   ['localroute', 'public/js/localroute.js'],
   ['pois', 'public/js/pois.js'],
+  ['kinds', 'public/js/kinds.js'],
   ['anchor', 'public/js/anchor.js'],
   ['match', 'public/js/match.js'],
   ['placeskit', 'public/js/placeskit.js'],

@@ -7,6 +7,7 @@ import { FloodAnimation, LINE_STYLE, prepareNetwork } from './flood.js';
 import { createLocalRouter } from './localroute.js';
 import { loadRoads } from './roads.js';
 import { TABS, findPois, groupPois, summaryOf, cuisineLabels } from './pois.js';
+import { KIND_GLYPHS, groupIcon, placeIcon } from './kinds.js';
 import { getConfig, ratingsSource, rateAll, thumbFor, detailsFor } from './rated.js';
 import { openStatus, weekTable } from './hours.js';
 import { haversine } from './geo.js';
@@ -54,8 +55,13 @@ const GLYPH = {
 /** A heart: filled for an address kept on this device. */
 const heart = (on, size = 20) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">${GLYPH.heart}</svg>`;
 GLYPH.meet = GLYPH.pin;
+for (const [k, v] of Object.entries(KIND_GLYPHS)) GLYPH[k] ??= v; // (each kind of place: Fast food, Bakeries, Pubs…)
 const glyph = (id, size = 16, width = 2.2) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${GLYPH[id]}</svg>`;
-const tile = (id, size = '') => `<span class="tile ${size}${id === 'all' ? ' grey' : ''}" style="--c:${TAB_COLOR[id] || '#8e8e93'}">${glyph(id)}</span>`;
+const tile = (id, size = '', c = TAB_COLOR[id]) => `<span class="tile ${size}${id === 'all' ? ' grey' : ''}" style="--c:${c || '#8e8e93'}">${glyph(id)}</span>`;
+/** A listing's tile: its own drawing (a croissant for Bakeries, a beer for Pubs) in its tab's colour. */
+const groupTile = (tab, group, size = '') => tile(groupIcon(tab, group) || tab, size, TAB_COLOR[tab]);
+/** What a place is, drawn: its listing's drawing, or the pin for the meeting point. */
+const placeGlyph = (p) => (p.tab === 'meet' ? 'pin' : placeIcon(p) || p.tab);
 const CHEV = '<svg class="chev" viewBox="0 0 8 14" width="8" height="14" aria-hidden="true"><path d="M1.5 1.5L6.5 7l-5 5.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const backBtn = (action, label) => `<button class="back" data-action="${action}">${CHEV}<span>${esc(label)}</span></button>`;
 
@@ -112,12 +118,13 @@ function toast(msg, { error = false, action, onAction, ms = 3600 } = {}) {
   if (action) {
     const b = document.createElement('button');
     b.textContent = action;
-    b.onclick = () => { onAction?.(); el.remove(); };
+    b.onclick = () => { onAction?.(); dismissToast(el); };
     el.appendChild(b);
   }
   $('#toasts').appendChild(el);
-  setTimeout(() => el.remove(), ms);
+  setTimeout(() => dismissToast(el), ms);
 }
+const dismissToast = (el) => leave(el, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(0.94)' }], { duration: 200, remove: true });
 
 /** Said once if this browser won't let Meet save (private browsing, storage blocked or full). */
 let warnedUnsaved = false;
@@ -128,7 +135,15 @@ function warnIfUnsaved() {
 }
 
 function showScreen(id) {
-  for (const s of $$('.screen')) s.hidden = s.id !== id;
+  for (const s of $$('.screen')) {
+    if (s.id === id) { stay(s); s.style.zIndex = ''; s.hidden = false; continue; }
+    if (s.hidden) continue;
+    // The screen left fades away over the next one (the start screen opening up as it goes), rather than vanishing.
+    s.style.zIndex = '5';
+    leave(s, s.id === 'screen-home' ? [{ opacity: 1 }, { opacity: 0, transform: 'scale(1.06)' }] : [{ opacity: 1 }, { opacity: 0 }], {
+      duration: 420, easing: 'cubic-bezier(0.32, 0.72, 0, 1)', hide: true, then: () => { s.style.zIndex = ''; },
+    });
+  }
 }
 
 /** A person's way of travelling: their own if it is one the app knows, otherwise the default. */
@@ -988,7 +1003,17 @@ const afterRender = {};
 // The panel's pages in order: going on to a later one slides it in from the right, going back slides the page away again.
 const PAGE_ORDER = ['people', 'results', 'group', 'place', 'share'];
 let shownView = null; // the page the panel shows (null while it is away)
+let redrawAfterTurn = false;
 function render({ keepScroll = false } = {}) {
+  // The page sliding in is drawn again (with what has just arrived for it) once it is in, not under the slide.
+  if (pageTurn && keepScroll && state.view === shownView) {
+    if (!redrawAfterTurn) {
+      redrawAfterTurn = true;
+      const again = () => { redrawAfterTurn = false; render({ keepScroll: true }); };
+      pageTurn.anims[1].finished.then(again, again);
+    }
+    return;
+  }
   const body = $('#panel-body');
   const scroll = body.scrollTop;
   const views = { people: renderPeople, results: renderResults, group: renderGroup, place: renderPlace, share: renderShare };
@@ -1009,6 +1034,57 @@ function render({ keepScroll = false } = {}) {
 }
 
 const reducedMotion = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * Something going away plays its way out (as it came in, backwards) rather
+ * than vanishing. With `hide` it counts as hidden at once (for the rest of the
+ * app) but stays in sight until it has gone; with `remove` it is taken out
+ * afterwards. Wanted again meanwhile, `stay` brings it straight back.
+ */
+function leave(el, keyframes, { duration = 220, easing = 'cubic-bezier(0.4, 0, 1, 1)', hide = false, remove = false, then } = {}) {
+  if (!el?.isConnected || el.hidden) { if (remove) el?.remove(); then?.(); return; }
+  stay(el);
+  if (reducedMotion()) { if (hide) el.hidden = true; if (remove) el.remove(); then?.(); return; }
+  if (hide) {
+    el.style.setProperty('display', getComputedStyle(el).display, 'important');
+    el.hidden = true;
+  }
+  el.inert = true;
+  el.style.pointerEvents = 'none';
+  const a = el.__leaving = el.animate(keyframes, { duration, easing, fill: 'forwards' });
+  a.finished.then(() => {
+    if (el.__leaving !== a) return;
+    el.__leaving = null;
+    el.inert = false;
+    el.style.removeProperty('display');
+    el.style.removeProperty('pointer-events');
+    if (remove) el.remove();
+    then?.();
+    a.cancel();
+  }, () => {});
+}
+function stay(el) {
+  const a = el?.__leaving;
+  if (!a) return;
+  el.__leaving = null;
+  a.cancel();
+  el.inert = false;
+  el.style.removeProperty('display');
+  el.style.removeProperty('pointer-events');
+}
+
+/**
+ * Heavier changes to the map (a list's pins, moving to fit them) wait for the
+ * page now sliding in, so the slide has the phone to itself. Straight after
+ * this task when no page is turning.
+ */
+function afterPageTurn(fn) {
+  queueMicrotask(() => {
+    const turn = pageTurn;
+    if (!turn) return fn();
+    turn.anims[1].finished.then(fn, fn);
+  });
+}
 const PAGE_TURN = { duration: 420, easing: 'cubic-bezier(0.32, 0.72, 0, 1)' };
 let pageTurn = null; // { layer, anims } while one page slides over another
 
@@ -1172,7 +1248,7 @@ function personTap(id) {
 const ROW_MOVE = { duration: 340, easing: 'cubic-bezier(0.32, 0.72, 0, 1)' };
 function togglePersonOpen(id) {
   if (state.view !== 'people') return;
-  if (state.modeMenu) { state.modeMenu = null; render({ keepScroll: true }); return; } // (a tap away from an open menu closes it)
+  if (state.modeMenu) { closeModeMenu(() => render({ keepScroll: true })); return; } // (a tap away from an open menu closes it)
   const open = state.open === id ? null : id;
   state.open = open;
   const rows = $$('#panel-body .person').filter((li) => li.classList.contains('open') !== (li.dataset.id === open));
@@ -1534,8 +1610,12 @@ async function patchPlace(id, patch) {
 
 function setStatus(text, { skip = false, spinner = true } = {}) {
   const chip = $('#search-status');
-  chip.hidden = !text;
-  if (!text) return;
+  if (!text) {
+    leave(chip, [{ opacity: 1 }, { opacity: 0, transform: 'translateX(-50%) scale(0.94)' }], { duration: 200, hide: true });
+    return;
+  }
+  stay(chip);
+  chip.hidden = false;
   $('.status-text', chip).textContent = text;
   $('.spinner', chip).hidden = !spinner;
   $('#btn-skip').hidden = !skip;
@@ -1612,8 +1692,10 @@ function setPill(i, text) {
 /** The line of text at the top of the search map (empty hides it). */
 function setHud(text) {
   const h = $('#flood-hud');
-  h.hidden = !text;
-  h.textContent = text || '';
+  if (!text) { leave(h, [{ opacity: 1 }, { opacity: 0 }], { duration: 300, hide: true }); return; }
+  stay(h);
+  h.hidden = false;
+  h.textContent = text;
 }
 
 /** The streets the animation floods: what's on screen and a little more. */
@@ -1773,7 +1855,7 @@ async function findPlaces({ replay = false } = {}) {
     // The meeting point, then everyone travels there along their route.
     const name = meetName(search);
     const pin = L.marker([meet.lat, meet.lon], {
-      icon: L.divIcon({ className: 'meet-pin', html: '<i class="meet-shadow"></i><div class="meet-jump"><div class="meet-dot"></div></div>', iconSize: [22, 22], iconAnchor: [11, 11] }),
+      icon: L.divIcon({ className: 'meet-pin', html: '<i class="meet-shadow"></i><div class="meet-jump"><i class="meet-halo"></i><div class="meet-dot"></div></div>', iconSize: [22, 22], iconAnchor: [11, 11] }),
       zIndexOffset: 1000,
     }).bindTooltip(esc(name === 'the middle' ? 'Meeting point' : name), { permanent: true, direction: 'bottom', className: 'label meet-label', offset: [0, 14] }).addTo(resultLayer);
     const times = people.map((p, i) => tripSeconds(search.routes[i], meeting.times[i]));
@@ -1880,10 +1962,19 @@ function afterModeChange() {
 }
 
 function setPersonMode(id, mode) {
-  state.modeMenu = null;
   const changed = applyMode(id, mode);
-  render({ keepScroll: true });
-  if (changed) afterModeChange();
+  closeModeMenu(() => {
+    render({ keepScroll: true });
+    if (changed) afterModeChange();
+  });
+}
+
+/** The travel menu closing: it shrinks back into its pill and fades, then `then` (drawing the rows without it). */
+function closeModeMenu(then) {
+  const menu = $('#panel-body .menu');
+  state.modeMenu = null;
+  if (!menu) return then();
+  leave(menu, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(0.94)' }], { duration: 160, then });
 }
 
 /** The Transit / Walk / Bike / Drive bar: everyone travels the same way. */
@@ -1966,7 +2057,7 @@ function renderResults() {
   const tabCount = groups.reduce((a, g) => a + g.items.length, 0);
   const list = groups.length
     ? `<ul class="group icons">
-        ${groups.map((g) => `<li><button class="cell cell-btn" data-action="group" data-group="${esc(g.group)}">${tile(s.tab)}<span class="cell-main cell-title">${esc(g.group)}</span><span class="cell-end count">${g.items.length}</span>${CHEV}</button></li>`).join('')}
+        ${groups.map((g) => `<li><button class="cell cell-btn" data-action="group" data-group="${esc(g.group)}">${groupTile(s.tab, g.group)}<span class="cell-main cell-title">${esc(g.group)}</span><span class="cell-end count">${g.items.length}</span>${CHEV}</button></li>`).join('')}
         ${groups.length > 1 ? `<li><button class="cell cell-btn" data-action="group" data-group="*">${tile('all')}<span class="cell-main cell-title">All ${esc(tabMeta.label.toLowerCase())}</span><span class="cell-end count">${tabCount}</span>${CHEV}</button></li>` : ''}
       </ul>`
     : `<div class="empty">${s.poiError ? esc(s.poiError) : s.poiLoading ? 'Looking for places…' : `Nothing found within ${fmtRadius(s.radius || RADIUS.start)}. Slide the distance further.`}</div>`;
@@ -2085,7 +2176,7 @@ let ratingsOn = false; // the server has ratings (checked at start)
 let ratingsName = ''; // who they come from, for the credit line
 let placesKitKey = null; // a browser key for Google's place card, when the server offers one
 
-const thumbArt = (p) => `<span class="thumb-art" style="--c:${TAB_COLOR[p.tab] || '#8e8e93'}">${glyph(p.tab === 'meet' ? 'pin' : p.tab, 22, 1.9)}</span>`;
+const thumbArt = (p) => `<span class="thumb-art" style="--c:${TAB_COLOR[p.tab] || '#8e8e93'}">${glyph(placeGlyph(p), 22, 1.9)}</span>`;
 const stars = (x) => `<span class="stars" style="--r:${Math.max(0, Math.min(100, (x / 5) * 100))}%" aria-hidden="true">★★★★★</span>`;
 
 /** "4.5 ●●●●◐ (1,234)": Tripadvisor's bubble picture when we have it, else stars. */
@@ -2269,7 +2360,11 @@ function renderGroup() {
   s.groupList = items.map((x) => x.p);
   const title = s.group === '*' ? `All ${TABS.find((t) => t.id === s.tab).label.toLowerCase()}` : s.group;
   const markersKey = `${s.tab}|${s.group}|${s.sort}|${items.map((x) => x.p.id).join(',')}`;
-  if (s.markersKey !== markersKey) { s.markersKey = markersKey; drawPoiMarkers(items.map((x) => x.p)); }
+  if (s.markersKey !== markersKey) {
+    s.markersKey = markersKey;
+    const list = items.map((x) => x.p);
+    afterPageTurn(() => { if (state.view === 'group' && s.markersKey === markersKey) drawPoiMarkers(list); });
+  }
   const anyTa = items.some((x) => x.p.rating?.rating != null);
   const anyFree = items.some((x) => x.p.thumbFrom === 'commons');
   const credits = [
@@ -2279,7 +2374,7 @@ function renderGroup() {
   ].filter(Boolean).join(' · ');
   return `
     ${backBtn('back-results', 'Categories')}
-    <div class="sheet-title">${tile(s.tab, 'lg')}<div style="flex:1;min-width:0"><h2>${esc(title)}</h2><div class="footnote">${items.length} place${items.length === 1 ? '' : 's'} nearby</div></div></div>
+    <div class="sheet-title">${s.group === '*' ? tile(s.tab, 'lg') : groupTile(s.tab, s.group, 'lg')}<div style="flex:1;min-width:0"><h2>${esc(title)}</h2><div class="footnote">${items.length} place${items.length === 1 ? '' : 's'} nearby</div></div></div>
     <div class="segmented" style="margin-top:0">
       <button class="seg${!['fair', 'top'].includes(s.sort) ? ' active' : ''}" data-action="sort" data-sort="near">Nearest</button>
       <button class="seg${s.sort === 'fair' ? ' active' : ''}" data-action="sort" data-sort="fair">Fairest</button>
@@ -2311,7 +2406,7 @@ function drawPoiMarkers(items) {
     poiMarkers.set(p.id, m);
   });
   const s = state.search;
-  requestAnimationFrame(() => fitTo([...items.map((p) => [p.lat, p.lon]), [s.meet.lat, s.meet.lon]], { maxZoom: 17 }));
+  fitTo([...items.map((p) => [p.lat, p.lon]), [s.meet.lat, s.meet.lon]], { maxZoom: 17 });
 }
 
 function highlightPoi(id, on) {
@@ -2391,11 +2486,11 @@ function renderPlace() {
     // (The meeting point has its own pin already.)
     if (p.id !== 'meet') {
       L.marker([p.lat, p.lon], {
-        icon: L.divIcon({ className: '', html: `<div class="poi-pin hl" style="--c:${TAB_COLOR[p.tab] || '#007aff'}">${glyph(p.tab, 15)}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] }),
+        icon: L.divIcon({ className: '', html: `<div class="poi-pin hl" style="--c:${TAB_COLOR[p.tab] || '#007aff'}">${glyph(placeGlyph(p), 15)}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] }),
         zIndexOffset: 1200,
       }).bindTooltip(esc(p.name), { permanent: true, direction: 'right', className: 'label', offset: [18, 0] }).addTo(poiLayer);
     }
-    requestAnimationFrame(() => fitTo([...routePeople(s).map((i) => [s.people[i].lat, s.people[i].lon]), [p.lat, p.lon]], { maxZoom: 16 }));
+    afterPageTurn(() => { if (state.view === 'place' && s.place === p) fitTo([...routePeople(s).map((i) => [s.people[i].lat, s.people[i].lon]), [p.lat, p.lon]], { maxZoom: 16 }); });
   }
   loadPlaceDirections();
   drawDirections();
@@ -2418,7 +2513,7 @@ function renderPlace() {
     : photos.length
     ? `<div class="gallery${photos.length === 1 ? ' single' : ''}">${photos.slice(0, 8).map((ph, k) => `<button class="g-item" data-action="photo" data-i="${k}" aria-label="Photo ${k + 1} of ${photos.length}"><img src="${esc(ph.url)}" alt="${esc(ph.caption || '')}" ${k > 1 ? 'loading="lazy"' : ''} decoding="async"></button>`).join('')}</div>`
     : loading ? '<div class="gallery"><span class="g-item skel"></span><span class="g-item skel"></span></div>'
-      : `<div class="hero-art" style="--c:${TAB_COLOR[p.tab] || '#007aff'}">${glyph(p.tab === 'meet' ? 'pin' : p.tab, 40, 1.6)}</div>`;
+      : `<div class="hero-art" style="--c:${TAB_COLOR[p.tab] || '#007aff'}">${glyph(placeGlyph(p), 40, 1.6)}</div>`;
   const meta = [p.id === 'meet' ? 'Meeting point' : p.group, PRICE[r?.priceLevel], p.id === 'meet' ? '' : `${fmtDist(p.fromCenter)} from the meeting point`].filter(Boolean);
   const quick = [
     `<button class="q primary" data-action="choose">${glyph('send', 19)}<span>Send</span></button>`,
@@ -2547,7 +2642,11 @@ function chooseMapsApp(p) {
       ${apps.map((a) => `<a class="choice-btn" data-app="${a.id}" href="${esc(a.url)}"${a.id === 'geo' ? '' : ' target="_blank" rel="noopener"'}>${esc(a.name)}${a.id === last ? '<span class="choice-note">Last used</span>' : ''}</a>`).join('')}
     </div>
     <button class="choice-btn choice-cancel" type="button">Cancel</button>`;
-  const close = () => { back.remove(); box.remove(); document.removeEventListener('keydown', onKey); };
+  const close = () => {
+    document.removeEventListener('keydown', onKey);
+    leave(back, [{ opacity: 1 }, { opacity: 0 }], { duration: 220, remove: true });
+    leave(box, [{ opacity: 1, translate: '0 0' }, { opacity: 0, translate: '0 28px' }], { duration: 240, remove: true });
+  };
   const onKey = (e) => { if (e.key === 'Escape') close(); };
   back.addEventListener('click', close);
   $('.choice-cancel', box).addEventListener('click', close);
@@ -2658,7 +2757,7 @@ function openLightbox(photos, start) {
       ].filter(Boolean).join(' · ')}
       ${ph.link ? ` · <a href="${linkOf(ph.link)}" target="_blank" rel="noopener">Licence &amp; source</a>` : ''}<span class="lb-count">${i + 1} / ${photos.length}</span></figcaption></figure>`;
   };
-  const close = () => { box.remove(); document.removeEventListener('keydown', onKey); };
+  const close = () => { document.removeEventListener('keydown', onKey); leave(box, [{ opacity: 1 }, { opacity: 0 }], { duration: 220, remove: true }); };
   const step = (k) => { i = (i + k + photos.length) % photos.length; show(); };
   const onKey = (e) => {
     if (e.key === 'Escape') close();
@@ -2700,7 +2799,7 @@ function loadPlaceDirections() {
     getDirections(person.mode, person, p, person.mode === 'transit' ? opts : {})
       .then((data) => { dir.results[i] = { status: 'ok', data, option: 0 }; })
       .catch((err) => { dir.results[i] = { status: 'error', message: friendlyError(err, person.mode) }; })
-      .finally(() => {
+      .finally(() => afterPageTurn(() => {
         if (state.dir !== dir || state.view !== 'place') return;
         drawDirections();
         render({ keepScroll: true });
@@ -2709,7 +2808,7 @@ function loadPlaceDirections() {
           const pts = dir.results.flatMap((r) => (r.status === 'ok' ? routeGeometry(r) : []));
           if (pts.length) fitTo([...pts, ...shown.map((k) => [s.people[k].lat, s.people[k].lon]), [p.lat, p.lon]], { maxZoom: 16 });
         }
-      });
+      }));
   });
 }
 
@@ -2948,8 +3047,8 @@ function initPanel() {
         setEveryoneMode(el.dataset.mode);
         break;
       case 'mode-menu':
-        state.modeMenu = state.modeMenu === el.dataset.id ? null : el.dataset.id;
-        render({ keepScroll: true });
+        if (state.modeMenu === el.dataset.id) closeModeMenu(() => render({ keepScroll: true }));
+        else { state.modeMenu = el.dataset.id; render({ keepScroll: true }); }
         break;
       case 'set-mode': setPersonMode(el.dataset.id, el.dataset.mode); break;
       case 'dir-toggle': {
@@ -3070,9 +3169,16 @@ function renderHistory() {
 }
 
 function openDrawer(open) {
-  $('#drawer').hidden = !open;
-  $('#drawer-backdrop').hidden = !open;
-  if (!open) return;
+  const drawer = $('#drawer'), back = $('#drawer-backdrop');
+  if (!open) {
+    leave(drawer, [{ transform: 'none' }, { transform: 'translateX(calc(100% + 20px))' }], { duration: 300, easing: 'cubic-bezier(0.4, 0, 0.7, 1)', hide: true });
+    leave(back, [{ opacity: 1 }, { opacity: 0 }], { duration: 260, hide: true });
+    return;
+  }
+  stay(drawer);
+  stay(back);
+  drawer.hidden = false;
+  back.hidden = false;
   $('#drawer-home').textContent = state.user.home?.address || 'Not set';
   syncSettingsUI();
   renderHistory();

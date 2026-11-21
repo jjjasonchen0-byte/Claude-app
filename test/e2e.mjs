@@ -397,7 +397,8 @@ try {
   await italian.click();
   await page.waitForSelector('.poi');
   assert.equal(await page.locator('.poi').count(), 4);
-  assert.equal(await page.locator('.poi-pin').count(), 4);
+  // (Their pins go on the map once the page has slid in.)
+  await page.waitForFunction(() => document.querySelectorAll('.poi-pin').length === 4);
   // Each place: its name, then a very short summary of it, and about how long the longest trip there is.
   assert.deepEqual(await page.locator('.poi .p-sum').allTextContents(), ['Italian', 'Italian', 'Italian', 'Italian']);
   for (const end of await page.locator('.poi .cell-end').allTextContents()) assert.match(end, /~\d+ min$/, `trip time: ${end}`);
