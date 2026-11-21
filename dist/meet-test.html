@@ -1054,16 +1054,20 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .num { --c: var(--accent); width: 30px; height: 30px; border-radius: 50%; background: var(--c); color: #fff; display: grid; place-items: center; font: 700 13px/1 var(--font-display); flex: none; }
 
 /* people: a compact row each. The picture (with a heart on it: hollow, filled once their address
-   is kept on this device), their name with how they travel beside it, their address, and at the
-   end removing them and the switch that leaves them out. Tapping the row opens it, down, to their
-   name and address in full, each with a pencil; double-tapping it keeps their address (the heart). */
+   is kept on this device), their name with how they travel beside it, their address below, and at
+   the end removing them and the switch that leaves them out. Tapping the row opens it where it is:
+   taller, a pencil beside the name, the address lower down in full across the row with a pencil at
+   its end. Double-tapping it keeps their address (the heart). */
 .group.people { overflow: visible; } /* (the travel menu opens over the rows below) */
+.person { position: relative; }
 .person.raised { z-index: 6; }
+.person.gliding { overflow: hidden; } /* (while it grows or shrinks) */
 .person-cell {
-  display: flex; align-items: center; gap: 12px; min-height: 70px; padding: 12px 12px 12px 16px; cursor: pointer;
+  display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; column-gap: 12px; row-gap: 4px; align-items: center;
+  min-height: 70px; padding: 12px 12px 12px 16px; cursor: pointer;
   -webkit-user-select: none; user-select: none; touch-action: manipulation;
 }
-.avatar-wrap { position: relative; width: 40px; height: 40px; flex: none; }
+.avatar-wrap { grid-column: 1; grid-row: 1 / span 2; position: relative; width: 40px; height: 40px; }
 .avatar-wrap .avatar { width: 40px; height: 40px; }
 /* The heart on the picture: the circle 20% smaller than it was in the sketch, the heart as big. */
 .badge-heart {
@@ -1083,30 +1087,43 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
   0% { transform: scale(0.2); opacity: 0; } 25% { transform: scale(1.18); opacity: 1; } 45% { transform: scale(0.94); }
   70% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.25) translateY(-12px); opacity: 0; }
 }
-.p-text { flex: 1; min-width: 0; display: grid; gap: 4px; }
-.p-line1 { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.p-line1 { grid-column: 2; grid-row: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
 .p-name {
   flex: 0 1 auto; min-width: 0; border: 0; padding: 0; background: none; color: var(--text); font-size: 16px; font-weight: 600; text-align: left;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
 }
-.p-addr { margin-top: 0; }
-.p-end { display: flex; align-items: center; gap: 12px; flex: none; }
+.p-end { grid-column: 3; grid-row: 1 / span 2; display: flex; align-items: center; gap: 12px; }
 .p-end .icon-circle { position: relative; }
 .p-end .icon-circle::after { content: ""; position: absolute; inset: -7px; }
-.person.inactive .avatar, .person.inactive .p-text { opacity: 0.4; }
-/* Open: name and address in full, a pencil beside each (a save button while one is being changed). */
-.p-more { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.34s cubic-bezier(0.32, 0.72, 0, 1); }
-.person.open .p-more { grid-template-rows: 1fr; }
-.p-more-inner { min-height: 0; overflow: hidden; padding: 0 12px 0 68px; opacity: 0; transition: opacity 0.22s, padding-bottom 0.34s cubic-bezier(0.32, 0.72, 0, 1); }
-.person.open .p-more-inner { opacity: 1; padding-bottom: 10px; transition: opacity 0.3s 0.06s, padding-bottom 0.34s cubic-bezier(0.32, 0.72, 0, 1); }
-.p-field { display: flex; align-items: flex-start; gap: 10px; padding: 10px 2px 8px 0; border-top: 0.5px solid var(--sep); }
-.p-field-text { flex: 1; min-width: 0; display: grid; gap: 2px; padding: 2px 0 2px 2px; }
-.p-label { font-size: 12px; font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.02em; }
-.p-value { font-size: 15px; line-height: 1.35; color: var(--text); overflow-wrap: anywhere; }
-.p-value.empty { color: var(--text-3); }
-.p-edit input { margin-top: 4px; background-color: var(--fill); }
+.p-addr { grid-column: 2; grid-row: 2; margin-top: 0; min-width: 0; }
+.person.home .p-addr { grid-column: 2 / 4; }
+.p-addr.only-open { display: none; } /* (someone without a name shows their street as one; the whole address when open) */
+.person.one-line:not(.open) .avatar-wrap, .person.one-line:not(.open) .p-end { grid-row: 1; }
+.person.inactive .avatar, .person.inactive .p-line1, .person.inactive .p-addr { opacity: 0.4; }
+/* Open: taller. Everything on the top line beside the picture; the address lower, in full, across the row. */
+.person.open .person-cell { padding-bottom: 16px; }
+.person.open .avatar-wrap, .person.open .p-end { grid-row: 1; }
+.person.open .p-name { white-space: normal; overflow-wrap: anywhere; }
+.person.open .p-addr { display: block; grid-column: 2 / 4; margin-top: 10px; white-space: normal; overflow-wrap: anywhere; line-height: 1.4; }
+/* A pencil beside the name and at the end of the address, only while open. */
+.pencil {
+  display: none; position: relative; flex: none; width: 26px; height: 26px; margin: -4px 0; border: 0; padding: 0; border-radius: 50%;
+  place-items: center; background: none; color: var(--accent); cursor: pointer; vertical-align: middle;
+}
+.pencil::after { content: ""; position: absolute; inset: -7px; }
+.pencil:active { transform: scale(0.88); }
+.person.open .pencil { display: inline-grid; animation: pencil-in 0.28s 0.12s both; }
+.p-addr .pencil { margin-left: 2px; }
+@keyframes pencil-in { from { opacity: 0; transform: scale(0.6); } }
+/* A pencil turns its line into a box, with a save button. (While the name is being changed it takes the top line.) */
+.person.naming .p-end { display: none; }
+.p-edit { display: flex; align-items: center; gap: 8px; min-width: 0; cursor: auto; -webkit-user-select: text; user-select: text; }
+.p-edit-name { grid-column: 2 / 4; grid-row: 1; }
+.p-edit-addr { grid-column: 2 / 4; grid-row: 2; align-items: flex-start; margin-top: 8px; }
+.p-edit-addr .search { flex: 1; min-width: 0; }
+.p-edit input { background-color: var(--fill); }
 .field-icon {
-  position: relative; flex: none; width: 34px; height: 34px; margin-top: 4px; border: 0; padding: 0; border-radius: 50%; display: grid; place-items: center;
+  position: relative; flex: none; width: 34px; height: 34px; border: 0; padding: 0; border-radius: 50%; display: grid; place-items: center;
   background: var(--fill); color: var(--text-2); box-shadow: var(--card-rim); cursor: pointer; transition: transform 0.15s;
 }
 .field-icon::after { content: ""; position: absolute; inset: -5px; }
@@ -1114,8 +1131,9 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .field-icon.save {
   color: #fff; background: linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0) 55%), var(--accent);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 4px 12px -4px var(--accent);
+  animation: pencil-in 0.24s both;
 }
-.p-edit .field-icon { margin-top: 21px; }
+.p-edit-addr .field-icon { margin-top: 4px; }
 /* How someone travels: a menu of glass from the pill beside their name. */
 .dd { position: relative; display: inline-flex; flex: none; }
 .menu {
@@ -6968,68 +6986,53 @@ function renderPeople() {
  * (hollow, filled once their address is kept on this device; double-tapping
  * the row does the same), their name with how they travel beside it, their
  * address; at the end removing them and the switch that leaves them out.
- * Tapping the row opens it, down, to their name and address in full, each
- * with a pencil to change it.
+ * Tapping the row opens it: taller, a pencil beside the name, the address
+ * below in full across the row with a pencil at its end. A pencil turns its
+ * line into a box with a save button.
  */
 function personRow(p, i, count) {
   const kept = !!savedMatch(p);
   const open = state.open === p.id;
+  const ed = state.edit?.id === p.id ? state.edit : null;
   const whose = p.isHome ? 'your' : `${p.name}’s`;
   const heartLabel = kept ? `Saved on this device. Tap to forget ${whose} address` : `Keep ${whose} address on this device`;
   const title = p.isHome ? (state.user.name ? `You (${state.user.name})` : 'You') : p.nickname || shortAddr(p.address);
   const named = p.isHome || !!p.nickname;
   const menuUp = count > 2 && i >= count - 2;
-  return `<li class="person${p.active ? '' : ' inactive'}${p.isHome ? ' home' : ''}${open ? ' open' : ''}${state.modeMenu === p.id ? ' raised' : ''}" data-id="${esc(p.id)}">
+  const pencil = (field, what) => `<button class="pencil" type="button" data-action="edit" data-field="${field}" aria-label="Change ${esc(what)}" title="Change ${esc(what)}">${glyph('pencil', 14, 2.1)}</button>`;
+  const save = `<button class="field-icon save" type="submit" aria-label="Save" title="Save">${glyph('check', 16, 2.6)}</button>`;
+  const line1 = ed?.field === 'name'
+    ? `<form class="p-edit p-edit-name" data-action="save-edit" autocomplete="off">
+        <input id="edit-nick" name="nick" value="${esc(ed.nick ?? p.nickname ?? '')}" maxlength="60" placeholder="Their name" aria-label="Name" autocomplete="off" enterkeyhint="done">${save}
+      </form>`
+    : `<div class="p-line1">
+        <button class="p-name" type="button" data-action="person-tap" aria-expanded="${open}" title="${esc(title)}">${esc(title)}</button>
+        ${p.isHome ? '' : pencil('name', named ? `${p.name}’s name` : 'their name')}
+        <div class="dd">${modePill(p)}${peopleModeMenu(p, menuUp)}</div>
+      </div>`;
+  const line2 = ed?.field === 'address'
+    ? `<form class="p-edit p-edit-addr" data-action="save-edit" autocomplete="off">
+        <div class="search searchfield" id="edit-search">
+          <input id="edit-address" type="search" value="${esc(ed.text ?? p.address)}" placeholder="${p.isHome ? 'Where you’re starting from' : 'Their address'}" aria-label="Address" autocomplete="off" enterkeyhint="done">
+          <ul class="suggestions inline" role="listbox" hidden></ul>
+        </div>${save}
+      </form>`
+    : `<div class="cell-sub p-addr${named ? '' : ' only-open'}" title="${esc(p.address)}"><span>${esc(p.address)}</span>${pencil('address', p.isHome ? 'your starting point' : `${p.name}’s address`)}</div>`;
+  return `<li class="person${p.active ? '' : ' inactive'}${p.isHome ? ' home' : ''}${named ? '' : ' one-line'}${open ? ' open' : ''}${ed?.field === 'name' ? ' naming' : ''}${state.modeMenu === p.id ? ' raised' : ''}" data-id="${esc(p.id)}">
       <div class="cell person-cell" data-action="person-tap">
         <div class="avatar-wrap">
           <span class="avatar" style="--c:${p.color}">${esc(initial(p.name))}</span>
           <button class="badge-heart${kept ? ' on' : ''}" type="button" data-action="heart-person" aria-pressed="${kept}" aria-label="${esc(heartLabel)}" title="${esc(heartLabel)}">${heart(kept, 13)}</button>
           ${state.pop === p.id ? `<span class="heart-pop" aria-hidden="true">${heart(true, 46)}</span>` : ''}
         </div>
-        <div class="p-text">
-          <div class="p-line1">
-            <button class="p-name" type="button" data-action="person-tap" aria-expanded="${open}" aria-controls="more-${esc(p.id)}" title="${esc(title)}">${esc(title)}</button>
-            <div class="dd">${modePill(p)}${peopleModeMenu(p, menuUp)}</div>
-          </div>
-          ${named ? `<span class="cell-sub p-addr" title="${esc(p.address)}">${esc(shortAddr(p.address))}</span>` : ''}
-        </div>
+        ${line1}
         ${p.isHome ? '' : `<div class="p-end">
           <button class="icon-circle" type="button" data-action="delete" aria-label="Remove ${esc(p.name)}" title="Remove">${glyph('close', 13, 2.6)}</button>
           <label class="switch" title="${p.active ? 'Included' : 'Left out'}"><input type="checkbox" data-action="toggle" ${p.active ? 'checked' : ''} aria-label="Include ${esc(p.name)}"><span></span></label>
         </div>`}
-      </div>
-      <div class="p-more" id="more-${esc(p.id)}">
-        <div class="p-more-inner">
-          ${p.isHome ? '' : personField(p, 'name')}
-          ${personField(p, 'address')}
-        </div>
+        ${line2}
       </div>
     </li>`;
-}
-
-/** One of someone's details in their open row: in full with a pencil, or (being changed) a box and a save button. */
-function personField(p, field) {
-  const ed = state.edit?.id === p.id && state.edit.field === field ? state.edit : null;
-  const isName = field === 'name';
-  const label = isName ? 'Name' : p.isHome ? 'Starting from' : 'Address';
-  if (ed) {
-    const box = isName
-      ? `<input id="edit-nick" name="nick" value="${esc(ed.nick ?? p.nickname ?? '')}" maxlength="60" placeholder="Their name" autocomplete="off" enterkeyhint="done">`
-      : `<div class="search searchfield" id="edit-search">
-          <input id="edit-address" type="search" value="${esc(ed.text ?? p.address)}" placeholder="${p.isHome ? 'Where you’re starting from' : 'Their address'}" autocomplete="off" enterkeyhint="done">
-          <ul class="suggestions inline" role="listbox" hidden></ul>
-        </div>`;
-    return `<form class="p-field p-edit" data-action="save-edit" autocomplete="off">
-        <div class="p-field-text"><label class="p-label" for="${isName ? 'edit-nick' : 'edit-address'}">${label}</label>${box}</div>
-        <button class="field-icon save" type="submit" aria-label="Save" title="Save">${glyph('check', 16, 2.6)}</button>
-      </form>`;
-  }
-  const value = isName ? p.nickname : p.address;
-  const what = isName ? `${p.name}’s name` : p.isHome ? 'your starting point' : `${p.name}’s address`;
-  return `<div class="p-field">
-      <div class="p-field-text"><span class="p-label">${label}</span><span class="p-value${value ? '' : ' empty'}">${esc(value || 'No name yet')}</span></div>
-      <button class="field-icon" type="button" data-action="edit" data-field="${field}" aria-label="Change ${esc(what)}" title="Change ${esc(what)}">${glyph('pencil', 14, 2.1)}</button>
-    </div>`;
 }
 
 /** How someone travels: a menu from the pill beside their name (up from the last rows, which have no room below). */
@@ -7055,21 +7058,52 @@ function personTap(id) {
   personTapTimer = setTimeout(() => { personTapTimer = 0; personTapId = null; togglePersonOpen(id); }, 260);
 }
 
-/** Open someone's row (closing any other), or close it: it slides open, so the rows are changed where they are, not drawn again. */
+/**
+ * Open someone's row (closing any other), or close it. The rows change where
+ * they are, not drawn again: each grows or shrinks to its new height and what
+ * is in it glides to its new place (measured before and after the change).
+ */
+const ROW_MOVE = { duration: 340, easing: 'cubic-bezier(0.32, 0.72, 0, 1)' };
 function togglePersonOpen(id) {
   if (state.view !== 'people') return;
   if (state.modeMenu) { state.modeMenu = null; render({ keepScroll: true }); return; } // (a tap away from an open menu closes it)
   const open = state.open === id ? null : id;
   state.open = open;
-  for (const li of $$('#panel-body .person')) {
+  const rows = $$('#panel-body .person').filter((li) => li.classList.contains('open') !== (li.dataset.id === open));
+  const moves = reducedMotion() ? [] : rows.map(measureRow);
+  for (const li of rows) {
     const on = li.dataset.id === open;
     li.classList.toggle('open', on);
     $('.p-name', li)?.setAttribute('aria-expanded', String(on));
   }
+  for (const m of moves) glideRow(m);
   // A change left half-made in a row now closing is dropped (once that row has closed).
   if (state.edit && state.edit.id !== open) {
     state.edit = null;
-    setTimeout(() => { if (state.view === 'people' && !state.edit) render({ keepScroll: true }); }, 360);
+    setTimeout(() => { if (state.view === 'people' && !state.edit) render({ keepScroll: true }); }, ROW_MOVE.duration + 20);
+  }
+}
+const ROW_PARTS = '.avatar-wrap, .p-name, .dd, .p-end, .p-addr';
+/** Where a row and the things in it are now (each part measured from the row's own corner). */
+function measureRow(li) {
+  const box = li.getBoundingClientRect();
+  return {
+    li,
+    h: box.height,
+    parts: $$(ROW_PARTS, li).map((el) => { const r = el.getBoundingClientRect(); return { el, x: r.left - box.left, y: r.top - box.top }; }),
+  };
+}
+/** From where it was to where it is: the row's height, and each part's place. */
+function glideRow({ li, h, parts }) {
+  const box = li.getBoundingClientRect();
+  li.classList.add('gliding');
+  const done = () => li.classList.remove('gliding');
+  li.animate([{ height: `${h}px` }, { height: `${box.height}px` }], ROW_MOVE).finished.then(done, done);
+  for (const { el, x, y } of parts) {
+    if (!el.isConnected || !el.offsetParent) continue;
+    const r = el.getBoundingClientRect();
+    const dx = x - (r.left - box.left), dy = y - (r.top - box.top);
+    if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], ROW_MOVE);
   }
 }
 
