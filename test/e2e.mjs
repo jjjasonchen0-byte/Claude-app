@@ -189,7 +189,7 @@ try {
     } else {
       await page.keyboard.press('Enter');
     }
-    await page.waitForFunction((n) => [...document.querySelectorAll('.person .cell-title')].some((e) => e.textContent.includes(n)), nick);
+    await page.waitForFunction((n) => [...document.querySelectorAll('.person .p-name')].some((e) => e.textContent.includes(n)), nick);
     assert.equal(await page.inputValue('#add-search input'), '', 'the form is empty again');
     assert.equal(await page.isDisabled('[data-action=add-person]'), true);
   }
@@ -206,42 +206,58 @@ try {
   await page.keyboard.press('Escape');
   await page.locator('#add-search input').blur();
 
-  // Each row: a pencil beside the name and one beside the address, changing them right there.
+  // Each row: two lines, and a heart on everyone's picture (filled for Sam, whose address is kept).
+  assert.deepEqual(await page.locator('.person .badge-heart').evaluateAll((bs) => bs.map((b) => b.getAttribute('aria-pressed'))), ['false', 'true', 'false']);
   const joRow = () => page.locator('.person', { hasText: 'Clapham' });
-  assert.equal(await joRow().locator('.p-name [data-action=edit]').count(), 1, 'a pencil beside the name');
-  assert.equal(await joRow().locator('.p-addr [data-action=edit]').count(), 1, 'a pencil beside the address');
-  assert.equal(await page.locator('.person.home .p-name [data-action=edit]').count(), 0, 'you have no name to change');
-  await joRow().locator('.p-name [data-action=edit]').click();
+  // A tap opens the row, down, to their name and address in full, each with a pencil.
+  await joRow().locator('.p-name').click();
+  await page.waitForSelector('.person.open .p-field [data-action=edit][data-field=name]');
+  assert.match(await joRow().locator('.p-more').textContent(), /Name\s*Jo[\s\S]*Address\s*5 Clapham High St, London, United Kingdom/);
+  assert.equal(await page.locator('.person.open').count(), 1);
+  await page.waitForTimeout(400);
+  await shot('03a-row-open');
+  await joRow().locator('[data-action=edit][data-field=name]').click();
   await page.waitForFunction(() => document.activeElement?.id === 'edit-nick');
+  assert.equal(await page.locator('.p-edit .field-icon.save').count(), 1, 'a save button beside the box');
   await page.keyboard.press('Escape'); // leaves things as they were
-  await page.waitForSelector('.person-edit', { state: 'detached' });
-  await joRow().locator('.p-name [data-action=edit]').click();
+  await page.waitForSelector('.p-edit', { state: 'detached' });
+  await joRow().locator('[data-action=edit][data-field=name]').click();
   await page.waitForFunction(() => document.activeElement?.id === 'edit-nick');
   await page.fill('#edit-nick', 'Joanna');
-  await page.keyboard.press('Enter'); // on to the address
-  await page.waitForFunction(() => document.activeElement?.id === 'edit-address');
-  await page.keyboard.press('Enter'); // the address as it was: saved
+  await page.keyboard.press('Enter'); // saved
   await page.waitForFunction(() => [...document.querySelectorAll('.person .p-name')].some((e) => e.textContent.includes('Joanna')));
-  // A new address: picked from the suggestions, then Save. (And back again.)
+  assert.equal(await page.locator('.person.open', { hasText: 'Joanna' }).count(), 1, 'the row stays open');
+  // A new address: picked from the suggestions, then the save button. (And back again.)
   for (const [q, street] of [['Camden', 'Camden Road'], ['Clapham', 'Clapham High St']]) {
-    await page.locator('.person', { hasText: 'Joanna' }).locator('.p-addr [data-action=edit]').click();
+    await page.locator('.person', { hasText: 'Joanna' }).locator('[data-action=edit][data-field=address]').click();
     await page.waitForFunction(() => document.activeElement?.id === 'edit-address');
     await page.fill('#edit-address', q);
     await page.waitForSelector('#edit-search .suggestions li[data-i]:not(.saved)');
     await page.keyboard.press('Enter');
-    await page.click('.person-edit [type=submit]');
+    await page.click('.p-edit [type=submit]');
     await page.waitForFunction((st) => [...document.querySelectorAll('.person .p-addr')].some((e) => e.textContent.includes(st)), street);
     if (q === 'Camden') await shot('03c-row-changed');
   }
   const joNow = await page.evaluate(() => JSON.parse(localStorage.getItem('meet-guest-v1')).places.find((x) => x.nickname === 'Joanna'));
   assert.equal(joNow.address.startsWith('5 Clapham High St'), true, 'the address change is saved');
-  // The heart in a row keeps that address on this device (and forgets it again).
-  const rowHeart = page.locator('.person', { hasText: 'Joanna' }).locator('[data-action=heart-person]');
-  assert.equal(await rowHeart.getAttribute('aria-pressed'), 'false');
-  await rowHeart.click();
+  // Another tap closes it.
+  await page.locator('.person', { hasText: 'Joanna' }).locator('.p-name').click();
+  await page.waitForFunction(() => !document.querySelector('.person.open'));
+  // The heart keeps that address on this device (filled), and forgets it again (hollow).
+  const rowHeart = () => page.locator('.person', { hasText: 'Joanna' }).locator('[data-action=heart-person]');
+  assert.equal(await rowHeart().getAttribute('aria-pressed'), 'false');
+  await rowHeart().click();
   await page.waitForSelector('.person:has-text("Joanna") [data-action=heart-person][aria-pressed=true]');
   assert.deepEqual((await page.evaluate(() => JSON.parse(localStorage.getItem('meet-guest-v1')).saved)).map((x) => x.nickname), ['Joanna', 'Sam']);
-  await page.locator('.person', { hasText: 'Joanna' }).locator('[data-action=heart-person]').click();
+  await rowHeart().click();
+  await page.waitForSelector('.person:has-text("Joanna") [data-action=heart-person][aria-pressed=false]');
+  // A double-tap on the row does the same, the heart popping over their picture (and the row stays shut).
+  await page.locator('.person', { hasText: 'Joanna' }).locator('.p-addr').dblclick();
+  await page.waitForSelector('.person:has-text("Joanna") [data-action=heart-person][aria-pressed=true]');
+  assert.equal(await page.locator('.person:has-text("Joanna") .heart-pop').count(), 1, 'the heart pops');
+  await page.waitForTimeout(400);
+  assert.equal(await page.locator('.person.open').count(), 0, 'a double-tap does not open the row');
+  await rowHeart().click();
   await page.waitForSelector('.person:has-text("Joanna") [data-action=heart-person][aria-pressed=false]');
   assert.equal(await page.locator('.person:has-text("Sam") [data-action=heart-person][aria-pressed=true]').count(), 1, "Sam's address is kept");
   await page.waitForTimeout(700);
@@ -452,8 +468,11 @@ try {
   await page.click('#drawer-close');
 
   // Exclude Jo and search again with just two people.
+  // Tapping someone's switch leaves them out, without opening their row.
   await page.locator('.person', { hasText: 'Jo' }).locator('.switch span').click();
   await page.waitForFunction(() => document.querySelectorAll('.person.inactive').length === 1);
+  await page.waitForTimeout(400);
+  assert.equal(await page.locator('.person.open').count(), 0, 'the switch does not open the row');
   await page.click('[data-action=find]');
   await page.waitForSelector('.growth-canvas');
   await page.waitForTimeout(3000);
