@@ -42,11 +42,23 @@
         <button class="round-btn" id="btn-recenter" title="Show everyone" aria-label="Show everyone">
           <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path d="M20.5 3.5L3.5 10.6l7.3 2.6 2.6 7.3z" fill="var(--accent)"/></svg>
         </button>
-        <button class="round-btn" id="btn-menu" title="Menu" aria-label="Open menu">
+        <button class="round-btn" id="btn-menu" title="Menu" aria-label="Menu" aria-haspopup="menu" aria-expanded="false" aria-controls="top-menu">
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
         </button>
       </div>
     </header>
+
+    <!-- The menu button opens out into Settings and Saved. -->
+    <div class="top-menu" id="top-menu" role="menu" aria-label="Menu" hidden>
+      <button class="menu-item" type="button" role="menuitem" data-open="settings">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" aria-hidden="true"><path d="M4 7h9M17.5 7H20M4 17h3.5M12 17h8"/><circle cx="15.2" cy="7" r="2.3"/><circle cx="9.8" cy="17" r="2.3"/></svg>
+        <span>Settings</span>
+      </button>
+      <button class="menu-item" type="button" role="menuitem" data-open="saved">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/></svg>
+        <span>Saved</span><span class="count" id="saved-count"></span>
+      </button>
+    </div>
 
     <div class="flood-hud" id="flood-hud" aria-live="polite" hidden></div>
 
@@ -67,11 +79,12 @@
   <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
   <nav class="drawer" id="drawer" aria-label="Menu" hidden>
     <div class="drawer-head">
-      <div class="wordmark wordmark-lg">meet<i></i></div>
-      <button class="icon-circle" id="drawer-close" aria-label="Close menu">
+      <h2 class="drawer-title" id="drawer-title">Settings</h2>
+      <button class="icon-circle" id="drawer-close" aria-label="Close">
         <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
       </button>
     </div>
+    <div class="drawer-page" id="drawer-settings">
     <div class="drawer-section">
       <h3>Starting point</h3>
       <div id="drawer-home"></div>
@@ -117,6 +130,12 @@
     </div>
     <p class="footnote app-note">Everything is saved on this device. <a href="/privacy" target="_blank" rel="noopener">Privacy &amp; Terms</a></p>
     <p class="footnote app-version" id="app-version" hidden></p>
+    </div>
+    <!-- Saved: the addresses kept with the heart. -->
+    <div class="drawer-page" id="drawer-saved" hidden>
+      <ul class="drawer-section saved-list" id="saved-list"></ul>
+      <p class="footnote app-note">Saved on this device. Tap the heart on someone's picture, or in the address box, to keep their address here.</p>
+    </div>
   </nav>
 
   <div class="toasts" id="toasts" aria-live="polite"></div>

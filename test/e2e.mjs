@@ -292,6 +292,22 @@ try {
   assert.equal(await page.locator('#leave-at.active').count(), 0);
   const shownNow = await page.inputValue('#leave-at');
   assert.ok(Math.abs(new Date(shownNow).getTime() - Date.now()) < 120000, `Reset shows the time it is now: ${shownNow}`);
+  // Safari's Reset doesn't empty the box: it puts back the box's default value. That is the time it is
+  // now, even when the page has been drawn again since a time was chosen (when the box's markup holds that time).
+  await page.fill('#leave-at', laterValue);
+  await page.dispatchEvent('#leave-at', 'change');
+  await page.evaluate(() => window.__meet.render({ keepScroll: true }));
+  assert.equal(await page.locator('#leave-at.active').count(), 1);
+  assert.equal(await page.inputValue('#leave-at'), laterValue, 'the chosen time, after drawing the page again');
+  await page.evaluate(() => {
+    const box = document.querySelector('#leave-at');
+    box.dispatchEvent(new Event('focus'));
+    box.value = box.defaultValue; // (what Safari's Reset does)
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  assert.equal(await page.locator('.leave-row [data-action=leave-now].active').count(), 1, "Safari's Reset: leaving now");
+  assert.ok(Math.abs(new Date(await page.inputValue('#leave-at')).getTime() - Date.now()) < 120000, 'showing the time it is now');
   await page.fill('#leave-at', laterValue); // (and the time chosen again, for the search)
   await page.dispatchEvent('#leave-at', 'change');
   assert.equal(await page.locator('#leave-at.active').count(), 1);
@@ -462,12 +478,29 @@ try {
   assert.notEqual(await page.inputValue('#share-text'), text, 'the message has the time');
   await shot('08-share');
 
-  // History is in the menu; there's nothing to sign in to.
+  // The menu button opens out into Settings and Saved. History is in Settings; there's nothing to sign in to.
   await page.click('#btn-menu');
+  await page.waitForSelector('#top-menu:not([hidden]) [data-open=settings]');
+  assert.deepEqual((await page.locator('#top-menu .menu-item > span:first-of-type').allTextContents()), ['Settings', 'Saved']);
+  assert.equal(await page.textContent('#saved-count'), '1', 'one address saved');
+  await page.click('#top-menu [data-open=settings]');
+  await page.waitForSelector('#top-menu', { state: 'hidden' });
+  assert.equal(await page.textContent('#drawer-title'), 'Settings');
   await page.waitForSelector('#history-list [data-hid]');
   await shot('09-menu');
   assert.equal(await page.locator('#drawer :text("Sign in")').count(), 0, 'no sign-in in the menu');
   await page.click('#drawer-close');
+  await page.waitForSelector('#drawer', { state: 'hidden' });
+  // Saved: the addresses kept with the heart (Sam's, who is in the meetup already).
+  await page.click('#btn-menu');
+  await page.click('#top-menu [data-open=saved]');
+  await page.waitForSelector('#drawer-saved:not([hidden]) .saved-row');
+  assert.equal(await page.textContent('#drawer-title'), 'Saved');
+  assert.equal(await page.locator('#drawer-settings').isHidden(), true);
+  assert.deepEqual(await page.locator('.saved-row .saved-name').allTextContents(), ['Sam']);
+  assert.equal(await page.locator('.saved-row .saved-in').count(), 1, 'Sam is in the meetup already');
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('#drawer', { state: 'hidden' });
 
   // Reload: everything was saved on this device.
   await page.reload();
@@ -475,6 +508,7 @@ try {
   assert.equal(await page.locator('.person').count(), 3, 'addresses saved on the device');
   assert.match(await page.locator('.person', { hasText: 'Sam' }).locator('.mode-pill').textContent(), /Bike/, "Sam's travel mode is remembered");
   await page.click('#btn-menu');
+  await page.click('#top-menu [data-open=settings]');
   assert.equal(await page.locator('#history-list [data-hid]').count(), 2, 'history saved on the device (the meeting point and the place sent)');
   await page.click('#drawer-close');
 
@@ -496,6 +530,7 @@ try {
   // Changing the meeting rule in the menu looks for a spot again straight away.
   assert.equal(await page.locator('.result-head[data-rule=similar]').count(), 1);
   await page.click('#btn-menu');
+  await page.click('#top-menu [data-open=settings]');
   await page.click('#set-mode [data-value=total]');
   await page.waitForSelector('#drawer', { state: 'hidden' });
   await page.waitForSelector('.panel:not(.away) .result-head[data-rule=total]', { timeout: 45000 });

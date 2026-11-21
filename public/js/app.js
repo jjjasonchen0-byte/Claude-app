@@ -787,34 +787,113 @@ function typingBoxToTop() {
   fitSuggestions?.();
 }
 
+/**
+ * A finger holding the sheet (by its tab, or its content at the top). It
+ * slides with the finger rather than stretching: for the time being it is as
+ * tall as it can be, its foot just off the bottom of the screen, so on the
+ * way nothing in it is laid out or painted again (its glass, sheen and shadow
+ * included), only moved. Let go, it settles at a size (see settleSheet).
+ */
+const held = { on: false, max: 0, h: 0, frame: 0 };
+function holdSheet() {
+  const panel = $('#panel');
+  const top = panel.getBoundingClientRect().top; // (where it is now, part way through settling too)
+  stopSettling();
+  const max = sheetSizes().max;
+  panel.classList.add('dragging');
+  panel.style.transform = '';
+  panel.style.height = `${max}px`;
+  const foot = panel.getBoundingClientRect().bottom;
+  Object.assign(held, { on: true, max, foot, h: Math.round(foot - top) });
+  panel.style.transform = `translateY(${max - held.h}px)`;
+  return held.h; // how much of it shows
+}
+/** The finger moved: this much of the sheet shows (at most once a frame: a finger reports more often than the screen is drawn). */
+function moveSheet(h) {
+  held.h = Math.max(56, Math.min(held.max, h));
+  if (!held.frame) held.frame = requestAnimationFrame(() => { held.frame = 0; $('#panel').style.transform = `translateY(${held.max - held.h}px)`; });
+}
+
+/**
+ * The sheet to a size by sliding there: it is given its new height at once
+ * and glides from where it was (from the finger, when let go). Going down,
+ * it keeps the height it needs to reach the bottom of the screen on the way,
+ * and takes its own at the end.
+ */
+const SETTLE = { duration: 420, easing: 'cubic-bezier(0.2, 0.9, 0.3, 1)' };
+let settling = null;
+function settleSheet(snap) {
+  const panel = $('#panel');
+  sheet.chosen = snap;
+  cancelAnimationFrame(held.frame);
+  held.frame = 0;
+  held.on = false;
+  const from = panel.getBoundingClientRect().top;
+  stopSettling();
+  panel.style.transform = '';
+  panel.classList.remove('dragging');
+  if (reducedMotion() || !isMobile()) { setSheet(snap); return; }
+  panel.classList.add('settling'); // (its height changes at once; its sides and corners still ease, to and from the screen's edges)
+  setSheet(snap);
+  const target = sheet.target;
+  const d = from - panel.getBoundingClientRect().top;
+  if (Math.abs(d) < 1) { panel.classList.remove('settling'); return; }
+  if (d < 0) panel.style.height = `${target - d}px`; // (taller for now: its foot stays off the screen until it's there)
+  const a = panel.animate(d > 0 ? [{ transform: `translateY(${d}px)` }, { transform: 'none' }] : [{ transform: 'none' }, { transform: `translateY(${-d}px)` }], SETTLE);
+  settling = { a, target, d };
+  const done = () => {
+    if (settling?.a !== a) return;
+    settling = null;
+    takeOwnHeight(panel, target);
+  };
+  a.finished.then(done, () => {});
+}
+/** Stop a settling sheet where it is supposed to end (a finger has caught it, or it is going away). */
+function stopSettling() {
+  if (!settling) return;
+  const { a, target, d } = settling;
+  settling = null;
+  a.cancel();
+  if (d < 0) takeOwnHeight($('#panel'), target);
+  else $('#panel').classList.remove('settling');
+}
+/** Back to its own height (it was taller to slide down), taken at once before its height eases again. */
+function takeOwnHeight(panel, target) {
+  if (sheet.target === target) {
+    panel.style.height = `${target}px`;
+    void getComputedStyle(panel).opacity; // (the new height is taken here, while it doesn't ease)
+  }
+  panel.classList.remove('settling');
+}
+
 function initSheet() {
   const panel = $('#panel');
   const handle = $('#panel-handle');
   let drag = null;
   handle.addEventListener('pointerdown', (e) => {
     if (!isMobile()) return;
-    drag = { y: e.clientY, h: panel.offsetHeight, t: performance.now(), moved: false, lastY: e.clientY, lastT: performance.now(), v: 0 };
-    panel.classList.add('dragging');
+    drag = { y: e.clientY, h: 0, moved: false, lastY: e.clientY, lastT: performance.now(), v: 0 };
     handle.setPointerCapture(e.pointerId);
     e.preventDefault();
   });
   handle.addEventListener('pointermove', (e) => {
     if (!drag) return;
     const dy = e.clientY - drag.y;
-    if (Math.abs(dy) > 5) drag.moved = true;
+    if (!drag.moved) {
+      if (Math.abs(dy) <= 4) return;
+      drag.moved = true;
+      drag.h = holdSheet();
+    }
     const now = performance.now();
     drag.v = (e.clientY - drag.lastY) / Math.max(1, now - drag.lastT); // px/ms, + is downward
     drag.lastY = e.clientY; drag.lastT = now;
-    const { max } = sheetSizes();
-    panel.style.height = `${Math.max(56, Math.min(max, drag.h - dy))}px`;
+    moveSheet(drag.h - dy);
   });
   const end = () => {
     if (!drag) return;
-    panel.classList.remove('dragging');
-    const snap = drag.moved ? snapFor(drag.v) : sheet.snap === 'peek' ? 'mid' : 'peek'; // (a tap toggles)
+    const snap = drag.moved ? snapFor(drag.v, held.h) : sheet.snap === 'peek' ? 'mid' : 'peek'; // (a tap toggles)
     drag = null;
-    sheet.chosen = snap;
-    setSheet(snap);
+    settleSheet(snap);
   };
   handle.addEventListener('pointerup', end);
   handle.addEventListener('pointercancel', end);
@@ -823,10 +902,11 @@ function initSheet() {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); snap = sheet.snap === 'peek' ? 'mid' : 'peek'; }
     if (e.key === 'ArrowUp') snap = sheet.snap === 'peek' ? 'mid' : 'full';
     if (e.key === 'ArrowDown') snap = sheet.snap === 'full' ? 'mid' : 'peek';
-    if (snap) { sheet.chosen = snap; setSheet(snap); }
+    if (snap) settleSheet(snap);
   });
   pullFromContent(panel);
   window.addEventListener('resize', () => {
+    if (held.on) return; // (a finger is on it)
     setSheet(sheet.snap);
     // Typing with the sheet fully open: keep the address box at its top, now and once the sheet has settled.
     typingBoxToTop();
@@ -834,10 +914,9 @@ function initSheet() {
   });
 }
 
-/** Letting go of the sheet: the next size in the direction of a flick (v: px/ms, + is down), else the nearest. */
-function snapFor(v) {
+/** Letting go of the sheet with `cur` of it showing: the next size in the direction of a flick (v: px/ms, + is down), else the nearest. */
+function snapFor(v, cur) {
   const s = sheetSizes();
-  const cur = $('#panel').offsetHeight;
   const order = ['peek', 'mid', 'full'];
   if (Math.abs(v) > 0.45) {
     return v > 0 ? [...order].reverse().find((k) => s[k] < cur - 4) || 'peek' : order.find((k) => s[k] > cur + 4) || 'full';
@@ -880,8 +959,7 @@ function pullFromContent(panel) {
       const s = sheetSizes();
       const take = Math.abs(dy) > Math.abs(dx) && body.scrollTop <= 0 && (dy < 0 ? pull.h < s.full - 2 : pull.h > s.peek + 2);
       if (!take) { pull = null; return; }
-      Object.assign(pull, { on: true, full: s.full });
-      panel.classList.add('dragging');
+      Object.assign(pull, { on: true, full: s.full, h: holdSheet() });
     }
     e.preventDefault();
     const now = performance.now();
@@ -889,14 +967,14 @@ function pullFromContent(panel) {
     pull.lastY = t.clientY;
     pull.lastT = now;
     const want = pull.h - dy;
-    panel.style.height = `${Math.max(56, Math.min(pull.full, want))}px`;
-    body.scrollTop = Math.max(0, want - pull.full); // (all the way up: the content scrolls on)
+    moveSheet(Math.min(pull.full, want));
+    const over = Math.max(0, want - pull.full); // (all the way up: the content scrolls on)
+    if (over || body.scrollTop) body.scrollTop = over;
     if (Math.abs(dy) > 10) pull.moved = true;
   }, { passive: false });
   const letGo = () => {
     if (!pull?.on) { pull = null; return; }
-    panel.classList.remove('dragging');
-    const snap = snapFor(pull.v);
+    const snap = snapFor(pull.v, held.h);
     // A drag isn't a tap: whatever it started on isn't pressed.
     if (pull.moved) {
       const stop = (e) => { e.stopPropagation(); e.preventDefault(); };
@@ -904,8 +982,7 @@ function pullFromContent(panel) {
       setTimeout(() => body.removeEventListener('click', stop, { capture: true }), 400);
     }
     pull = null;
-    sheet.chosen = snap;
-    setSheet(snap);
+    settleSheet(snap);
   };
   body.addEventListener('touchend', letGo);
   body.addEventListener('touchcancel', letGo);
@@ -931,6 +1008,7 @@ function enterMain(recentre = false) {
 function setView(view) {
   state.view = view;
   state.modeMenu = null;
+  if (view === 'searching') stopSettling(); // (the sheet goes away from wherever it is)
   if (view !== 'people') map?.closePopup(); // an "Add this address" bubble belongs to the people list
   // While the search runs the panel slides away (down off a phone's screen), and back up with the results.
   $('#panel').classList.toggle('away', view === 'searching');
@@ -1448,15 +1526,33 @@ function leaveRow() {
 }
 
 /**
- * A date and time box that, when emptied, shows the time it is now and calls
- * `onReset`. (A phone's Reset in its date picker empties the box.)
+ * A date and time box whose picker's Reset goes back to the time it is now,
+ * calling `onReset`. Browsers reset it in two ways: some empty the box (it
+ * then shows the time it is now), and Safari puts back the box's default
+ * value (its value attribute), which is therefore kept at the time it is now
+ * (again each time the picker opens) whatever the box shows.
  */
 function resetsToNow(box, onReset) {
-  const check = () => {
-    if (box.value) return false;
-    box.value = toLocalInput(new Date());
-    onReset();
-    return true;
+  const defaultNow = () => {
+    const shown = box.value;
+    box.defaultValue = toLocalInput(new Date());
+    box.value = shown; // (what it shows stays as it is)
+  };
+  defaultNow();
+  box.addEventListener('focus', defaultNow);
+  box.addEventListener('pointerdown', defaultNow);
+  const check = (e) => {
+    if (!box.value) {
+      box.value = toLocalInput(new Date());
+      onReset();
+      return true;
+    }
+    // Back to its default (only once the picker is done with it, not while its wheels turn past it).
+    if (e?.type !== 'input' && box.value === box.defaultValue) {
+      onReset();
+      return true;
+    }
+    return false;
   };
   box.addEventListener('input', check);
   return check;
@@ -1565,7 +1661,9 @@ async function addPlace(loc) {
     const { place } = await api.addPlace({ address: loc.address, lat: loc.lat, lon: loc.lon, nickname: loc.nickname || '', mode: state.settings.travel });
     state.places.push(place);
     render();
-    toast(`Added ${place.nickname || shortAddr(place.address)}`);
+    // (From Saved while a meeting point is on show: it was picked without them.)
+    const shown = state.search && ['results', 'group', 'place'].includes(state.view);
+    toast(`Added ${place.nickname || shortAddr(place.address)}`, shown ? { action: 'Find again', onAction: () => findPlaces(), ms: 6000 } : {});
     warnIfUnsaved();
     fitTo(activePeople().map((p) => [p.lat, p.lon]), { maxZoom: 15 });
   } catch (err) { toast(err.message, { error: true }); }
@@ -2727,7 +2825,7 @@ afterRender.place = () => {
   });
   const arrive = $('#dir-when-time');
   if (arrive) {
-    // Reset (an emptied box): leaving now again.
+    // Reset: leaving now again.
     const reset = resetsToNow(arrive, () => { state.when = { type: 'now' }; render({ keepScroll: true }); });
     arrive.addEventListener('change', () => {
       if (!arrive.isConnected || reset()) return; // (a reset has drawn the page again already)
@@ -3168,7 +3266,12 @@ function renderHistory() {
     : '<li class="empty-note">Places you send show up here.</li>';
 }
 
-function openDrawer(open) {
+/**
+ * The menu drawer, on one of its pages: Settings (the starting point, the
+ * meeting rule, how people travel, the animation, the look and past meetups)
+ * or Saved (the addresses kept with the heart).
+ */
+function openDrawer(open, page = 'settings') {
   const drawer = $('#drawer'), back = $('#drawer-backdrop');
   if (!open) {
     leave(drawer, [{ transform: 'none' }, { transform: 'translateX(calc(100% + 20px))' }], { duration: 300, easing: 'cubic-bezier(0.4, 0, 0.7, 1)', hide: true });
@@ -3179,6 +3282,13 @@ function openDrawer(open) {
   stay(back);
   drawer.hidden = false;
   back.hidden = false;
+  drawer.dataset.page = page;
+  $('#drawer-title').textContent = page === 'saved' ? 'Saved' : 'Settings';
+  drawer.setAttribute('aria-label', page === 'saved' ? 'Saved' : 'Settings');
+  $('#drawer-settings').hidden = page === 'saved';
+  $('#drawer-saved').hidden = page !== 'saved';
+  drawer.scrollTop = 0;
+  if (page === 'saved') { renderSaved(); return; }
   $('#drawer-home').textContent = state.user.home?.address || 'Not set';
   syncSettingsUI();
   renderHistory();
@@ -3201,12 +3311,86 @@ async function saveSettings(patch) {
   try { await api.updateMe({ settings: state.settings }); } catch { /* keep local */ }
 }
 
+/** The menu button's menu: Settings and Saved, growing out of the button (and back into it). */
+function openTopMenu(open) {
+  const menu = $('#top-menu'), btn = $('#btn-menu');
+  btn.setAttribute('aria-expanded', String(open));
+  if (!open) {
+    leave(menu, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(0.4)' }], { duration: 180, hide: true });
+    return;
+  }
+  stay(menu);
+  const n = state.saved.length;
+  $('#saved-count').textContent = n ? String(n) : '';
+  menu.hidden = false;
+}
+
+/** Saved: each address kept with the heart, to add to the meetup (or seen to be in it already), or to forget. */
+function renderSaved() {
+  const list = $('#saved-list');
+  const colors = ['#ff9500', '#34c759', '#af52de', '#ff2d55', '#5ac8fa', '#ffcc00', '#5856d6'];
+  const inMeetup = (sv) => everyone().some((p) => p.address === sv.address || haversine(p.lat, p.lon, sv.lat, sv.lon) < 15);
+  list.innerHTML = state.saved.length
+    ? state.saved.map((sv, i) => {
+      const title = savedTitle(sv);
+      const here = inMeetup(sv);
+      return `<li class="saved-row" data-sid="${esc(sv.id)}">
+        <span class="avatar" style="--c:${colors[i % colors.length]}">${esc(initial(title))}</span>
+        <span class="saved-text"><span class="saved-name">${esc(title)}</span><span class="saved-sub">${esc(sv.address)}</span></span>
+        ${here ? '<span class="saved-in">In the meetup</span>'
+          : `<button class="saved-add" type="button" data-add="${esc(sv.id)}" aria-label="Add ${esc(title)} to the meetup">Add</button>`}
+        <button class="saved-heart" type="button" data-forget="${esc(sv.id)}" aria-label="Forget ${esc(title)}" title="Forget">${heart(true, 18)}</button>
+      </li>`;
+    }).join('')
+    : `<li class="saved-empty">${heart(false, 30)}<b>Nothing saved yet</b></li>`;
+}
+
+async function addSaved(id) {
+  const sv = state.saved.find((x) => x.id === id);
+  if (!sv) return;
+  await addPlace({ address: sv.address, lat: sv.lat, lon: sv.lon, nickname: sv.nickname || '' });
+  renderSaved();
+}
+
+async function forgetSaved(id) {
+  const sv = state.saved.find((x) => x.id === id);
+  if (!sv) return;
+  await forgetAddress(id);
+  renderSaved();
+  if (state.view === 'people') render({ keepScroll: true }); // (their heart empties)
+  toast(`Forgot ${savedTitle(sv)}`, {
+    action: 'Undo',
+    onAction: async () => {
+      await toggleSaved(sv, sv.nickname || '');
+      if (!$('#drawer').hidden && $('#drawer').dataset.page === 'saved') renderSaved();
+      if (state.view === 'people') render({ keepScroll: true });
+    },
+  });
+}
+
 function initDrawer() {
-  $('#btn-menu').onclick = () => openDrawer(true);
+  $('#btn-menu').onclick = () => openTopMenu($('#top-menu').hidden);
+  $('#top-menu').addEventListener('click', (e) => {
+    const item = e.target.closest('[data-open]');
+    if (!item) return;
+    openTopMenu(false);
+    openDrawer(true, item.dataset.open);
+  });
+  // A tap anywhere else closes the menu.
+  document.addEventListener('pointerdown', (e) => {
+    if (!$('#top-menu').hidden && !e.target.closest('#top-menu, #btn-menu')) openTopMenu(false);
+  }, true);
+  $('#saved-list').addEventListener('click', (e) => {
+    const add = e.target.closest('[data-add]'), forget = e.target.closest('[data-forget]');
+    if (add) addSaved(add.dataset.add);
+    else if (forget) forgetSaved(forget.dataset.forget);
+  });
   $('#drawer-close').onclick = () => openDrawer(false);
   $('#drawer-backdrop').onclick = () => openDrawer(false);
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !$('#drawer').hidden) openDrawer(false);
+    if (e.key !== 'Escape') return;
+    if (!$('#top-menu').hidden) openTopMenu(false);
+    else if (!$('#drawer').hidden) openDrawer(false);
   });
   for (const [id, key] of [['#set-mode', 'mode'], ['#set-travel', 'travel'], ['#set-speed', 'speed'], ['#set-theme', 'theme']]) {
     $(id).addEventListener('click', (e) => {
@@ -3274,5 +3458,5 @@ async function boot() {
   onUser(await api.start());
 }
 
-window.__meet = { onUser, api, get map() { return map; } };
+window.__meet = { onUser, api, render, get map() { return map; } };
 boot();
