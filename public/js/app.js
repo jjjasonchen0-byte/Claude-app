@@ -3138,6 +3138,7 @@ function initDrawer() {
 // ---------------------------------------------------------------- boot
 
 async function boot() {
+  document.addEventListener('touchstart', () => {}, { passive: true }); // (iOS shows a button as pressed only where touches are listened for)
   noZoomForTyping();
   followKeyboard();
   initHome();

@@ -4,6 +4,7 @@
    Layout: full-bleed map; a floating glass panel on desktop, a draggable glass sheet on phones. */
 :root {
   --page: #ffffff;                      /* start screen */
+  --press: grayscale(0.3) brightness(0.94); /* a link or button while it's pressed: slightly grey */
   --bg: #f2f2f7;                        /* grouped background */
   --card: rgba(255, 255, 255, 0.66);       /* inset cards, on glass */
   --card-solid: #ffffff;
@@ -39,7 +40,7 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --page: #000000; --bg: #000000; --card: rgba(255, 255, 255, 0.08); --card-solid: #2c2c2e;
+    --page: #000000; --bg: #000000; --card: rgba(255, 255, 255, 0.08); --card-solid: #2c2c2e; --press: grayscale(0.3) brightness(1.15);
     --material: rgba(30, 30, 34, 0.52); --material-strong: rgba(42, 42, 48, 0.74);
     --glass-blur: blur(26px) saturate(180%) brightness(0.92);
     --glass-rim: inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 0 0 0.5px rgba(255, 255, 255, 0.1);
@@ -57,7 +58,7 @@
   }
 }
 :root[data-theme="dark"] {
-  --page: #000000; --bg: #000000; --card: rgba(255, 255, 255, 0.08); --card-solid: #2c2c2e;
+  --page: #000000; --bg: #000000; --card: rgba(255, 255, 255, 0.08); --card-solid: #2c2c2e; --press: grayscale(0.3) brightness(1.15);
   --material: rgba(30, 30, 34, 0.52); --material-strong: rgba(42, 42, 48, 0.74);
   --glass-blur: blur(26px) saturate(180%) brightness(0.92);
   --glass-rim: inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 0 0 0.5px rgba(255, 255, 255, 0.1);
@@ -368,6 +369,14 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .cell-btn { transition: background 0.15s; }
 .cell-btn:hover { background: var(--fill); }
 .cell-btn:active { background: var(--fill-2); }
+/* Pressing: a link or button goes slightly grey while it's held, as on an iPhone (a row of a list greys behind
+   it instead). Not a row when the press is on something in it with its own (the remove button, the switch). */
+:is(a[href], button, [role=button], summary):not(:disabled, .cell-btn, .leaflet-marker-icon):active:not(:has(:is(a[href], button, input, label):active)) {
+  filter: var(--press);
+}
+.person-cell:active:not(:has(:is(a[href], button:not(.p-name), input, label, .p-edit):active)) { background: var(--fill-2); }
+.group.people > .person:first-child > .person-cell { border-top-left-radius: 24px; border-top-right-radius: 24px; }
+.group.people > .person:last-child > .person-cell { border-bottom-left-radius: 24px; border-bottom-right-radius: 24px; }
 .cell-main { flex: 1; min-width: 0; display: block; }
 .cell-title { display: block; font-size: 16px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cell-sub { display: block; font-size: 13px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px; }
