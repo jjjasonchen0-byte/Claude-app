@@ -497,6 +497,8 @@ route('GET', '/api/config', async (req, res) => {
     // A browser key for Google's place card (Places UI Kit). It is public by
     // nature: restrict it to this site and to the Maps JavaScript and Places APIs.
     placesKit: (process.env.GOOGLE_MAPS_BROWSER_KEY || '').trim() || null,
+    // Who to contact about privacy and the terms (shown on /privacy): MEET_CONTACT.
+    contact: CONTACT || null,
   }, { 'Cache-Control': 'private, max-age=300' });
 });
 
@@ -593,8 +595,11 @@ function serveStatic(req, res, pathname) {
       fs.createReadStream(file).on('error', () => res.destroy()).pipe(res);
       return;
     }
-    // An unknown page (not a file with an extension) gets the app.
-    if (prefix === '/' && !path.extname(rel) && pathname !== '/index.html') return serveStatic(req, res, '/index.html');
+    // A page of its own without its ending (/privacy is privacy.html); any other unknown page gets the app.
+    if (prefix === '/' && !path.extname(rel) && pathname !== '/index.html') {
+      if (/^\/[a-z-]+$/.test(pathname) && fs.existsSync(`${file}.html`)) return serveStatic(req, res, `${pathname}.html`);
+      return serveStatic(req, res, '/index.html');
+    }
     break;
   }
   res.writeHead(404, { 'Content-Type': 'text/plain' });
@@ -626,6 +631,11 @@ async function handle(req, res) {
   if (req.method !== 'GET' && req.method !== 'HEAD') throw new HttpError(405, 'Method not allowed');
   try { pathname = decodeURIComponent(pathname); }
   catch { throw new HttpError(400, 'Bad request'); }
+  // The terms are the second half of the privacy page.
+  if (pathname === '/terms') {
+    res.writeHead(301, { Location: '/privacy#terms' });
+    return res.end();
+  }
   serveStatic(req, res, pathname);
 }
 

@@ -19,7 +19,7 @@ Find somewhere that's roughly as close for everyone in a group, with a press of 
 6. Open a place for a **full page like a search result**: photos (tap to view full screen), rating with a breakdown, reviews, opening hours, phone, website and menu, what it offers (outdoor seating, takeaway, step-free…), and **real directions for everyone, each in their own way of travelling**: public transport (lines in their official colours, times, changes, walking legs, with *Leave now* or *Arrive by*), walking, cycling or driving.
 7. **Send the location** by share sheet, WhatsApp, Messages, Email, Telegram, copy, a calendar invite, or Google/Apple Maps.
 
-**No sign-in.** Your starting point, the people you meet, addresses you've kept with the heart, past meetups and settings are all saved on your device, in the browser's storage. Nothing about you is kept on the server. (They don't move between devices, and clearing the browser's site data clears them.)
+**No sign-in.** Your starting point, the people you meet, addresses you've kept with the heart, past meetups and settings are all saved on your device, in the browser's storage. Nothing about you is kept on the server. (They don't move between devices, and clearing the browser's site data clears them.) The **Privacy & Terms** page (`/privacy`, with the terms at `/terms`) says the same for your visitors: what stays on their device, what is sent to which service and why, and the terms of use, including the notice Google's terms ask for. It is linked at the foot of the start screen and in the menu, and has a button to delete everything Meet saved on that device. Set `MEET_CONTACT` so it shows how to reach you.
 
 The look follows Apple's design language, in the spirit of its **Liquid Glass**: a quiet map with white streets and no shop icons, the system font, floating surfaces of clear frosted glass with a rim of light along their edges, capsule-shaped buttons and fields (a button or link goes slightly grey while it is pressed), inset grouped lists, coloured category tiles, iOS-style switches and segmented controls (the choice under a lens of glass). With *Reduce transparency* on, the glass is nearly solid. On phones the panel is a sheet of glass floating above the bottom of the screen, meeting the screen's edges when pulled all the way up. Drag its handle to resize it, or tap the handle to collapse and expand it; swiping its content up while it's scrolled to the top grows it too (and down at the top shrinks it), as on an iPhone. Every page opens at the size it was last pulled to. Going from page to page, the next page slides in from the right (and back again), as in an iPhone app.
 
@@ -36,7 +36,7 @@ Requires Node 20.3+. Dependencies are Leaflet and MapLibre (for the map), served
 
 | Variable | What it does |
 | --- | --- |
-| `MEET_CONTACT` | Your email or website, sent to the routing services so they can reach you (Transitous requires it) |
+| `MEET_CONTACT` | Your email or website, sent to the routing services so they can reach you (Transitous requires it), and shown as the contact on the Privacy & Terms page |
 | `TRIPADVISOR_API_KEY` | Optional. Turns on Tripadvisor ratings, photos and reviews (see below) |
 | `TRIPADVISOR_DAILY_LIMIT` | Most Tripadvisor "billable entities" Meet uses per day (default 150) |
 | `TRANSIT_DAILY_LIMIT` | Most public-transport searches per day (default 600) |

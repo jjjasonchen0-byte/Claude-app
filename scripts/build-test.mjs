@@ -48,6 +48,11 @@ const html = read('public/index.html');
 let body = html.slice(html.indexOf('<body>') + 6, html.indexOf('<script src="/vendor/leaflet/leaflet.js">'));
 body = replaceOnce(body, 'title="Use my current location" aria-label="Use my current location"', 'title="Pick a random address" aria-label="Pick a random address"', 'locate label');
 body = replaceOnce(body, 'placeholder="Where are you starting from?"', 'placeholder="Try “George Street” or “Bondi”"', 'home placeholder');
+// Privacy & Terms: the page is on the live site (this file has no server of its own to serve it).
+const SITE = process.env.MEET_SITE || 'https://meet-hhdt.onrender.com';
+if (body.split('href="/privacy"').length !== 3) throw new Error('build-test: expected two links to /privacy');
+body = body.replaceAll('href="/privacy" target="_blank" rel="noopener"', 'href="/privacy"')
+  .replaceAll('href="/privacy"', `href="${SITE}/privacy" target="_blank" rel="noopener"`);
 // A sample group of friends, to try it in one tap.
 body = replaceOnce(body, '      <button class="btn btn-plain" type="button" id="home-cancel" hidden>Cancel</button>',
   `      <button class="btn btn-plain" type="button" id="demo-sample">Try a sample group</button>

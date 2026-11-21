@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Privacy &amp; Terms · Meet</title>
+  <meta name="description" content="How Meet handles your data, and the terms for using it.">
+  <meta name="theme-color" content="#f2f2f7">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <script>
+    // The look chosen in Meet's menu (Auto, Light or Dark), if one was.
+    try {
+      const t = JSON.parse(localStorage.getItem('meet-guest-v1') || '{}').settings?.theme;
+      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+    } catch { /* the system's look */ }
+  </script>
+  <style>
+    :root {
+      --bg: #f2f2f7; --card: #ffffff; --text: #000000; --text-2: rgba(60, 60, 67, 0.64); --sep: rgba(60, 60, 67, 0.16);
+      --accent: #007aff; --red: #ff3b30; --fill: rgba(118, 118, 128, 0.12);
+      --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #000000; --card: #1c1c1e; --text: #ffffff; --text-2: rgba(235, 235, 245, 0.64); --sep: rgba(84, 84, 88, 0.6);
+        --accent: #0a84ff; --red: #ff453a; --fill: rgba(118, 118, 128, 0.24); color-scheme: dark;
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #000000; --card: #1c1c1e; --text: #ffffff; --text-2: rgba(235, 235, 245, 0.64); --sep: rgba(84, 84, 88, 0.6);
+      --accent: #0a84ff; --red: #ff453a; --fill: rgba(118, 118, 128, 0.24); color-scheme: dark;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html { scroll-padding-top: 76px; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 var(--font); letter-spacing: -0.01em;
+      -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    a:active, button:active { filter: grayscale(0.3) brightness(0.94); }
+    .top {
+      position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: calc(12px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 12px max(16px, env(safe-area-inset-left));
+      background: color-mix(in srgb, var(--bg) 82%, transparent); -webkit-backdrop-filter: saturate(1.8) blur(20px); backdrop-filter: saturate(1.8) blur(20px);
+      border-bottom: 0.5px solid var(--sep);
+    }
+    .wordmark { font: 800 24px/1 var(--font-display); letter-spacing: -0.04em; color: var(--text); }
+    .wordmark i { display: inline-block; width: 0.26em; height: 0.26em; margin-left: 0.05em; border-radius: 50%; background: var(--accent); }
+    .back { font-size: 16px; font-weight: 500; white-space: nowrap; }
+    main { max-width: 680px; margin: 0 auto; padding: 8px max(16px, env(safe-area-inset-right)) calc(40px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+    h1 { font: 700 34px/1.12 var(--font-display); letter-spacing: -0.025em; margin: 28px 4px 6px; }
+    .updated { margin: 0 4px 18px; color: var(--text-2); font-size: 14px; }
+    nav.jump { display: flex; gap: 8px; margin: 0 0 22px; }
+    nav.jump a { padding: 8px 16px; border-radius: 999px; background: var(--fill); font-weight: 600; font-size: 15px; }
+    section { background: var(--card); border-radius: 22px; padding: 6px 20px 18px; margin: 0 0 14px; }
+    h2 { font: 700 22px/1.25 var(--font-display); letter-spacing: -0.02em; margin: 34px 4px 12px; }
+    h3 { font: 600 17px/1.3 var(--font-display); margin: 16px 0 6px; }
+    p, li { color: var(--text); }
+    p { margin: 8px 0; }
+    ul { margin: 8px 0; padding-left: 20px; }
+    li { margin: 6px 0; }
+    li::marker { color: var(--text-2); }
+    .lead { font-size: 17px; }
+    .muted { color: var(--text-2); font-size: 14px; }
+    dl { margin: 6px 0 0; }
+    dt { font-weight: 600; margin-top: 14px; }
+    dd { margin: 2px 0 0; color: var(--text-2); }
+    .danger {
+      margin-top: 10px; border: 0; border-radius: 999px; padding: 11px 18px; background: var(--fill); color: var(--red);
+      font: 600 16px/1.2 var(--font); cursor: pointer;
+    }
+    .done { color: var(--text-2); font-size: 14px; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <a class="wordmark" href="/" aria-label="Meet">meet<i></i></a>
+    <a class="back" href="/">Back to Meet</a>
+  </header>
+
+  <main>
+    <h1>Privacy &amp; Terms</h1>
+    <p class="updated">Last updated 21 November 2026</p>
+    <nav class="jump" aria-label="On this page">
+      <a href="#privacy">Privacy</a>
+      <a href="#terms">Terms of use</a>
+    </nav>
+
+    <h2 id="privacy">Privacy</h2>
+    <section>
+      <h3>The short version</h3>
+      <p class="lead">Meet has no accounts and keeps nothing about you on its server. Your starting point, the people you add and the addresses you keep are saved only on your device.</p>
+      <p>To find a meeting place and directions, map positions and addresses have to be sent to the map, search and routing services listed below. Nothing is sold, and there are no ads or analytics.</p>
+    </section>
+
+    <section>
+      <h3>What's saved on your device</h3>
+      <ul>
+        <li>Your starting point.</li>
+        <li>The people you add: the names you give them, their addresses and positions, and how each one travels.</li>
+        <li>Addresses you keep with the heart, your past meetups, and your settings.</li>
+      </ul>
+      <p>These are kept in your browser's storage for this site. Meet doesn't set cookies or receive a copy, and they don't move between your devices. They stay until you delete them: remove people and forget addresses in the app, use the button below, or clear this site's data in your browser.</p>
+      <button class="danger" type="button" id="forget-all">Delete everything Meet saved on this device</button>
+      <p class="done" id="forget-done" hidden>Done. Meet has nothing saved on this device.</p>
+    </section>
+
+    <section>
+      <h3>Your location</h3>
+      <p>Meet uses your location only if you tap the arrow on the start screen and allow it when your browser asks. It's used once, to look up your address, which is then saved on your device as your starting point. Meet doesn't follow your location in the background.</p>
+      <p>You can change your starting point in the menu at any time, and turn off location access in your browser's or phone's settings.</p>
+    </section>
+
+    <section>
+      <h3>Other people's addresses</h3>
+      <p>When you add someone, you're giving Meet their address. Please add only people who are happy for you to use it to plan a meetup. Their details are kept on your device, like yours, and are sent to the services below only as map positions and addresses, without names.</p>
+      <p>When you send a meeting place, it goes only to the app and people you choose, and contains only the place, the time and any note you add.</p>
+    </section>
+
+    <section>
+      <h3>What's sent to other services, and why</h3>
+      <p>Like any website, each of these services sees your device's IP address. Each gets only what it needs to answer:</p>
+      <dl>
+        <dt>Address search: Photon (komoot) and Nominatim (OpenStreetMap)</dt>
+        <dd>What you type in an address box, or the position of a spot you tap on the map or of your location, to find its address.</dd>
+        <dt>Map: OpenFreeMap, or OpenStreetMap's map servers</dt>
+        <dd>The part of the map you're looking at.</dd>
+        <dt>Places: Overpass (OpenStreetMap) and Photon</dt>
+        <dd>The area around the meeting point, to list places to meet.</dd>
+        <dt>Walking, cycling and driving routes: FOSSGIS routing service</dt>
+        <dd>The start and end of each route, from your browser and through Meet's server.</dd>
+        <dt>Public transport: Transitous</dt>
+        <dd>The start and end of each trip and the time, through Meet's server.</dd>
+        <dt>Photos: Wikidata and Wikimedia Commons</dt>
+        <dd>Which place a photo is wanted for.</dd>
+        <dt>Google Maps, when it's switched on</dt>
+        <dd>The map, directions and travel times through Meet's server (map positions), and Google's card for a place you open, which your browser loads from Google. Google may set its own cookies. See Google's <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</dd>
+        <dt>Tripadvisor, when it's switched on</dt>
+        <dd>The names and positions of places, through Meet's server, for ratings, photos and reviews. Nothing about you.</dd>
+        <dt>Fonts: Google Fonts</dt>
+        <dd>Your browser loads Meet's typeface from Google.</dd>
+      </dl>
+    </section>
+
+    <section>
+      <h3>Meet's server</h3>
+      <ul>
+        <li>It passes requests on to the routing, public transport, Google and Tripadvisor services, so their keys stay secret and the same answer can be reused.</li>
+        <li>It keeps recent answers, which contain map positions but no names, in memory for up to a day, and remembers which map places match a Google or Tripadvisor listing. None of this is linked to you.</li>
+        <li>It uses your IP address to limit how much each visitor can ask at once, and forgets it within ten minutes.</li>
+        <li>Meet's host, Render, may keep short-lived technical logs of requests (such as IP addresses and the addresses requested) to run and protect the service.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h3>Your choices and rights</h3>
+      <p>Everything Meet keeps about you is on your own device, so you can see, change or delete it yourself at any time. Depending on where you live, you may have rights over your personal data, such as to see or delete it. Because Meet's server doesn't keep personal data, there's usually nothing on our side to provide or delete, but you're welcome to ask.</p>
+      <h3>Children</h3>
+      <p>Meet isn't meant for children under 13.</p>
+      <h3>Changes</h3>
+      <p>If Meet changes how it handles data, this page will be updated, with a new date at the top.</p>
+      <div id="contact" hidden>
+        <h3>Contact</h3>
+        <p>Questions about privacy or these terms: <a id="contact-link" href="#"></a></p>
+      </div>
+    </section>
+
+    <h2 id="terms">Terms of use</h2>
+    <section>
+      <h3>Using Meet</h3>
+      <p>Meet is free to use. By using it, you agree to these terms.</p>
+      <ul>
+        <li>Travel times, routes, timetables, opening hours, photos and ratings come from other services and from estimates, and can be wrong or out of date. Check before you travel, follow local laws and road signs, and use your own judgement about where it's safe to go.</li>
+        <li>Use Meet for planning meetups with people who are happy to share where they're starting from. Don't use it to track anyone, and don't overload it or copy its data in bulk.</li>
+        <li>Places, photos, ratings and reviews belong to their authors and services: OpenStreetMap contributors, Wikimedia authors, Google and Tripadvisor, as credited in the app.</li>
+      </ul>
+    </section>
+    <section>
+      <h3>Google Maps</h3>
+      <p>Meet uses Google Maps features and content. Your use of them is subject to the current <a href="https://maps.google.com/help/terms_maps/" target="_blank" rel="noopener">Google Maps/Google Earth Additional Terms of Service</a> and the <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a>.</p>
+    </section>
+    <section>
+      <h3>No guarantees</h3>
+      <p>Meet is provided as it is, without guarantees that it will be available, accurate or suited to your plans. To the extent the law allows, we aren't responsible for losses that come from using it or relying on what it shows. Nothing here limits rights you have under consumer law that can't be limited.</p>
+      <p>Meet may change, or stop, at any time. These terms may be updated too; the date at the top shows when they last changed.</p>
+    </section>
+  </main>
+
+  <script>
+    // Delete what Meet keeps in this browser (one entry: everything the app saves).
+    const forget = document.getElementById('forget-all');
+    forget.addEventListener('click', () => {
+      if (!confirm('Delete your starting point, the people you added, kept addresses, past meetups and settings from this device?')) return;
+      try { localStorage.removeItem('meet-guest-v1'); } catch { /* nothing could be saved here either */ }
+      forget.hidden = true;
+      document.getElementById('forget-done').hidden = false;
+    });
+    // Who to contact, as the server is set up (MEET_CONTACT: an email address or a website).
+    fetch('/api/config').then((r) => (r.ok ? r.json() : null)).then((c) => {
+      const v = String(c?.contact || '').trim();
+      if (!v) return;
+      const link = document.getElementById('contact-link');
+      const email = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+      link.textContent = v.replace(/^mailto:/, '');
+      link.href = email ? `mailto:${v}` : /^https?:\/\//.test(v) ? v : `https://${v}`;
+      document.getElementById('contact').hidden = false;
+    }).catch(() => {});
+  </script>
+</body>
+</html>

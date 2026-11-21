@@ -16,7 +16,7 @@ const shotsDir = process.argv.includes('--shots') ? process.argv[process.argv.in
 if (shotsDir) fs.mkdirSync(shotsDir, { recursive: true });
 const PORT = 3999;
 const dataFile = path.join(os.tmpdir(), `meet-e2e-${Date.now()}.json`);
-const server = spawn(process.execPath, ['server.js'], { env: { ...process.env, PORT, DATA_FILE: dataFile }, stdio: 'inherit' });
+const server = spawn(process.execPath, ['server.js'], { env: { ...process.env, PORT, DATA_FILE: dataFile, MEET_CONTACT: 'hello@example.com' }, stdio: 'inherit' });
 await new Promise((r) => setTimeout(r, 600));
 
 // ---- fake data ---------------------------------------------------------------
@@ -158,6 +158,9 @@ try {
   // Home address
   await page.waitForSelector('#screen-home:not([hidden])');
   assert.equal(await page.locator('#screen-home :text("Sign in")').count(), 0, 'no sign-in on the start screen');
+  // Privacy & Terms: at the foot of the start screen, and in the menu.
+  assert.equal(await page.locator('#screen-home .home-legal a[href="/privacy"]').isVisible(), true, 'Privacy & Terms on the start screen');
+  assert.equal(await page.locator('#drawer .app-note a[href="/privacy"]').count(), 1, 'and in the menu');
   await shot('01-start');
   await page.fill('#home-search input', 'Baker Street');
   await page.waitForSelector('#home-search .suggestions li[data-i]');
@@ -516,6 +519,22 @@ try {
   await page.waitForSelector('.person');
   await page.waitForTimeout(500);
   await shot('13-mobile-people');
+
+  // The Privacy & Terms page: its own address, the terms at /terms, who to contact, and a button
+  // that deletes what Meet saved on this device.
+  const legal = await ctx.newPage();
+  assert.equal((await legal.goto(`http://localhost:${PORT}/privacy`)).status(), 200);
+  assert.equal(await legal.locator('h1').textContent(), 'Privacy & Terms');
+  assert.equal(await legal.locator('a[href="https://maps.google.com/help/terms_maps/"]').count(), 1, "Google's terms are linked");
+  await legal.waitForSelector('#contact:not([hidden]) a[href="mailto:hello@example.com"]');
+  await legal.goto(`http://localhost:${PORT}/terms`);
+  assert.match(legal.url(), /\/privacy#terms$/);
+  assert.ok(await legal.evaluate(() => !!localStorage.getItem('meet-guest-v1')), 'something is saved before');
+  legal.once('dialog', (d) => d.accept());
+  await legal.click('#forget-all');
+  await legal.waitForSelector('#forget-done:not([hidden])');
+  assert.equal(await legal.evaluate(() => localStorage.getItem('meet-guest-v1')), null, 'deleted from this device');
+  await legal.close();
 
   assert.ok(routingAsked > 0, 'walking, cycling and driving routes came straight from the routing service');
   assert.equal(tablesAsked, 0, 'travel times for finding the spot and for lists of places were worked out over the streets loaded, not asked for');

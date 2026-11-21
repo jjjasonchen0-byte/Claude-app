@@ -877,6 +877,13 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .field-btn.busy svg { animation: breathe 1s ease-in-out infinite; }
 @keyframes breathe { 50% { transform: scale(1.25); opacity: 0.5; } }
 .intro > .btn-plain { margin-top: -18px; }
+/* Privacy & Terms, quietly at the foot of the start screen (out of the way while typing). */
+.home-legal {
+  position: absolute; left: 0; right: 0; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); margin: 0; padding: 0 20px;
+  text-align: center; font-size: 13px; color: var(--text-2);
+}
+.home-legal a, .app-note a { color: var(--accent); text-decoration: none; font-weight: 500; white-space: nowrap; }
+.screen-centered.typing .home-legal { display: none; }
 /* Typing on a small screen: logo and box at the top, the suggestions in the space a keyboard leaves free. */
 .screen-centered.typing { align-items: start; }
 .screen-centered.typing .intro { margin: calc(4px + env(safe-area-inset-top, 0px)) 0 0; gap: 14px; }
@@ -1657,6 +1664,7 @@ img.broken { display: none; }
       <button class="btn btn-plain" type="button" id="demo-sample">Try a sample group</button>
       <button class="btn btn-plain" type="button" id="home-cancel" hidden>Cancel</button>
     </div>
+    <p class="home-legal">Your addresses stay on this device. <a href="https://meet-hhdt.onrender.com/privacy" target="_blank" rel="noopener">Privacy &amp; Terms</a></p>
   </section>
 
   <!-- ============ Main ============ -->
@@ -1742,7 +1750,7 @@ img.broken { display: none; }
       <h3>Past meetups</h3>
       <ul class="history" id="history-list"></ul>
     </div>
-    <p class="footnote app-note">Everything is saved on this device.</p>
+    <p class="footnote app-note">Everything is saved on this device. <a href="https://meet-hhdt.onrender.com/privacy" target="_blank" rel="noopener">Privacy &amp; Terms</a></p>
     <p class="footnote app-version" id="app-version" hidden></p>
   </nav>
 
