@@ -1082,7 +1082,7 @@ function renderPeople() {
 }
 
 /**
- * Someone in the list, in two lines: their picture with a heart on it
+ * Someone in the list, in two lines: their picture with a heart on it (not yours)
  * (hollow, filled once their address is kept on this device; double-tapping
  * the row does the same), their name with how they travel beside it, their
  * address; at the end removing them and the switch that leaves them out.
@@ -1094,8 +1094,7 @@ function personRow(p, i, count) {
   const kept = !!savedMatch(p);
   const open = state.open === p.id;
   const ed = state.edit?.id === p.id ? state.edit : null;
-  const whose = p.isHome ? 'your' : `${p.name}’s`;
-  const heartLabel = kept ? `Saved on this device. Tap to forget ${whose} address` : `Keep ${whose} address on this device`;
+  const heartLabel = kept ? `Saved on this device. Tap to forget ${p.name}’s address` : `Keep ${p.name}’s address on this device`;
   const title = p.isHome ? (state.user.name ? `You (${state.user.name})` : 'You') : p.nickname || shortAddr(p.address);
   const named = p.isHome || !!p.nickname;
   const menuUp = count > 2 && i >= count - 2;
@@ -1122,7 +1121,7 @@ function personRow(p, i, count) {
       <div class="cell person-cell" data-action="person-tap">
         <div class="avatar-wrap">
           <span class="avatar" style="--c:${p.color}">${esc(initial(p.name))}</span>
-          <button class="badge-heart${kept ? ' on' : ''}" type="button" data-action="heart-person" aria-pressed="${kept}" aria-label="${esc(heartLabel)}" title="${esc(heartLabel)}">${heart(kept, 13)}</button>
+          ${p.isHome ? '' : `<button class="badge-heart${kept ? ' on' : ''}" type="button" data-action="heart-person" aria-pressed="${kept}" aria-label="${esc(heartLabel)}" title="${esc(heartLabel)}">${heart(kept, 13)}</button>`}
           ${state.pop === p.id ? `<span class="heart-pop" aria-hidden="true">${heart(true, 46)}</span>` : ''}
         </div>
         ${line1}
@@ -1146,6 +1145,13 @@ const peopleModeMenu = (p, up) => (state.modeMenu === p.id ? `<div class="menu${
  */
 let personTapTimer = 0, personTapId = null;
 function personTap(id) {
+  if (everyone().find((x) => x.id === id)?.isHome) { // (your own row has no heart: it opens at once)
+    clearTimeout(personTapTimer);
+    personTapTimer = 0;
+    personTapId = null;
+    togglePersonOpen(id);
+    return;
+  }
   if (personTapTimer && personTapId === id) {
     clearTimeout(personTapTimer);
     personTapTimer = 0;
@@ -1338,8 +1344,8 @@ async function toggleSavedAddress() {
 let heartPopTimer = 0;
 async function toggleSavedPerson(id) {
   const p = everyone().find((x) => x.id === id);
-  if (!p) return;
-  await toggleSaved(p, p.isHome ? '' : p.nickname || '');
+  if (!p || p.isHome) return; // (no heart on your own row)
+  await toggleSaved(p, p.nickname || '');
   clearTimeout(heartPopTimer);
   state.pop = savedMatch(p) ? id : null;
   if (state.pop) heartPopTimer = setTimeout(() => { state.pop = null; }, 800);

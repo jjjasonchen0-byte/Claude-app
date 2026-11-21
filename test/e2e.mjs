@@ -206,8 +206,9 @@ try {
   await page.keyboard.press('Escape');
   await page.locator('#add-search input').blur();
 
-  // Each row: two lines, and a heart on everyone's picture (filled for Sam, whose address is kept).
-  assert.deepEqual(await page.locator('.person .badge-heart').evaluateAll((bs) => bs.map((b) => b.getAttribute('aria-pressed'))), ['false', 'true', 'false']);
+  // Each row: two lines, and a heart on everyone's picture but yours (filled for Sam, whose address is kept).
+  assert.equal(await page.locator('.person.home .badge-heart').count(), 0, 'no heart on your own row');
+  assert.deepEqual(await page.locator('.person .badge-heart').evaluateAll((bs) => bs.map((b) => b.getAttribute('aria-pressed'))), ['true', 'false']);
   const joRow = () => page.locator('.person', { hasText: 'Clapham' });
   // A tap opens the row where it is: taller, a pencil beside the name, the address lower down in full with a pencil at its end.
   assert.equal(await joRow().locator('.pencil:visible').count(), 0, 'no pencils on a shut row');
