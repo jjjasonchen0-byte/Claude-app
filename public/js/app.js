@@ -1086,68 +1086,53 @@ function renderPeople() {
  * (hollow, filled once their address is kept on this device; double-tapping
  * the row does the same), their name with how they travel beside it, their
  * address; at the end removing them and the switch that leaves them out.
- * Tapping the row opens it, down, to their name and address in full, each
- * with a pencil to change it.
+ * Tapping the row opens it: taller, a pencil beside the name, the address
+ * below in full across the row with a pencil at its end. A pencil turns its
+ * line into a box with a save button.
  */
 function personRow(p, i, count) {
   const kept = !!savedMatch(p);
   const open = state.open === p.id;
+  const ed = state.edit?.id === p.id ? state.edit : null;
   const whose = p.isHome ? 'your' : `${p.name}’s`;
   const heartLabel = kept ? `Saved on this device. Tap to forget ${whose} address` : `Keep ${whose} address on this device`;
   const title = p.isHome ? (state.user.name ? `You (${state.user.name})` : 'You') : p.nickname || shortAddr(p.address);
   const named = p.isHome || !!p.nickname;
   const menuUp = count > 2 && i >= count - 2;
-  return `<li class="person${p.active ? '' : ' inactive'}${p.isHome ? ' home' : ''}${open ? ' open' : ''}${state.modeMenu === p.id ? ' raised' : ''}" data-id="${esc(p.id)}">
+  const pencil = (field, what) => `<button class="pencil" type="button" data-action="edit" data-field="${field}" aria-label="Change ${esc(what)}" title="Change ${esc(what)}">${glyph('pencil', 14, 2.1)}</button>`;
+  const save = `<button class="field-icon save" type="submit" aria-label="Save" title="Save">${glyph('check', 16, 2.6)}</button>`;
+  const line1 = ed?.field === 'name'
+    ? `<form class="p-edit p-edit-name" data-action="save-edit" autocomplete="off">
+        <input id="edit-nick" name="nick" value="${esc(ed.nick ?? p.nickname ?? '')}" maxlength="60" placeholder="Their name" aria-label="Name" autocomplete="off" enterkeyhint="done">${save}
+      </form>`
+    : `<div class="p-line1">
+        <button class="p-name" type="button" data-action="person-tap" aria-expanded="${open}" title="${esc(title)}">${esc(title)}</button>
+        ${p.isHome ? '' : pencil('name', named ? `${p.name}’s name` : 'their name')}
+        <div class="dd">${modePill(p)}${peopleModeMenu(p, menuUp)}</div>
+      </div>`;
+  const line2 = ed?.field === 'address'
+    ? `<form class="p-edit p-edit-addr" data-action="save-edit" autocomplete="off">
+        <div class="search searchfield" id="edit-search">
+          <input id="edit-address" type="search" value="${esc(ed.text ?? p.address)}" placeholder="${p.isHome ? 'Where you’re starting from' : 'Their address'}" aria-label="Address" autocomplete="off" enterkeyhint="done">
+          <ul class="suggestions inline" role="listbox" hidden></ul>
+        </div>${save}
+      </form>`
+    : `<div class="cell-sub p-addr${named ? '' : ' only-open'}" title="${esc(p.address)}"><span>${esc(p.address)}</span>${pencil('address', p.isHome ? 'your starting point' : `${p.name}’s address`)}</div>`;
+  return `<li class="person${p.active ? '' : ' inactive'}${p.isHome ? ' home' : ''}${named ? '' : ' one-line'}${open ? ' open' : ''}${ed?.field === 'name' ? ' naming' : ''}${state.modeMenu === p.id ? ' raised' : ''}" data-id="${esc(p.id)}">
       <div class="cell person-cell" data-action="person-tap">
         <div class="avatar-wrap">
           <span class="avatar" style="--c:${p.color}">${esc(initial(p.name))}</span>
           <button class="badge-heart${kept ? ' on' : ''}" type="button" data-action="heart-person" aria-pressed="${kept}" aria-label="${esc(heartLabel)}" title="${esc(heartLabel)}">${heart(kept, 13)}</button>
           ${state.pop === p.id ? `<span class="heart-pop" aria-hidden="true">${heart(true, 46)}</span>` : ''}
         </div>
-        <div class="p-text">
-          <div class="p-line1">
-            <button class="p-name" type="button" data-action="person-tap" aria-expanded="${open}" aria-controls="more-${esc(p.id)}" title="${esc(title)}">${esc(title)}</button>
-            <div class="dd">${modePill(p)}${peopleModeMenu(p, menuUp)}</div>
-          </div>
-          ${named ? `<span class="cell-sub p-addr" title="${esc(p.address)}">${esc(shortAddr(p.address))}</span>` : ''}
-        </div>
+        ${line1}
         ${p.isHome ? '' : `<div class="p-end">
           <button class="icon-circle" type="button" data-action="delete" aria-label="Remove ${esc(p.name)}" title="Remove">${glyph('close', 13, 2.6)}</button>
           <label class="switch" title="${p.active ? 'Included' : 'Left out'}"><input type="checkbox" data-action="toggle" ${p.active ? 'checked' : ''} aria-label="Include ${esc(p.name)}"><span></span></label>
         </div>`}
-      </div>
-      <div class="p-more" id="more-${esc(p.id)}">
-        <div class="p-more-inner">
-          ${p.isHome ? '' : personField(p, 'name')}
-          ${personField(p, 'address')}
-        </div>
+        ${line2}
       </div>
     </li>`;
-}
-
-/** One of someone's details in their open row: in full with a pencil, or (being changed) a box and a save button. */
-function personField(p, field) {
-  const ed = state.edit?.id === p.id && state.edit.field === field ? state.edit : null;
-  const isName = field === 'name';
-  const label = isName ? 'Name' : p.isHome ? 'Starting from' : 'Address';
-  if (ed) {
-    const box = isName
-      ? `<input id="edit-nick" name="nick" value="${esc(ed.nick ?? p.nickname ?? '')}" maxlength="60" placeholder="Their name" autocomplete="off" enterkeyhint="done">`
-      : `<div class="search searchfield" id="edit-search">
-          <input id="edit-address" type="search" value="${esc(ed.text ?? p.address)}" placeholder="${p.isHome ? 'Where you’re starting from' : 'Their address'}" autocomplete="off" enterkeyhint="done">
-          <ul class="suggestions inline" role="listbox" hidden></ul>
-        </div>`;
-    return `<form class="p-field p-edit" data-action="save-edit" autocomplete="off">
-        <div class="p-field-text"><label class="p-label" for="${isName ? 'edit-nick' : 'edit-address'}">${label}</label>${box}</div>
-        <button class="field-icon save" type="submit" aria-label="Save" title="Save">${glyph('check', 16, 2.6)}</button>
-      </form>`;
-  }
-  const value = isName ? p.nickname : p.address;
-  const what = isName ? `${p.name}’s name` : p.isHome ? 'your starting point' : `${p.name}’s address`;
-  return `<div class="p-field">
-      <div class="p-field-text"><span class="p-label">${label}</span><span class="p-value${value ? '' : ' empty'}">${esc(value || 'No name yet')}</span></div>
-      <button class="field-icon" type="button" data-action="edit" data-field="${field}" aria-label="Change ${esc(what)}" title="Change ${esc(what)}">${glyph('pencil', 14, 2.1)}</button>
-    </div>`;
 }
 
 /** How someone travels: a menu from the pill beside their name (up from the last rows, which have no room below). */
@@ -1173,21 +1158,52 @@ function personTap(id) {
   personTapTimer = setTimeout(() => { personTapTimer = 0; personTapId = null; togglePersonOpen(id); }, 260);
 }
 
-/** Open someone's row (closing any other), or close it: it slides open, so the rows are changed where they are, not drawn again. */
+/**
+ * Open someone's row (closing any other), or close it. The rows change where
+ * they are, not drawn again: each grows or shrinks to its new height and what
+ * is in it glides to its new place (measured before and after the change).
+ */
+const ROW_MOVE = { duration: 340, easing: 'cubic-bezier(0.32, 0.72, 0, 1)' };
 function togglePersonOpen(id) {
   if (state.view !== 'people') return;
   if (state.modeMenu) { state.modeMenu = null; render({ keepScroll: true }); return; } // (a tap away from an open menu closes it)
   const open = state.open === id ? null : id;
   state.open = open;
-  for (const li of $$('#panel-body .person')) {
+  const rows = $$('#panel-body .person').filter((li) => li.classList.contains('open') !== (li.dataset.id === open));
+  const moves = reducedMotion() ? [] : rows.map(measureRow);
+  for (const li of rows) {
     const on = li.dataset.id === open;
     li.classList.toggle('open', on);
     $('.p-name', li)?.setAttribute('aria-expanded', String(on));
   }
+  for (const m of moves) glideRow(m);
   // A change left half-made in a row now closing is dropped (once that row has closed).
   if (state.edit && state.edit.id !== open) {
     state.edit = null;
-    setTimeout(() => { if (state.view === 'people' && !state.edit) render({ keepScroll: true }); }, 360);
+    setTimeout(() => { if (state.view === 'people' && !state.edit) render({ keepScroll: true }); }, ROW_MOVE.duration + 20);
+  }
+}
+const ROW_PARTS = '.avatar-wrap, .p-name, .dd, .p-end, .p-addr';
+/** Where a row and the things in it are now (each part measured from the row's own corner). */
+function measureRow(li) {
+  const box = li.getBoundingClientRect();
+  return {
+    li,
+    h: box.height,
+    parts: $$(ROW_PARTS, li).map((el) => { const r = el.getBoundingClientRect(); return { el, x: r.left - box.left, y: r.top - box.top }; }),
+  };
+}
+/** From where it was to where it is: the row's height, and each part's place. */
+function glideRow({ li, h, parts }) {
+  const box = li.getBoundingClientRect();
+  li.classList.add('gliding');
+  const done = () => li.classList.remove('gliding');
+  li.animate([{ height: `${h}px` }, { height: `${box.height}px` }], ROW_MOVE).finished.then(done, done);
+  for (const { el, x, y } of parts) {
+    if (!el.isConnected || !el.offsetParent) continue;
+    const r = el.getBoundingClientRect();
+    const dx = x - (r.left - box.left), dy = y - (r.top - box.top);
+    if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], ROW_MOVE);
   }
 }
 

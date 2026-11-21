@@ -209,12 +209,18 @@ try {
   // Each row: two lines, and a heart on everyone's picture (filled for Sam, whose address is kept).
   assert.deepEqual(await page.locator('.person .badge-heart').evaluateAll((bs) => bs.map((b) => b.getAttribute('aria-pressed'))), ['false', 'true', 'false']);
   const joRow = () => page.locator('.person', { hasText: 'Clapham' });
-  // A tap opens the row, down, to their name and address in full, each with a pencil.
+  // A tap opens the row where it is: taller, a pencil beside the name, the address lower down in full with a pencil at its end.
+  assert.equal(await joRow().locator('.pencil:visible').count(), 0, 'no pencils on a shut row');
+  const shutHeight = (await joRow().boundingBox()).height;
   await joRow().locator('.p-name').click();
-  await page.waitForSelector('.person.open .p-field [data-action=edit][data-field=name]');
-  assert.match(await joRow().locator('.p-more').textContent(), /Name\s*Jo[\s\S]*Address\s*5 Clapham High St, London, United Kingdom/);
+  await page.waitForSelector('.person.open .p-line1 [data-action=edit][data-field=name]');
   assert.equal(await page.locator('.person.open').count(), 1);
   await page.waitForTimeout(400);
+  assert.equal((await joRow().locator('.p-addr span').textContent()).trim(), '5 Clapham High St, London, United Kingdom');
+  assert.equal(await joRow().locator('.p-addr [data-action=edit][data-field=address]:visible').count(), 1, 'a pencil at the end of the address');
+  const nameBox = await joRow().locator('.p-line1').boundingBox(), addrBox = await joRow().locator('.p-addr').boundingBox();
+  assert.ok(addrBox.y >= nameBox.y + nameBox.height + 6, 'the address drops below the top line');
+  assert.ok((await joRow().boundingBox()).height > shutHeight + 10, 'the row grows');
   await shot('03a-row-open');
   await joRow().locator('[data-action=edit][data-field=name]').click();
   await page.waitForFunction(() => document.activeElement?.id === 'edit-nick');

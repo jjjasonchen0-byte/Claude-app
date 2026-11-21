@@ -388,16 +388,20 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .num { --c: var(--accent); width: 30px; height: 30px; border-radius: 50%; background: var(--c); color: #fff; display: grid; place-items: center; font: 700 13px/1 var(--font-display); flex: none; }
 
 /* people: a compact row each. The picture (with a heart on it: hollow, filled once their address
-   is kept on this device), their name with how they travel beside it, their address, and at the
-   end removing them and the switch that leaves them out. Tapping the row opens it, down, to their
-   name and address in full, each with a pencil; double-tapping it keeps their address (the heart). */
+   is kept on this device), their name with how they travel beside it, their address below, and at
+   the end removing them and the switch that leaves them out. Tapping the row opens it where it is:
+   taller, a pencil beside the name, the address lower down in full across the row with a pencil at
+   its end. Double-tapping it keeps their address (the heart). */
 .group.people { overflow: visible; } /* (the travel menu opens over the rows below) */
+.person { position: relative; }
 .person.raised { z-index: 6; }
+.person.gliding { overflow: hidden; } /* (while it grows or shrinks) */
 .person-cell {
-  display: flex; align-items: center; gap: 12px; min-height: 70px; padding: 12px 12px 12px 16px; cursor: pointer;
+  display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; column-gap: 12px; row-gap: 4px; align-items: center;
+  min-height: 70px; padding: 12px 12px 12px 16px; cursor: pointer;
   -webkit-user-select: none; user-select: none; touch-action: manipulation;
 }
-.avatar-wrap { position: relative; width: 40px; height: 40px; flex: none; }
+.avatar-wrap { grid-column: 1; grid-row: 1 / span 2; position: relative; width: 40px; height: 40px; }
 .avatar-wrap .avatar { width: 40px; height: 40px; }
 /* The heart on the picture: the circle 20% smaller than it was in the sketch, the heart as big. */
 .badge-heart {
@@ -417,30 +421,43 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
   0% { transform: scale(0.2); opacity: 0; } 25% { transform: scale(1.18); opacity: 1; } 45% { transform: scale(0.94); }
   70% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.25) translateY(-12px); opacity: 0; }
 }
-.p-text { flex: 1; min-width: 0; display: grid; gap: 4px; }
-.p-line1 { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.p-line1 { grid-column: 2; grid-row: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
 .p-name {
   flex: 0 1 auto; min-width: 0; border: 0; padding: 0; background: none; color: var(--text); font-size: 16px; font-weight: 600; text-align: left;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
 }
-.p-addr { margin-top: 0; }
-.p-end { display: flex; align-items: center; gap: 12px; flex: none; }
+.p-end { grid-column: 3; grid-row: 1 / span 2; display: flex; align-items: center; gap: 12px; }
 .p-end .icon-circle { position: relative; }
 .p-end .icon-circle::after { content: ""; position: absolute; inset: -7px; }
-.person.inactive .avatar, .person.inactive .p-text { opacity: 0.4; }
-/* Open: name and address in full, a pencil beside each (a save button while one is being changed). */
-.p-more { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.34s cubic-bezier(0.32, 0.72, 0, 1); }
-.person.open .p-more { grid-template-rows: 1fr; }
-.p-more-inner { min-height: 0; overflow: hidden; padding: 0 12px 0 68px; opacity: 0; transition: opacity 0.22s, padding-bottom 0.34s cubic-bezier(0.32, 0.72, 0, 1); }
-.person.open .p-more-inner { opacity: 1; padding-bottom: 10px; transition: opacity 0.3s 0.06s, padding-bottom 0.34s cubic-bezier(0.32, 0.72, 0, 1); }
-.p-field { display: flex; align-items: flex-start; gap: 10px; padding: 10px 2px 8px 0; border-top: 0.5px solid var(--sep); }
-.p-field-text { flex: 1; min-width: 0; display: grid; gap: 2px; padding: 2px 0 2px 2px; }
-.p-label { font-size: 12px; font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.02em; }
-.p-value { font-size: 15px; line-height: 1.35; color: var(--text); overflow-wrap: anywhere; }
-.p-value.empty { color: var(--text-3); }
-.p-edit input { margin-top: 4px; background-color: var(--fill); }
+.p-addr { grid-column: 2; grid-row: 2; margin-top: 0; min-width: 0; }
+.person.home .p-addr { grid-column: 2 / 4; }
+.p-addr.only-open { display: none; } /* (someone without a name shows their street as one; the whole address when open) */
+.person.one-line:not(.open) .avatar-wrap, .person.one-line:not(.open) .p-end { grid-row: 1; }
+.person.inactive .avatar, .person.inactive .p-line1, .person.inactive .p-addr { opacity: 0.4; }
+/* Open: taller. Everything on the top line beside the picture; the address lower, in full, across the row. */
+.person.open .person-cell { padding-bottom: 16px; }
+.person.open .avatar-wrap, .person.open .p-end { grid-row: 1; }
+.person.open .p-name { white-space: normal; overflow-wrap: anywhere; }
+.person.open .p-addr { display: block; grid-column: 2 / 4; margin-top: 10px; white-space: normal; overflow-wrap: anywhere; line-height: 1.4; }
+/* A pencil beside the name and at the end of the address, only while open. */
+.pencil {
+  display: none; position: relative; flex: none; width: 26px; height: 26px; margin: -4px 0; border: 0; padding: 0; border-radius: 50%;
+  place-items: center; background: none; color: var(--accent); cursor: pointer; vertical-align: middle;
+}
+.pencil::after { content: ""; position: absolute; inset: -7px; }
+.pencil:active { transform: scale(0.88); }
+.person.open .pencil { display: inline-grid; animation: pencil-in 0.28s 0.12s both; }
+.p-addr .pencil { margin-left: 2px; }
+@keyframes pencil-in { from { opacity: 0; transform: scale(0.6); } }
+/* A pencil turns its line into a box, with a save button. (While the name is being changed it takes the top line.) */
+.person.naming .p-end { display: none; }
+.p-edit { display: flex; align-items: center; gap: 8px; min-width: 0; cursor: auto; -webkit-user-select: text; user-select: text; }
+.p-edit-name { grid-column: 2 / 4; grid-row: 1; }
+.p-edit-addr { grid-column: 2 / 4; grid-row: 2; align-items: flex-start; margin-top: 8px; }
+.p-edit-addr .search { flex: 1; min-width: 0; }
+.p-edit input { background-color: var(--fill); }
 .field-icon {
-  position: relative; flex: none; width: 34px; height: 34px; margin-top: 4px; border: 0; padding: 0; border-radius: 50%; display: grid; place-items: center;
+  position: relative; flex: none; width: 34px; height: 34px; border: 0; padding: 0; border-radius: 50%; display: grid; place-items: center;
   background: var(--fill); color: var(--text-2); box-shadow: var(--card-rim); cursor: pointer; transition: transform 0.15s;
 }
 .field-icon::after { content: ""; position: absolute; inset: -5px; }
@@ -448,8 +465,9 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .field-icon.save {
   color: #fff; background: linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0) 55%), var(--accent);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 4px 12px -4px var(--accent);
+  animation: pencil-in 0.24s both;
 }
-.p-edit .field-icon { margin-top: 21px; }
+.p-edit-addr .field-icon { margin-top: 4px; }
 /* How someone travels: a menu of glass from the pill beside their name. */
 .dd { position: relative; display: inline-flex; flex: none; }
 .menu {
