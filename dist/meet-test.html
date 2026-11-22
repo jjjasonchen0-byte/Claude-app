@@ -1020,6 +1020,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
 }
 .flood-pill-icon { width: 0; height: 0; }
+.flood-pill:empty { display: none; } /* (someone without a name: a tag once their time is known) */
 .flood-pill {
   position: absolute; left: 0; bottom: 56px; transform: translateX(-50%); white-space: nowrap; padding: 3px 8px; border-radius: 6px;
   border: 1.5px solid var(--c); background: var(--flood-glass); color: var(--flood-ink);
@@ -1420,6 +1421,11 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .leaflet-popup-content-wrapper { border-radius: 26px; background: var(--glass-sheen), var(--material-strong); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); color: var(--text); box-shadow: var(--glass-rim), var(--shadow-2); }
 .leaflet-popup-tip { background: var(--material-strong); }
 .leaflet-popup-content { margin: 14px 16px; font: inherit; font-size: 14px; }
+/* Someone's address, when their pin is tapped. */
+.pin-pop { display: grid; gap: 2px; max-width: 220px; }
+.pin-pop b { font-size: 15px; }
+.pin-pop span { color: var(--text-2); line-height: 1.35; }
+.avatar-pin svg { display: block; }
 .leaflet-container a.leaflet-popup-close-button { top: 6px; right: 6px; color: var(--text-2); }
 .map-popup .btn { margin-top: 10px; width: 100%; min-height: 40px; }
 .leaflet-container { font: inherit; }
@@ -6299,6 +6305,7 @@ const SHEET_DEFAULT = { people: 'mid', results: 'mid', group: 'mid', place: 'mid
 // Category icons: Settings-style coloured tiles with simple line glyphs.
 const TAB_COLOR = { food: '#ff9500', drinks: '#a2845e', fun: '#5856d6', culture: '#af52de', outdoors: '#34c759', shopping: '#007aff', meet: '#007aff' };
 const GLYPH = {
+  person: '<circle cx="12" cy="8" r="3.6"/><path d="M5 20.5c0-4 3.1-6.8 7-6.8s7 2.8 7 6.8"/>',
   food: '<path d="M7 3v7a2 2 0 0 0 2 2v9M5 3v5M9 3v5M17 21V3c-2.2 1.2-3.5 4-3.5 7.5h3.5"/>',
   drinks: '<path d="M5 9h11v4a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5zM16 10.5h1.5a2.5 2.5 0 0 1 0 5H16M8 3.5v2.5M11.5 3.5v2.5"/>',
   fun: '<path d="M12 3.5l2.5 5.2 5.7.8-4.1 4 1 5.6-5.1-2.7-5.1 2.7 1-5.6-4.1-4 5.7-.8z"/>',
@@ -6725,9 +6732,11 @@ function initMap() {
 }
 
 function pinIcon(person) {
+  // (Someone without a name: a person, not the first figure of their street address.)
+  const face = person.isHome || person.nickname ? esc(initial(person.name)) : glyph('person', 18, 2.4);
   return L.divIcon({
     className: '',
-    html: `<div class="avatar-pin" style="--c:${person.color}">${esc(initial(person.name))}</div>`,
+    html: `<div class="avatar-pin" style="--c:${person.color}">${face}</div>`,
     iconSize: [38, 47],
     iconAnchor: [19, 47],
   });
@@ -6737,12 +6746,13 @@ function drawPeople() {
   peopleLayer.clearLayers();
   for (const p of everyone()) {
     if (!p.active && state.view !== 'people') continue;
-    // Names sit above the pins; someone added without a name gets no label
-    // (their street address shows only when you point at the pin).
+    // Names sit above the pins (someone added without a name gets none). Addresses aren't
+    // shown on the map: tapping someone's pin shows theirs.
     const named = p.isHome || p.nickname;
     const m = L.marker([p.lat, p.lon], { icon: pinIcon(p), draggable: state.view === 'people', opacity: p.active ? 1 : 0.4, riseOnHover: true })
-      .bindTooltip(esc(p.name), { permanent: !!named, direction: 'top', className: 'label', offset: [0, -48] })
+      .bindPopup(`<div class="pin-pop">${named ? `<b>${esc(p.name)}</b>` : ''}<span>${esc(p.address)}</span></div>`, { className: 'map-popup', offset: [0, -40], closeButton: false, autoPan: false })
       .addTo(peopleLayer);
+    if (named) m.bindTooltip(esc(p.name), { permanent: true, direction: 'top', className: 'label', offset: [0, -48] });
     m.on('dragend', () => moveAddress(p, m.getLatLng()));
   }
 }
@@ -7963,15 +7973,25 @@ const routeMode = (r) => (r?.options ? 'transit' : r?.mode);
 
 // ------------------------------------------------ the search animation's captions
 
-const STREETISH = /\d|\b(street|st|road|rd|avenue|ave|lane|ln|way|drive|dr|parade|pde|place|pl|terrace|tce|highway|hwy|crescent|cres|close|court|ct|boulevard|blvd|square|sq|row|walk|esplanade)\b/i;
-/** The suburb or area of an address ("12 King St, Newtown, Sydney, …" → "Newtown"). */
-function placeOf(address) {
-  const parts = String(address || '').split(', ').map((x) => x.trim()).filter(Boolean);
-  return parts.slice(1).find((x) => !STREETISH.test(x)) || parts[1] || parts[0] || '';
-}
-/** A person's name if they have one (no street address: the area instead). */
+/** A person's name if they have one (never their address, or part of it). */
 const whoOf = (p) => p.nickname || (p.isHome ? 'You' : '');
-const pillText = (p, extra) => (extra ? `${whoOf(p) || placeOf(p.address)} · ${extra}` : [whoOf(p), placeOf(p.address)].filter(Boolean).join(' · '));
+/** A name tag in the search: their name, and how long their trip is once known (someone without a name: just that). */
+const pillText = (p, extra) => [whoOf(p), extra].filter(Boolean).join(' · ');
+
+/**
+ * The meeting point found: the map glides a little (zooming in or out) to put
+ * it in the middle of what's in sight above or beside the panel, as close as
+ * it can with everyone's pins (and name tags) still in sight around it.
+ */
+function centreOnMeet(meet, people) {
+  const dLat = Math.max(0.0012, ...people.map((p) => Math.abs(p.lat - meet.lat)));
+  const dLon = Math.max(0.0012, ...people.map((p) => Math.abs(p.lon - meet.lon)));
+  const around = L.latLngBounds([meet.lat - dLat, meet.lon - dLon], [meet.lat + dLat, meet.lon + dLon]);
+  const { tl, br } = mapPadding();
+  const opts = { paddingTopLeft: tl, paddingBottomRight: br, maxZoom: 16 };
+  if (reducedMotion()) map.fitBounds(around, { ...opts, animate: false });
+  else map.flyToBounds(around, { ...opts, duration: 1.2, easeLinearity: 0.3 });
+}
 
 /** What the meeting point is near: the place it moved to, a park or landmark right there, or the street. */
 function meetName(search) {
@@ -8190,10 +8210,9 @@ async function findPlaces({ replay = false } = {}) {
     await poisPromise;
     if (ctrl.signal.aborted) return;
     setStatus('');
-    // The panel slides back up with the results; the map moves only if the panel would cover someone.
+    // The panel slides back up with the results, and the map glides to the meeting point.
     setView('results');
-    const pts = [...people.map((p) => [p.lat, p.lon]), [meet.lat, meet.lon]];
-    if (!inSight(pts, { share: 0.6 })) fitTo(pts, { maxZoom: 16 });
+    centreOnMeet(meet, people);
   } catch (err) {
     if (ctrl.signal.aborted) return;
     console.error(err);

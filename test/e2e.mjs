@@ -324,15 +324,30 @@ try {
   assert.equal(await page.locator('#flood-city').count(), 0, 'no city name');
   assert.ok(streetTiles > 0, 'streets came from the map tiles');
   assert.equal(await page.locator('.flood-pill').count(), 3, 'a name tag over everyone');
-  assert.match(await page.textContent('.flood-pill >> nth=1'), /^Sam · /);
+  assert.equal(await page.textContent('.flood-pill >> nth=1'), 'Sam', 'just their name (no address, or part of one)');
   await page.waitForTimeout(900);
   await shot('04-converging');
   await page.waitForFunction(() => /Meet near/.test(document.querySelector('#flood-hud')?.textContent), null, { timeout: 20000 });
+  assert.match(await page.textContent('.flood-pill >> nth=1'), /^Sam · \d+ min$/, 'then how long their trip is');
   await page.waitForTimeout(800);
   await shot('04c-meet');
   await page.waitForSelector('.panel:not(.away) .pills', { timeout: 30000 });
   assert.equal(await page.locator('.flood-base').count(), 0, 'the dimming is gone');
-  assert.deepEqual(await mapView(), viewBefore, 'and where it was with the results (nobody is behind the panel)');
+  // The meeting point found: the map glides to put it in the middle of what's in sight beside the panel, everyone's pins still in sight.
+  await page.waitForTimeout(1600);
+  const placed = await page.evaluate(() => {
+    const panel = document.querySelector('#panel').getBoundingClientRect();
+    const map = document.querySelector('#map').getBoundingClientRect();
+    const mid = (el) => { const r = el.getBoundingClientRect(); return { x: (r.left + r.right) / 2, y: (r.top + r.bottom) / 2 }; };
+    const meet = mid(document.querySelector('.meet-dot'));
+    // (the room left for the panel and the name tags, as the app leaves it)
+    const centre = { x: (panel.right + 50 + map.right - 40) / 2, y: (map.top + 130 + map.bottom - 40) / 2 };
+    const pins = [...document.querySelectorAll('.avatar-pin')].map(mid);
+    return { off: Math.hypot(meet.x - centre.x, meet.y - centre.y), pins: pins.length, inSight: pins.every((p) => p.x > panel.right && p.x < map.right && p.y > map.top && p.y < map.bottom) };
+  });
+  assert.ok(placed.off < 30, `the meeting point in the middle of what's in sight (${Math.round(placed.off)} px off)`);
+  assert.equal(placed.pins, 3);
+  assert.ok(placed.inSight, "and everyone's pin still in sight");
   assert.equal(await page.locator('#screen-main.flooding').count(), 0);
   assert.deepEqual([...transitTimes], [later.toISOString()], 'public transport planned for the chosen time');
   assert.deepEqual(reachAsked, Array(3).fill(later.toISOString()), 'stops reached by each rider, leaving at the chosen time');
