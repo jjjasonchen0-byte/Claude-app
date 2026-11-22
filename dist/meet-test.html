@@ -7585,6 +7585,9 @@ function personTap(id, e) {
 function doubleTap(e) {
   const t = lastTap;
   if (!t || performance.now() - t.t > 320 || Math.hypot(e.clientX - t.x, e.clientY - t.y) > 40) return;
+  // A button in that same row (the pencil that has just appeared beside the name, say) is a tap of its own.
+  const control = e.target.closest('button, a, input, label, select, textarea, .menu');
+  if (control && !control.matches('.p-name') && e.target.closest('.person')?.dataset.id === t.id) { lastTap = null; return; }
   e.stopPropagation();
   e.preventDefault();
   lastTap = null;
