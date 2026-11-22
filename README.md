@@ -19,7 +19,7 @@ Find somewhere that's roughly as close for everyone in a group, with a press of 
 6. Open a place for a **full page like a search result**: photos (tap to view full screen), rating with a breakdown, reviews, opening hours, phone, website and menu, what it offers (outdoor seating, takeaway, step-free…), and **real directions for everyone, each in their own way of travelling**: public transport (lines in their official colours, times, changes, walking legs, with *Leave now* or *Arrive by*), walking, cycling or driving.
 7. **Send the location** by share sheet, WhatsApp, Messages, Email, Telegram, copy, a calendar invite, or Google/Apple Maps.
 
-**The menu** (the ≡ button) opens out into **Settings** (your starting point, the meeting rule, the default way to travel, the animation speed, the look and past meetups) and **Saved** (the addresses you've kept with the heart: add one to the meetup with a tap, or forget it).
+**The menu** (the ≡ button) opens out into **Settings** (your starting point, the default way to travel, the animation speed, the look and past meetups) and **Saved** (the addresses you've kept with the heart: add one to the meetup with a tap, or forget it).
 
 **No sign-in.** Your starting point, the people you meet, addresses you've kept with the heart, past meetups and settings are all saved on your device, in the browser's storage. Nothing about you is kept on the server. (They don't move between devices, and clearing the browser's site data clears them.) The **Privacy & Terms** page (`/privacy`, with the terms at `/terms`) says the same for your visitors: what stays on their device, what is sent to which service and why, and the terms of use, including the notice Google's terms ask for. It is linked at the foot of the start screen and in the menu, and has a button to delete everything Meet saved on that device. Set `MEET_CONTACT` so it shows how to reach you.
 
@@ -156,9 +156,7 @@ The Sydney data comes from OpenStreetMap via [OpenFreeMap](https://openfreemap.o
 
 - Leave people out of a search without deleting them. Change their name or address with the pencils beside them, and undo a delete.
 - Address suggestions are biased towards your starting point and work with the keyboard.
-- **Two ways to pick the meeting point** (in the menu; changing it looks again straight away):
-  - *Similar times* (default): everyone's trip takes about as long. To even things out, the longest trip may grow by up to 30% (or 5 minutes) over the shortest it could be. People travelling very differently (one walking, one driving) can't always be evened out; the results show each person's time.
-  - *Least travel*: everyone's trips add up to the least overall.
+- **The fairest meeting point**, always: everyone's trip takes about as long. To even things out, the longest trip may grow by up to 30% (or 5 minutes) over the shortest it could be. People travelling very differently (one walking, one driving) can't always be evened out; the results show each person's time.
 - Travel time and distance for each person in their own mode. The menu sets the default mode for people you add.
 - Opening hours read from OpenStreetMap: "Open · Closes 22:00", "Closes soon", "Closed · Opens Tue 09:00", and a weekly table.
 - How far to look for places: a slider from 100 m to 1 km (800 m to start, 1 km when little is nearby), drawn as a circle around the meeting point that follows the slider. Closer in needs no new search; further out shows a spinner while the places load.

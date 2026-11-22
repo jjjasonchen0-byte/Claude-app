@@ -288,8 +288,8 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
   .panel-handle:active { cursor: grabbing; }
   /* (and fades as it goes, so the pull tab stays clear) */
   .panel-body, .page-leaving {
-    -webkit-mask-image: linear-gradient(to bottom, transparent 2px, #000 24px, #000 calc(100% - 18px), transparent);
-    mask-image: linear-gradient(to bottom, transparent 2px, #000 24px, #000 calc(100% - 18px), transparent);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 2px, #000 24px, #000 calc(var(--fade-at, 100%) - 18px), transparent var(--fade-at, 100%));
+    mask-image: linear-gradient(to bottom, transparent 2px, #000 24px, #000 calc(var(--fade-at, 100%) - 18px), transparent var(--fade-at, 100%));
   }
   .panel-body { padding-top: 30px; }
   .leaflet-control-zoom { display: none; }

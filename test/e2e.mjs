@@ -542,13 +542,14 @@ try {
   assert.equal(await page.locator('.panel .trip').count(), 2, 'two travellers');
   await page.waitForTimeout(600);
   await shot('11-two-people-results');
-  // Changing the meeting rule in the menu looks for a spot again straight away.
+  // The meeting point is always the fairest (everyone's trip about as long): there's no other rule to choose in Settings.
   assert.equal(await page.locator('.result-head[data-rule=similar]').count(), 1);
   await page.click('#btn-menu');
   await page.click('#top-menu [data-open=settings]');
-  await page.click('#set-mode [data-value=total]');
+  await page.waitForSelector('#drawer-settings:not([hidden])');
+  assert.deepEqual(await page.locator('#drawer-settings h3').allTextContents(), ['Starting point', 'Default way to travel', 'Animation', 'Appearance', 'Past meetups'], 'no meeting rule in Settings');
+  await page.keyboard.press('Escape');
   await page.waitForSelector('#drawer', { state: 'hidden' });
-  await page.waitForSelector('.panel:not(.away) .result-head[data-rule=total]', { timeout: 45000 });
 
   // Mobile layout check
   await page.setViewportSize({ width: 390, height: 844 });

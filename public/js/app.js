@@ -354,7 +354,7 @@ function onUser(user) {
   state.places = user.places || [];
   state.saved = user.saved || [];
   state.settings = { ...DEFAULT_SETTINGS, ...(user.settings || {}) };
-  if (state.settings.mode !== 'total') state.settings.mode = 'similar'; // "fair" from before is now "similar"
+  state.settings.mode = 'similar'; // the meeting point is always the fairest: everyone's trip about as long (no other choice)
   if (!MODES.some((m) => m.id === state.settings.travel)) state.settings.travel = DEFAULT_SETTINGS.travel;
   if (!PACE[state.settings.speed]) state.settings.speed = DEFAULT_SETTINGS.speed;
   if (!['auto', 'light', 'dark'].includes(state.settings.theme)) state.settings.theme = DEFAULT_SETTINGS.theme;
@@ -800,7 +800,17 @@ function typingBoxToTop() {
  * way nothing in it is laid out or painted again (its glass, sheen and shadow
  * included), only moved. Let go, it settles at a size (see settleSheet).
  */
-const held = { on: false, max: 0, h: 0, frame: 0 };
+const held = { on: false, max: 0, h: 0, pad: 0, frame: 0 };
+/**
+ * Where what scrolls fades out at the bottom, measured from the sheet's top:
+ * its own foot (null), or, while it is taller than it shows (held, or sliding
+ * down to a size), the foot of the part in sight, so the fade stays there.
+ */
+function fadeAt(px) {
+  const body = $('#panel-body');
+  if (px == null) body.style.removeProperty('--fade-at');
+  else body.style.setProperty('--fade-at', `${Math.round(px)}px`);
+}
 function holdSheet() {
   const panel = $('#panel');
   const top = panel.getBoundingClientRect().top; // (where it is now, part way through settling too)
@@ -810,14 +820,21 @@ function holdSheet() {
   panel.style.transform = '';
   panel.style.height = `${max}px`;
   const foot = panel.getBoundingClientRect().bottom;
-  Object.assign(held, { on: true, max, foot, h: Math.round(foot - top) });
+  Object.assign(held, { on: true, max, foot, h: Math.round(foot - top), pad: parseFloat(getComputedStyle(panel).paddingBottom) || 0 });
   panel.style.transform = `translateY(${max - held.h}px)`;
+  fadeAt(held.h - held.pad);
   return held.h; // how much of it shows
 }
 /** The finger moved: this much of the sheet shows (at most once a frame: a finger reports more often than the screen is drawn). */
 function moveSheet(h) {
   held.h = Math.max(56, Math.min(held.max, h));
-  if (!held.frame) held.frame = requestAnimationFrame(() => { held.frame = 0; $('#panel').style.transform = `translateY(${held.max - held.h}px)`; });
+  if (!held.frame) {
+    held.frame = requestAnimationFrame(() => {
+      held.frame = 0;
+      $('#panel').style.transform = `translateY(${held.max - held.h}px)`;
+      fadeAt(held.h - held.pad);
+    });
+  }
 }
 
 /**
@@ -838,13 +855,16 @@ function settleSheet(snap) {
   stopSettling();
   panel.style.transform = '';
   panel.classList.remove('dragging');
-  if (reducedMotion() || !isMobile()) { setSheet(snap); return; }
+  if (reducedMotion() || !isMobile()) { fadeAt(null); setSheet(snap); return; }
   panel.classList.add('settling'); // (its height changes at once; its sides and corners still ease, to and from the screen's edges)
   setSheet(snap);
   const target = sheet.target;
   const d = from - panel.getBoundingClientRect().top;
-  if (Math.abs(d) < 1) { panel.classList.remove('settling'); return; }
-  if (d < 0) panel.style.height = `${target - d}px`; // (taller for now: its foot stays off the screen until it's there)
+  if (Math.abs(d) < 1) { fadeAt(null); panel.classList.remove('settling'); return; }
+  if (d < 0) {
+    panel.style.height = `${target - d}px`; // (taller for now: its foot stays off the screen until it's there)
+    fadeAt(target - (parseFloat(getComputedStyle(panel).paddingBottom) || 0)); // (and the fade where its foot will be)
+  } else fadeAt(null);
   const a = panel.animate(d > 0 ? [{ transform: `translateY(${d}px)` }, { transform: 'none' }] : [{ transform: 'none' }, { transform: `translateY(${-d}px)` }], SETTLE);
   settling = { a, target, d };
   const done = () => {
@@ -865,6 +885,7 @@ function stopSettling() {
 }
 /** Back to its own height (it was taller to slide down), taken at once before its height eases again. */
 function takeOwnHeight(panel, target) {
+  fadeAt(null);
   if (sheet.target === target) {
     panel.style.height = `${target}px`;
     void getComputedStyle(panel).opacity; // (the new height is taken here, while it doesn't ease)
@@ -1977,7 +1998,7 @@ async function findPlaces({ replay = false } = {}) {
   // The map stays as it was (it moves, smoothly, only to bring someone into sight): the lines are drawn on it.
   await bringIntoSight(people.map((p) => [p.lat, p.lon]), ctrl.signal);
   if (ctrl.signal.aborted) return;
-  const rule = prev?.rule || (state.settings.mode === 'total' ? 'total' : 'similar');
+  const rule = 'similar'; // (always the fairest)
   // Everyone leaves now, or at the time chosen above the Find button (public transport timetables use it).
   const leaveAt = prev ? prev.leaveAt : leaveTime();
   const at = leaveAt ? { time: leaveAt } : {};
@@ -3372,13 +3393,10 @@ function applyTheme() {
 }
 
 function syncSettingsUI() {
-  for (const [id, key] of [['#set-mode', 'mode'], ['#set-travel', 'travel'], ['#set-speed', 'speed'], ['#set-theme', 'theme']]) {
+  for (const [id, key] of [['#set-travel', 'travel'], ['#set-speed', 'speed'], ['#set-theme', 'theme']]) {
     for (const b of $$('.seg', $(id))) b.classList.toggle('active', b.dataset.value === state.settings[key]);
   }
   placeThumbs($('#drawer-settings'));
-  $('#mode-hint').textContent = state.settings.mode === 'total'
-    ? 'Everyone’s trips add up to the least time, even if some take longer than others.'
-    : 'Everyone’s trip takes about as long, without making anyone travel much further than needed.';
 }
 
 function renderHistory() {
@@ -3419,19 +3437,10 @@ function openDrawer(open, page = 'settings') {
 }
 
 async function saveSettings(patch) {
-  const prevMode = state.settings.mode;
   state.settings = { ...state.settings, ...patch };
   applyTheme();
   syncSettingsUI();
-  if (state.search && ['results', 'group', 'place', 'searching'].includes(state.view)) {
-    if (patch.mode && patch.mode !== prevMode) {
-      // A different rule means a different spot: look again straight away.
-      openDrawer(false);
-      findPlaces();
-    } else {
-      render({ keepScroll: true });
-    }
-  }
+  if (state.search && ['results', 'group', 'place', 'searching'].includes(state.view)) render({ keepScroll: true });
   try { await api.updateMe({ settings: state.settings }); } catch { /* keep local */ }
 }
 
@@ -3516,7 +3525,7 @@ function initDrawer() {
     if (!$('#top-menu').hidden) openTopMenu(false);
     else if (!$('#drawer').hidden) openDrawer(false);
   });
-  for (const [id, key] of [['#set-mode', 'mode'], ['#set-travel', 'travel'], ['#set-speed', 'speed'], ['#set-theme', 'theme']]) {
+  for (const [id, key] of [['#set-travel', 'travel'], ['#set-speed', 'speed'], ['#set-theme', 'theme']]) {
     $(id).addEventListener('click', (e) => {
       const b = e.target.closest('.seg');
       if (b) saveSettings({ [key]: b.dataset.value });
