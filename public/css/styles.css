@@ -532,8 +532,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 /* Let's meet: the last thing in the list. What scrolls fades out softly at the panel's bottom edge. */
 .cta { margin-top: 18px; }
 @media (min-width: 760px) { .panel-body, .page-leaving { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); } }
-/* Typing an address on a phone: the sheet is fully open with the box at its top (room to scroll it there, no button in the way). */
-.panel.typing .panel-content { padding-bottom: 900px; }
+/* Typing an address on a phone: the sheet is fully open with the box at its top (just room enough to scroll it there; see typingBoxToTop), no button in the way. */
 .panel.typing .cta { display: none; }
 
 /* results */

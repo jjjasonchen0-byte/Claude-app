@@ -585,6 +585,9 @@ try {
   await page.waitForSelector('#add-search .suggestions li[data-i]:not(.saved)');
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => document.querySelector('#panel').classList.contains('typing'));
+  await page.waitForTimeout(500);
+  // Typing, the box at the top: no further to scroll down into nothing.
+  assert.ok(await page.evaluate(() => { const b = document.querySelector('#panel-body'); return b.scrollHeight - b.clientHeight - b.scrollTop; }) < 12, 'nothing to scroll down into while typing');
   const hb = await page.locator('#panel-handle').boundingBox();
   await page.mouse.move(hb.x + hb.width / 2, hb.y + 12);
   await page.mouse.down();

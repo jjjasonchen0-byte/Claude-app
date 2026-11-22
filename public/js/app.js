@@ -822,7 +822,10 @@ function typingSheet(on) {
   panel.classList.toggle('typing', on);
   setSheet(sheet.snap);
   if (on) typingBoxToTop();
-  else $('#panel-body').scrollTop = 0;
+  else {
+    $('#panel-body .panel-content')?.style.removeProperty('padding-bottom'); // (the room made for typing goes)
+    $('#panel-body').scrollTop = 0;
+  }
 }
 /** While typing: the address box at the top of the sheet (again after the screen changes size, as when a keyboard opens). */
 function typingBoxToTop() {
@@ -831,9 +834,25 @@ function typingBoxToTop() {
   if (!box || !$('#panel').classList.contains('typing')) return;
   // Just below the pull tab (what scrolls goes on up under it).
   const under = $('#panel-handle')?.offsetHeight || 0;
-  body.scrollTop += box.getBoundingClientRect().top - body.getBoundingClientRect().top - under - 6;
+  const target = body.scrollTop + box.getBoundingClientRect().top - body.getBoundingClientRect().top - under - 6;
+  // Room below what's there for the box to come up so far, and no more (nothing to scroll down into):
+  // for the sheet's height now or the one it is easing to (opening, or a keyboard coming up), whichever
+  // is taller, so the box stays put meanwhile; once it is there, again for that height alone.
+  const content = $('.panel-content', body);
+  const panel = $('#panel');
+  const coming = (sheet.target || panel.offsetHeight) - (parseFloat(getComputedStyle(panel).paddingBottom) || 0);
+  if (content) {
+    content.style.paddingBottom = '0px';
+    const cs = getComputedStyle(body);
+    const tall = parseFloat(cs.paddingTop) + content.offsetHeight + parseFloat(cs.paddingBottom); // (what's there, however short)
+    content.style.paddingBottom = `${Math.max(0, Math.ceil(target + Math.max(body.clientHeight, coming) - tall))}px`;
+  }
+  body.scrollTop = target;
+  clearTimeout(roomTimer);
+  if (Math.abs(body.clientHeight - coming) > 1) roomTimer = setTimeout(typingBoxToTop, 380);
   fitSuggestions?.();
 }
+let roomTimer = 0;
 
 /**
  * A finger holding the sheet (by its tab, or its content at the top). It
