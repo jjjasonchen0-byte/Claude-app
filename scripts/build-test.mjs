@@ -32,7 +32,7 @@ app = replaceOnce(app, "map = L.map('map', { zoomControl: false, worldCopyJump: 
   "map = L.map('map', { zoomControl: false, zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 80, minZoom: 11.5, maxZoom: 19, maxBounds: L.latLngBounds(__m.demo.getBounds()).pad(0.55), maxBoundsViscosity: 0.8 });", 'map init');
 app = app.replace(/\/\/ basemap:start[\s\S]*?\/\/ basemap:end\n/, 'function addBasemap() { if (!baseLayer) baseLayer = __m.demo.addBasemap(map) || true; }\n');
 if (app.includes('basemaps.cartocdn.com')) throw new Error('build-test: base map not replaced');
-app = replaceOnce(app, 'map.attributionControl.setPrefix(false);', "map.attributionControl.setPrefix(false).addAttribution('Test version: central Sydney, built into this page');", 'attribution');
+// (That this is the test version is said in the menu, beside where the version goes; the map keeps only its credits.)
 // Calendar files can't be saved from inside the test page.
 app = replaceOnce(app, '      <button class="btn btn-tinted" data-action="calendar">Calendar</button>\n', '', 'calendar button');
 // The test version has no timetables, so start on walking directions.
@@ -48,6 +48,7 @@ const html = read('public/index.html');
 let body = html.slice(html.indexOf('<body>') + 6, html.indexOf('<script src="/vendor/leaflet/leaflet.js">'));
 body = replaceOnce(body, 'title="Use my current location" aria-label="Use my current location"', 'title="Pick a random address" aria-label="Pick a random address"', 'locate label');
 body = replaceOnce(body, 'placeholder="Where are you starting from?"', 'placeholder="Try “George Street” or “Bondi”"', 'home placeholder');
+body = replaceOnce(body, '<p class="footnote app-version" id="app-version" hidden></p>', '<p class="footnote app-version" id="app-version">Test version: central Sydney, built into this page</p>', 'test version note');
 // Privacy & Terms: the page is on the live site (this file has no server of its own to serve it).
 const SITE = process.env.MEET_SITE || 'https://meet-hhdt.onrender.com';
 if (body.split('href="/privacy"').length !== 3) throw new Error('build-test: expected two links to /privacy');

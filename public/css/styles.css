@@ -297,7 +297,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
      and out of sight under it once it covers the map. */
   .leaflet-bottom { bottom: var(--sheet-lift, 0px); transition: bottom 0.32s cubic-bezier(0.2, 0.9, 0.3, 1); }
   #screen-main:has(> .panel.away) .leaflet-bottom { bottom: 0; }
-  #screen-main:has(> .panel.edge:not(.away)) .leaflet-control-attribution { visibility: hidden; }
+  #screen-main:has(> .panel.edge:not(.away)) :is(.leaflet-control-attribution, .credits-btn) { visibility: hidden; }
 }
 
 /* ---------------------------------------------------------------- status HUD */
@@ -776,6 +776,17 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 }
 @media (max-width: 759px) { .leaflet-control-attribution { margin: 0 12px 6px 0 !important; border-radius: 10px; } }
 .leaflet-control-attribution a { color: var(--text-2); }
+/* Folded (see foldingCredits in app.js): a small (i) in the corner shows them again. */
+.leaflet-control-attribution.folded { display: none; }
+.leaflet-control-attribution:not(.folded) { animation: fade 0.25s; }
+.credits-btn {
+  display: none; position: relative; width: 26px; height: 26px; border: 0; padding: 0; border-radius: 50%; place-items: center; cursor: pointer;
+  color: var(--text-2); background: var(--material-strong); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-rim), 0 1px 4px rgba(0, 0, 0, 0.12); animation: fade 0.25s;
+}
+.credits-btn::after { content: ""; position: absolute; inset: -8px; }
+.credits-btn.shown { display: grid; }
+@media (max-width: 759px) { .leaflet-right .credits-btn { margin: 0 12px 8px 0; } }
 /* Without a CARTO key: the standard OpenStreetMap map, calmer; inverted at night. */
 .osm-tiles { filter: saturate(0.45) contrast(0.9) brightness(1.06); }
 .osm-tiles.dark { filter: invert(1) hue-rotate(180deg) brightness(0.88) contrast(0.85) saturate(0.35); }

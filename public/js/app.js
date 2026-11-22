@@ -591,12 +591,54 @@ function addFreeBasemap(want) {
 // (The routing service asks apps to credit it and to link to "fix the map".)
 const ROUTES_CREDIT = `Routes <a href="${ATTRIBUTION.routing.url}" target="_blank" rel="noopener">FOSSGIS OSRM</a> (<a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener">fix the map</a>) · Public transport <a href="${ATTRIBUTION.transit.url}" target="_blank" rel="noopener">Transitous</a>`;
 
+/**
+ * The map's credits, as OpenStreetMap's licence asks (and its guidelines
+ * allow): shown in full when the map appears, then folded into a small (i) in
+ * the corner after five seconds, or as soon as the map is touched. The (i)
+ * shows them again, and they fold the same way.
+ */
+function foldingCredits() {
+  const credits = map.attributionControl.getContainer();
+  const Info = L.Control.extend({
+    options: { position: 'bottomright' },
+    onAdd() {
+      const b = L.DomUtil.create('button', 'credits-btn');
+      b.type = 'button';
+      b.title = 'Map credits';
+      b.setAttribute('aria-label', 'Map credits');
+      b.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 11.2v5.3M12 7.8h.01"/></svg>';
+      L.DomEvent.disableClickPropagation(b);
+      L.DomEvent.on(b, 'click', () => show());
+      return b;
+    },
+  });
+  const btn = new Info().addTo(map).getContainer();
+  let timer = 0;
+  const fold = () => {
+    clearTimeout(timer);
+    credits.classList.add('folded');
+    btn.classList.add('shown');
+  };
+  const show = () => {
+    credits.classList.remove('folded');
+    btn.classList.remove('shown');
+    clearTimeout(timer);
+    timer = setTimeout(fold, 5000);
+  };
+  // Touching the map (to move it, zoom or tap it) folds them; touching the credits themselves (their links) doesn't.
+  const touched = (e) => { if (!credits.classList.contains('folded') && !e.target.closest?.('.leaflet-control')) fold(); };
+  map.getContainer().addEventListener('pointerdown', touched, true);
+  map.getContainer().addEventListener('wheel', touched, { capture: true, passive: true });
+  show();
+}
+
 function initMap() {
   map = L.map('map', { zoomControl: false, worldCopyJump: true });
   L.control.zoom({ position: 'bottomright' }).addTo(map);
   addBasemap();
   map.attributionControl.setPrefix(false);
   map.attributionControl.addAttribution(ROUTES_CREDIT);
+  foldingCredits();
   peopleLayer = L.layerGroup().addTo(map);
   resultLayer = L.layerGroup().addTo(map);
   poiLayer = L.layerGroup().addTo(map);
