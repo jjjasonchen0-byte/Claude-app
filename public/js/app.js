@@ -809,6 +809,38 @@ function setSheet(snap) {
   panel.classList.toggle('edge', edge);
   // The map's credits sit just above it (see .leaflet-bottom in styles.css).
   document.documentElement.style.setProperty('--sheet-lift', `${edge ? 0 : sheet.target + 12}px`);
+  placeGo();
+}
+
+/**
+ * Let's meet as a play button of Liquid Glass, just above the sheet while it
+ * is pulled all the way down on the people page (with the Let's meet button
+ * at the foot of the list out of sight). It rides on the sheet's top and
+ * fades away as the sheet is pulled up. `at`: where the sheet is while a
+ * finger holds it ({ top, h, peek }: its top, from the top of the screen, how
+ * much of it shows and how much at its smallest); otherwise where it is going.
+ */
+const GO = { size: 54, gap: 12, fade: 64 };
+const SHEET_FLOAT = 8; // (how far the sheet floats above the bottom of the screen: .panel's bottom in styles.css)
+function placeGo(at = null) {
+  const btn = $('#btn-go');
+  const panel = $('#panel');
+  const screen = $('#screen-main');
+  if (!btn) return;
+  let { top, h, peek } = at || {};
+  if (!at) {
+    if (!isMobile()) { btn.style.opacity = '0'; btn.inert = true; return; }
+    h = sheet.target || panel.offsetHeight;
+    top = screen.clientHeight - SHEET_FLOAT - h;
+    peek = sheetSizes().peek;
+  }
+  const can = state.view === 'people' && !panel.classList.contains('away') && !panel.classList.contains('typing');
+  const o = can ? Math.min(1, Math.max(0, 1 - (h - peek) / GO.fade)) : 0;
+  btn.style.translate = `0 ${Math.round(top - GO.gap - GO.size)}px`;
+  btn.style.transform = `scale(${(0.82 + 0.18 * o).toFixed(3)})`;
+  btn.style.opacity = o.toFixed(3);
+  btn.inert = o < 0.5;
+  btn.disabled = activePeople().length < 2;
 }
 
 /**
@@ -881,9 +913,13 @@ function holdSheet() {
   panel.style.transform = '';
   panel.style.height = `${max}px`;
   const foot = panel.getBoundingClientRect().bottom;
-  Object.assign(held, { on: true, max, foot, h: Math.round(foot - top), pad: parseFloat(getComputedStyle(panel).paddingBottom) || 0 });
+  Object.assign(held, {
+    on: true, max, foot, h: Math.round(foot - top), pad: parseFloat(getComputedStyle(panel).paddingBottom) || 0,
+    screenTop: $('#screen-main').getBoundingClientRect().top, peek: sheetSizes().peek,
+  });
   panel.style.transform = `translateY(${max - held.h}px)`;
   fadeAt(held.h - held.pad);
+  placeGo({ top: held.foot - held.h - held.screenTop, h: held.h, peek: held.peek });
   return held.h; // how much of it shows
 }
 /** The finger moved: this much of the sheet shows (at most once a frame: a finger reports more often than the screen is drawn). */
@@ -894,6 +930,7 @@ function moveSheet(h) {
       held.frame = 0;
       $('#panel').style.transform = `translateY(${held.max - held.h}px)`;
       fadeAt(held.h - held.pad);
+      placeGo({ top: held.foot - held.h - held.screenTop, h: held.h, peek: held.peek });
     });
   }
 }
@@ -1220,6 +1257,7 @@ function render({ keepScroll = false } = {}) {
   } else {
     shownView = null; // (the results come back up with the panel, not as a page turn)
   }
+  placeGo();
   drawPeople();
   drawRadius();
 }
@@ -1923,6 +1961,7 @@ function showIncluded() {
   if (badge) badge.textContent = `${all.filter((p) => p.active).length} of ${all.length}`;
   const find = $('[data-action=find]');
   if (find) find.disabled = activePeople().length < 2;
+  placeGo();
   drawPeople();
 }
 
@@ -3450,6 +3489,13 @@ function initPanel() {
     saveEdit();
   });
 
+  const go = $('#btn-go');
+  go.onclick = () => findPlaces();
+  go.addEventListener('pointerdown', (e) => {
+    const r = go.getBoundingClientRect();
+    go.style.setProperty('--px', `${Math.round(e.clientX - r.left)}px`);
+    go.style.setProperty('--py', `${Math.round(e.clientY - r.top)}px`);
+  });
   $('#btn-skip').onclick = () => anim?.skip();
   $('#btn-cancel-search').onclick = cancelSearch;
   $('#btn-recenter').onclick = () => {

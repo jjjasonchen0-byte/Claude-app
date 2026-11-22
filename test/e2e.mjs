@@ -551,6 +551,9 @@ try {
   await page.keyboard.press('Escape');
   await page.waitForSelector('#drawer', { state: 'hidden' });
 
+  // On a computer there's no play button above the panel (the panel is always open beside the map).
+  assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('#btn-go')).display), 'none', 'no play button on a computer');
+
   // Mobile layout check
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(400);
@@ -578,6 +581,22 @@ try {
   const [sheetBox, headBox, meetBox] = [await page.locator('#panel').boundingBox(), await page.locator('.sheet-title h2').boundingBox(), await page.locator('[data-action=find]').boundingBox()];
   assert.ok(headBox.y + headBox.height <= sheetBox.y + sheetBox.height, 'the heading in the smallest sheet');
   assert.ok(meetBox.y >= sheetBox.y + sheetBox.height, "Let's meet further down the list, not held over it");
+  // With the sheet all the way down, Let's meet is also a play button just above it, on the right;
+  // pulled up, the button fades away (and can't be pressed), and comes back when it's pulled down again.
+  const goShown = () => page.evaluate(() => { const b = document.querySelector('#btn-go'); return { o: Number(getComputedStyle(b).opacity), inert: b.inert }; });
+  await page.waitForFunction(() => Number(getComputedStyle(document.querySelector('#btn-go')).opacity) === 1);
+  const goBox = await page.locator('#btn-go').boundingBox();
+  assert.ok(goBox.y + goBox.height <= sheetBox.y - 6 && goBox.y + goBox.height >= sheetBox.y - 20, `the play button just above the sheet (${goBox.y + goBox.height} / ${sheetBox.y})`);
+  assert.ok(goBox.x + goBox.width >= 390 - 20 && goBox.width >= 50, 'on the right, a little larger than the round buttons');
+  assert.equal((await goShown()).inert, false);
+  await page.focus('#panel-handle');
+  await page.keyboard.press('ArrowUp');
+  await page.waitForTimeout(600);
+  assert.deepEqual(await goShown(), { o: 0, inert: true }, 'faded away with the sheet pulled up');
+  await page.focus('#panel-handle');
+  await page.keyboard.press('ArrowDown');
+  await page.waitForFunction(() => Number(getComputedStyle(document.querySelector('#btn-go')).opacity) === 1);
+  assert.equal((await goShown()).inert, false, 'back once the sheet is down');
   // An address picked, then the tab pulled down instead of Add: never mind (nobody added, the box empty, the sheet back down).
   const before = await page.locator('.person').count();
   await page.focus('#add-input');
@@ -597,6 +616,16 @@ try {
   assert.equal(await page.inputValue('#add-input'), '', 'the address let go');
   assert.equal(await page.locator('.person').count(), before, 'nobody added');
   assert.ok((await page.locator('#panel').boundingBox()).height < 600, 'the sheet back down');
+  // The play button does what Let's meet does: the search starts (here, cancelled at once).
+  await page.focus('#panel-handle');
+  for (const k of ['ArrowDown', 'ArrowDown']) { await page.keyboard.press(k); await page.waitForTimeout(500); }
+  await page.waitForFunction(() => Number(getComputedStyle(document.querySelector('#btn-go')).opacity) === 1);
+  await page.click('#btn-go');
+  await page.waitForSelector('#search-status:not([hidden])');
+  assert.ok(await page.evaluate(() => document.querySelector('#panel').classList.contains('away')), 'the search started');
+  await page.waitForFunction(() => document.querySelector('#btn-go').inert, null, { timeout: 2000 });
+  await page.click('#btn-cancel-search');
+  await page.waitForSelector('#search-status', { state: 'hidden' });
 
   // The Privacy & Terms page: its own address, the terms at /terms, who to contact, and a button
   // that deletes what Meet saved on this device.

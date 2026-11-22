@@ -804,6 +804,72 @@ input, textarea { font: inherit; letter-spacing: inherit; color: inherit; }
 }
 .round-btn:active { transform: scale(0.9); }
 
+/* Let's meet above the sheet (phones; see placeGo in app.js): a drop of Liquid Glass. Clearer than the bars, so the
+   map shows through; lit along its top, brighter at its rim where the glass bends the light, with a caustic at its
+   foot. Pressed, it swells and lights up under the finger. It rides on the sheet's top: placed (its translate) and
+   faded and scaled (its transform) from app.js, easing as the sheet eases and following the finger at once while the
+   sheet is held. (The swell is its scale, which leaves where it is alone.) */
+.go-btn {
+  --go-ease: cubic-bezier(0.2, 0.9, 0.3, 1); --go-spring: cubic-bezier(0.3, 1.6, 0.5, 1);
+  position: absolute; top: 0; right: max(14px, env(safe-area-inset-right, 0px)); z-index: 1001; display: none;
+  width: 54px; height: 54px; padding: 0; border: 0; border-radius: 50%; place-items: center; color: var(--accent);
+  background:
+    radial-gradient(120% 75% at 50% -8%, var(--go-light), transparent 58%),
+    radial-gradient(closest-side, transparent 70%, var(--go-rim) 100%),
+    radial-gradient(80% 40% at 50% 104%, var(--go-caustic), transparent 70%),
+    var(--go-glass);
+  -webkit-backdrop-filter: blur(4px) saturate(165%) brightness(var(--go-bright)); backdrop-filter: blur(4px) saturate(165%) brightness(var(--go-bright));
+  box-shadow: inset 0 1.5px 0.5px var(--go-top), inset 0 -1px 1px var(--go-foot), inset 0 0 0 0.5px var(--go-line), var(--go-shadow);
+  opacity: 0; will-change: translate, transform, opacity;
+  transition: translate 0.32s var(--go-ease), transform 0.32s var(--go-ease), opacity 0.26s, scale 0.42s var(--go-spring), filter 0.2s;
+}
+@media (max-width: 759px) { .go-btn { display: grid; } }
+/* (its rim of light, brightest top left and bottom right) */
+.go-btn::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1.2px; pointer-events: none; background: var(--go-edge);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
+}
+/* (the light under the finger) */
+.go-btn::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity 0.35s;
+  background: radial-gradient(circle at var(--px, 50%) var(--py, 50%), var(--go-glow), transparent 62%);
+}
+.go-btn svg { position: relative; z-index: 1; margin-left: 2px; filter: drop-shadow(0 1px 1.5px var(--go-icon-shadow)); transition: opacity 0.2s; }
+.go-btn:active:not(:disabled) {
+  scale: 1.1; /* (and slightly grey, as every button: see --press) */
+  transition: translate 0.32s var(--go-ease), transform 0.32s var(--go-ease), opacity 0.26s, scale 0.2s var(--go-spring), filter 0.12s;
+}
+.go-btn:active:not(:disabled)::after { opacity: 1; transition-duration: 0.08s; }
+.go-btn:disabled { cursor: default; }
+.go-btn:disabled svg { opacity: 0.35; }
+/* It follows the finger holding the sheet at once, and eases with it as it settles. */
+.panel.dragging ~ .go-btn { transition: scale 0.42s var(--go-spring), filter 0.2s; }
+.panel.settling ~ .go-btn { transition: translate 0.42s var(--go-ease), transform 0.42s var(--go-ease), opacity 0.3s, scale 0.42s var(--go-spring), filter 0.2s; }
+:root {
+  --go-glass: rgba(255, 255, 255, 0.18); --go-bright: 1.05; --go-light: rgba(255, 255, 255, 0.62); --go-rim: rgba(255, 255, 255, 0.55);
+  --go-caustic: rgba(255, 255, 255, 0.4); --go-top: rgba(255, 255, 255, 0.95); --go-foot: rgba(255, 255, 255, 0.5); --go-line: rgba(255, 255, 255, 0.55);
+  --go-edge: linear-gradient(140deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.25) 30%, rgba(255, 255, 255, 0.08) 55%, rgba(255, 255, 255, 0.6));
+  --go-glow: rgba(255, 255, 255, 0.75); --go-icon-shadow: rgba(255, 255, 255, 0.6);
+  --go-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.07), 0 12px 28px -8px rgba(0, 0, 0, 0.3), 0 3px 8px rgba(0, 0, 0, 0.1);
+}
+:root[data-theme="dark"] {
+  --go-glass: rgba(44, 44, 50, 0.36); --go-bright: 0.9; --go-light: rgba(255, 255, 255, 0.2); --go-rim: rgba(255, 255, 255, 0.14);
+  --go-caustic: rgba(255, 255, 255, 0.12); --go-top: rgba(255, 255, 255, 0.4); --go-foot: rgba(255, 255, 255, 0.14); --go-line: rgba(255, 255, 255, 0.16);
+  --go-edge: linear-gradient(140deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.12) 30%, rgba(255, 255, 255, 0.03) 55%, rgba(255, 255, 255, 0.3));
+  --go-glow: rgba(255, 255, 255, 0.28); --go-icon-shadow: rgba(0, 0, 0, 0.5);
+  --go-shadow: 0 12px 28px -8px rgba(0, 0, 0, 0.6), 0 3px 8px rgba(0, 0, 0, 0.3);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --go-glass: rgba(44, 44, 50, 0.36); --go-bright: 0.9; --go-light: rgba(255, 255, 255, 0.2); --go-rim: rgba(255, 255, 255, 0.14);
+    --go-caustic: rgba(255, 255, 255, 0.12); --go-top: rgba(255, 255, 255, 0.4); --go-foot: rgba(255, 255, 255, 0.14); --go-line: rgba(255, 255, 255, 0.16);
+    --go-edge: linear-gradient(140deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.12) 30%, rgba(255, 255, 255, 0.03) 55%, rgba(255, 255, 255, 0.3));
+    --go-glow: rgba(255, 255, 255, 0.28); --go-icon-shadow: rgba(0, 0, 0, 0.5);
+    --go-shadow: 0 12px 28px -8px rgba(0, 0, 0, 0.6), 0 3px 8px rgba(0, 0, 0, 0.3);
+  }
+}
+
 input[type=text], input[type=search], input:not([type]), input[type=datetime-local], textarea {
   width: 100%; border: 0; background: var(--fill); border-radius: 999px; padding: 11px 16px; outline: none; font-size: 16px; transition: box-shadow 0.15s;
   -webkit-appearance: none; appearance: none;
@@ -962,6 +1028,9 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
   /* The map's credits just above the sheet (see setSheet in app.js); back at the bottom while the sheet is away,
      and out of sight under it once it covers the map. */
   .leaflet-bottom { bottom: var(--sheet-lift, 0px); transition: bottom 0.32s cubic-bezier(0.2, 0.9, 0.3, 1); }
+  /* (in the bottom left, as in Apple Maps: the bottom right is Let's meet's) */
+  .leaflet-bottom.leaflet-right { right: auto; left: 0; max-width: calc(100% - 96px); }
+  .leaflet-bottom.leaflet-right .leaflet-control { float: left; }
   #screen-main:has(> .panel.away) .leaflet-bottom { bottom: 0; }
   #screen-main:has(> .panel.edge:not(.away)) :is(.leaflet-control-attribution, .credits-btn) { visibility: hidden; }
 }
@@ -1439,7 +1508,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
   font-size: 10px; border-radius: 10px 0 0 0; color: var(--text-2);
   background: var(--material-strong) !important; -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
 }
-@media (max-width: 759px) { .leaflet-control-attribution { margin: 0 12px 6px 0 !important; border-radius: 10px; } }
+@media (max-width: 759px) { .leaflet-control-attribution { margin: 0 0 6px 12px !important; border-radius: 10px; } }
 .leaflet-control-attribution a { color: var(--text-2); }
 /* Folded (see foldingCredits in app.js): a small (i) in the corner shows them again. */
 .leaflet-control-attribution.folded { display: none; }
@@ -1451,7 +1520,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 }
 .credits-btn::after { content: ""; position: absolute; inset: -8px; }
 .credits-btn.shown { display: grid; }
-@media (max-width: 759px) { .leaflet-right .credits-btn { margin: 0 12px 8px 0; } }
+@media (max-width: 759px) { .leaflet-right .credits-btn { margin: 0 0 8px 12px; } }
 /* Without a CARTO key: the standard OpenStreetMap map, calmer; inverted at night. */
 .osm-tiles { filter: saturate(0.45) contrast(0.9) brightness(1.06); }
 .osm-tiles.dark { filter: invert(1) hue-rotate(180deg) brightness(0.88) contrast(0.85) saturate(0.35); }
@@ -1786,6 +1855,11 @@ img.broken { display: none; }
       <div class="panel-handle" id="panel-handle" role="button" tabindex="0" aria-label="Drag or tap to resize"><span></span></div>
       <div class="panel-body" id="panel-body"></div>
     </aside>
+
+    <!-- Let's meet, above the sheet while it is pulled all the way down (see placeGo in app.js). -->
+    <button class="go-btn" id="btn-go" type="button" title="Let’s meet" aria-label="Let’s meet" inert>
+      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d="M8.6 6.1v11.8l9.6-5.9z" fill="currentColor" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/></svg>
+    </button>
   </section>
 
   <!-- ============ Menu ============ -->
@@ -6922,6 +6996,38 @@ function setSheet(snap) {
   panel.classList.toggle('edge', edge);
   // The map's credits sit just above it (see .leaflet-bottom in styles.css).
   document.documentElement.style.setProperty('--sheet-lift', `${edge ? 0 : sheet.target + 12}px`);
+  placeGo();
+}
+
+/**
+ * Let's meet as a play button of Liquid Glass, just above the sheet while it
+ * is pulled all the way down on the people page (with the Let's meet button
+ * at the foot of the list out of sight). It rides on the sheet's top and
+ * fades away as the sheet is pulled up. `at`: where the sheet is while a
+ * finger holds it ({ top, h, peek }: its top, from the top of the screen, how
+ * much of it shows and how much at its smallest); otherwise where it is going.
+ */
+const GO = { size: 54, gap: 12, fade: 64 };
+const SHEET_FLOAT = 8; // (how far the sheet floats above the bottom of the screen: .panel's bottom in styles.css)
+function placeGo(at = null) {
+  const btn = $('#btn-go');
+  const panel = $('#panel');
+  const screen = $('#screen-main');
+  if (!btn) return;
+  let { top, h, peek } = at || {};
+  if (!at) {
+    if (!isMobile()) { btn.style.opacity = '0'; btn.inert = true; return; }
+    h = sheet.target || panel.offsetHeight;
+    top = screen.clientHeight - SHEET_FLOAT - h;
+    peek = sheetSizes().peek;
+  }
+  const can = state.view === 'people' && !panel.classList.contains('away') && !panel.classList.contains('typing');
+  const o = can ? Math.min(1, Math.max(0, 1 - (h - peek) / GO.fade)) : 0;
+  btn.style.translate = `0 ${Math.round(top - GO.gap - GO.size)}px`;
+  btn.style.transform = `scale(${(0.82 + 0.18 * o).toFixed(3)})`;
+  btn.style.opacity = o.toFixed(3);
+  btn.inert = o < 0.5;
+  btn.disabled = activePeople().length < 2;
 }
 
 /**
@@ -6994,9 +7100,13 @@ function holdSheet() {
   panel.style.transform = '';
   panel.style.height = `${max}px`;
   const foot = panel.getBoundingClientRect().bottom;
-  Object.assign(held, { on: true, max, foot, h: Math.round(foot - top), pad: parseFloat(getComputedStyle(panel).paddingBottom) || 0 });
+  Object.assign(held, {
+    on: true, max, foot, h: Math.round(foot - top), pad: parseFloat(getComputedStyle(panel).paddingBottom) || 0,
+    screenTop: $('#screen-main').getBoundingClientRect().top, peek: sheetSizes().peek,
+  });
   panel.style.transform = `translateY(${max - held.h}px)`;
   fadeAt(held.h - held.pad);
+  placeGo({ top: held.foot - held.h - held.screenTop, h: held.h, peek: held.peek });
   return held.h; // how much of it shows
 }
 /** The finger moved: this much of the sheet shows (at most once a frame: a finger reports more often than the screen is drawn). */
@@ -7007,6 +7117,7 @@ function moveSheet(h) {
       held.frame = 0;
       $('#panel').style.transform = `translateY(${held.max - held.h}px)`;
       fadeAt(held.h - held.pad);
+      placeGo({ top: held.foot - held.h - held.screenTop, h: held.h, peek: held.peek });
     });
   }
 }
@@ -7333,6 +7444,7 @@ function render({ keepScroll = false } = {}) {
   } else {
     shownView = null; // (the results come back up with the panel, not as a page turn)
   }
+  placeGo();
   drawPeople();
   drawRadius();
 }
@@ -8036,6 +8148,7 @@ function showIncluded() {
   if (badge) badge.textContent = `${all.filter((p) => p.active).length} of ${all.length}`;
   const find = $('[data-action=find]');
   if (find) find.disabled = activePeople().length < 2;
+  placeGo();
   drawPeople();
 }
 
@@ -9562,6 +9675,13 @@ function initPanel() {
     saveEdit();
   });
 
+  const go = $('#btn-go');
+  go.onclick = () => findPlaces();
+  go.addEventListener('pointerdown', (e) => {
+    const r = go.getBoundingClientRect();
+    go.style.setProperty('--px', `${Math.round(e.clientX - r.left)}px`);
+    go.style.setProperty('--py', `${Math.round(e.clientY - r.top)}px`);
+  });
   $('#btn-skip').onclick = () => anim?.skip();
   $('#btn-cancel-search').onclick = cancelSearch;
   $('#btn-recenter').onclick = () => {
