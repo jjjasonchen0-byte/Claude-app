@@ -960,9 +960,16 @@ function initSheet() {
   });
   const end = () => {
     if (!drag) return;
-    const snap = drag.moved ? snapFor(drag.v, held.h) : sheet.snap === 'peek' ? 'mid' : 'peek'; // (a tap toggles)
+    let snap = drag.moved ? snapFor(drag.v, held.h) : sheet.snap === 'peek' ? 'mid' : 'peek'; // (a tap toggles)
+    const giveUp = drag.moved && snap !== 'full' && panel.classList.contains('typing');
     drag = null;
+    if (giveUp) {
+      // Pulled down while typing: never mind. Back to the size it was (smallest after a flick right down).
+      panel.classList.remove('typing');
+      snap = snap === 'peek' ? 'peek' : sheet.snap === 'full' ? 'mid' : sheet.snap || 'mid';
+    }
     settleSheet(snap);
+    if (giveUp) neverMind();
   };
   handle.addEventListener('pointerup', end);
   handle.addEventListener('pointercancel', end);
@@ -982,6 +989,18 @@ function initSheet() {
     typingBoxToTop();
     setTimeout(typingBoxToTop, 350);
   });
+}
+
+/**
+ * Pulled down while typing: what was being added (an address and name not yet
+ * added) or changed (in someone's row) is let go, and the keyboard goes down.
+ */
+function neverMind() {
+  state.addDraft = null;
+  state.edit = null;
+  document.activeElement?.blur();
+  $('#panel-body').scrollTop = 0;
+  render();
 }
 
 /** Letting go of the sheet with `cur` of it showing: the next size in the direction of a flick (v: px/ms, + is down), else the nearest. */
@@ -1210,9 +1229,21 @@ function thumbsIn(root) {
   }
   return at;
 }
-function placeThumbs(root = document, was = null, { animate = true } = {}) {
+// A row (or a choice in it) that changes size after its highlight was placed (a phone laying
+// out its date box a moment later, the sheet widening to the screen's edges, a font arriving):
+// the highlight is placed again, at once.
+const thumbWatch = 'ResizeObserver' in window ? new ResizeObserver((entries) => {
+  const rows = new Set();
+  for (const { target } of entries) {
+    if (!target.isConnected) { thumbWatch.unobserve(target); continue; }
+    const g = target.closest('.segmented, .pills, .leave-row');
+    if (g) rows.add(g);
+  }
+  for (const g of rows) placeThumbs(g.parentElement, null, { animate: false, only: g });
+}) : null;
+function placeThumbs(root = document, was = null, { animate = true, only = null } = {}) {
   for (const { group, item, thumb: cls } of THUMBED) {
-    for (const g of $$(group, root)) {
+    for (const g of only ? [only].filter((x) => x.matches(group)) : $$(group, root)) {
       if (!g.offsetParent) continue; // (out of sight: placed once shown)
       const on = $(`:scope > ${item}.active`, g);
       let t = $(`:scope > .${cls}`, g);
@@ -1222,13 +1253,17 @@ function placeThumbs(root = document, was = null, { animate = true } = {}) {
         t.className = cls;
         t.setAttribute('aria-hidden', 'true');
         g.prepend(t);
+        if (thumbWatch) for (const el of [g, ...g.children]) if (el !== t) thumbWatch.observe(el);
       }
       const from = !t.hidden && t.dataset.x ? { x: Number(t.dataset.x), w: Number(t.dataset.w) } : was?.get(thumbKey(g));
       t.hidden = false;
       const x = on.offsetLeft, w = on.offsetWidth;
+      if (!animate && t.dataset.y === String(on.offsetTop) && t.dataset.h === String(on.offsetHeight) && t.dataset.x === String(x) && t.dataset.w === String(w)) continue; // (where it is already)
       Object.assign(t.style, { top: `${on.offsetTop}px`, height: `${on.offsetHeight}px`, width: `${w}px`, transform: `translateX(${x}px)` });
       t.dataset.x = x;
       t.dataset.w = w;
+      t.dataset.y = on.offsetTop;
+      t.dataset.h = on.offsetHeight;
       g.classList.add('thumbed');
       if (animate && from && (Math.abs(from.x - x) > 0.5 || Math.abs(from.w - w) > 0.5) && !reducedMotion()) {
         t.getAnimations().forEach((a) => a.cancel());

@@ -578,6 +578,22 @@ try {
   const [sheetBox, headBox, meetBox] = [await page.locator('#panel').boundingBox(), await page.locator('.sheet-title h2').boundingBox(), await page.locator('[data-action=find]').boundingBox()];
   assert.ok(headBox.y + headBox.height <= sheetBox.y + sheetBox.height, 'the heading in the smallest sheet');
   assert.ok(meetBox.y >= sheetBox.y + sheetBox.height, "Let's meet further down the list, not held over it");
+  // An address picked, then the tab pulled down instead of Add: never mind (nobody added, the box empty, the sheet back down).
+  const before = await page.locator('.person').count();
+  await page.focus('#add-input');
+  await page.fill('#add-input', 'Camden');
+  await page.waitForSelector('#add-search .suggestions li[data-i]:not(.saved)');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => document.querySelector('#panel').classList.contains('typing'));
+  const hb = await page.locator('#panel-handle').boundingBox();
+  await page.mouse.move(hb.x + hb.width / 2, hb.y + 12);
+  await page.mouse.down();
+  for (let i = 1; i <= 10; i++) { await page.mouse.move(hb.x + hb.width / 2, hb.y + 12 + i * 30); await page.waitForTimeout(16); }
+  await page.mouse.up();
+  await page.waitForFunction(() => !document.querySelector('#panel').classList.contains('typing'));
+  assert.equal(await page.inputValue('#add-input'), '', 'the address let go');
+  assert.equal(await page.locator('.person').count(), before, 'nobody added');
+  assert.ok((await page.locator('#panel').boundingBox()).height < 600, 'the sheet back down');
 
   // The Privacy & Terms page: its own address, the terms at /terms, who to contact, and a button
   // that deletes what Meet saved on this device.
