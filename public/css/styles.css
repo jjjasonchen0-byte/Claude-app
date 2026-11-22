@@ -287,6 +287,10 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
     -webkit-mask-image: linear-gradient(to bottom, transparent 2px, #000 24px); mask-image: linear-gradient(to bottom, transparent 2px, #000 24px);
   }
   .panel-body { padding-top: 30px; }
+  .panel.has-foot .panel-body {
+    -webkit-mask-image: linear-gradient(to bottom, transparent 2px, #000 24px, #000 calc(100% - 18px), transparent);
+    mask-image: linear-gradient(to bottom, transparent 2px, #000 24px, #000 calc(100% - 18px), transparent);
+  }
   .leaflet-control-zoom { display: none; }
   /* The map's credits just above the sheet (see setSheet in app.js); back at the bottom while the sheet is away,
      and out of sight under it once it covers the map. */
@@ -522,10 +526,13 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .add-row { display: flex; gap: 8px; }
 .add-row input { flex: 1; min-width: 0; }
 .add-row .btn { flex: none; min-width: 76px; min-height: 44px; }
-.cta { position: sticky; bottom: -20px; padding: 22px 0 8px; margin-top: 12px; background: linear-gradient(transparent, var(--glass-floor) 45%); }
+/* At the foot of the sheet, below what scrolls (Let's meet): always in sight, whatever the sheet's size.
+   What scrolls fades out just above it. */
+.panel-foot { position: relative; flex: none; padding: 4px 20px 14px; }
+@media (min-width: 760px) { .panel.has-foot .panel-body { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); } }
 /* Typing an address on a phone: the sheet is fully open with the box at its top (room to scroll it there, no button in the way). */
 .panel.typing .panel-content { padding-bottom: 900px; }
-.panel.typing .cta { display: none; }
+.panel.typing .panel-foot { display: none; }
 
 /* results */
 .result-head { display: flex; align-items: center; gap: 14px; margin: 4px 4px 22px; }

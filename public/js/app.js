@@ -268,7 +268,7 @@ function attachSearch(root, { near, onPick, saved = null, onUnsave = null }) {
     if (panelBody) {
       const c = panelBody.getBoundingClientRect();
       top = Math.max(top, c.top + ($('#panel-handle')?.offsetHeight || 0)); // (not up under the pull tab)
-      bottom = Math.min(bottom, c.bottom - ($('.cta', panelBody)?.offsetHeight || 0));
+      bottom = Math.min(bottom, c.bottom);
     }
     const r = input.getBoundingClientRect();
     const below = bottom - r.bottom - 12, above = r.top - top - 12;
@@ -740,11 +740,18 @@ function bringIntoSight(latlngs, signal) {
 
 function sheetSizes() {
   const H = $('#screen-main').clientHeight;
-  const inner = $('#panel-body .panel-content');
-  const content = 26 + (inner ? inner.offsetHeight : 200) + 22;
+  const panel = $('#panel'), body = $('#panel-body');
+  const inner = $('.panel-content', body);
+  const foot = $('#panel-foot');
+  // Below what scrolls: the foot (Let's meet) and the room kept for a phone's home bar.
+  const below = (foot.hidden ? 0 : foot.offsetHeight) + (parseFloat(getComputedStyle(panel).paddingBottom) || 0);
+  const content = 26 + (inner ? inner.offsetHeight : 200) + 22 + below;
   const full = Math.min(content, H - 72);
   const mid = Math.min(Math.round(H * 0.48), full);
-  const peek = Math.min(132, mid);
+  // At its smallest: down to the page's heading, and the foot below it.
+  const title = inner && $('.sheet-title', inner);
+  const head = title ? title.getBoundingClientRect().bottom - body.getBoundingClientRect().top + body.scrollTop + 8 : 0;
+  const peek = Math.min(Math.max(132, below ? head + below : 0), mid);
   return { peek, mid, full, max: H - 72 };
 }
 
@@ -1107,6 +1114,7 @@ function render({ keepScroll = false } = {}) {
     afterRender[state.view]?.();
     body.scrollTop = keepScroll ? scroll : 0;
     if (tabsScroll && $('.pills', body)) $('.pills', body).scrollLeft = tabsScroll;
+    setFoot(FEET[state.view]?.() || '', { animate: !!from });
     placeThumbs(body, was);
     if (isMobile() && sheet.snap) setSheet(sheet.snap);
     if (leaving) turnPage(leaving, PAGE_ORDER.indexOf(state.view) < PAGE_ORDER.indexOf(from));
@@ -1285,10 +1293,28 @@ function renderPeople() {
     <ul class="group icons people">${rows}</ul>
     ${addBox()}
     <p class="footnote" style="margin:0 6px">Or tap the map to drop a pin. Drag any pin to move it.</p>
-    ${leaveRow()}
-    <div class="cta">
-      <button class="btn btn-primary btn-block btn-lg" data-action="find" ${active < 2 ? 'disabled' : ''}>Let’s meet</button>
-    </div>`;
+    ${leaveRow()}`;
+}
+
+/** What stays at the foot of the sheet, below what scrolls: on the people page, Let's meet. */
+const FEET = {
+  people: () => `<button class="btn btn-primary btn-block btn-lg" data-action="find" ${activePeople().length < 2 ? 'disabled' : ''}>Let’s meet</button>`,
+};
+function setFoot(html, { animate = true } = {}) {
+  const foot = $('#panel-foot');
+  $('#panel').classList.toggle('has-foot', !!html);
+  if (!html) {
+    if (animate) leave(foot, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(14px)' }], { duration: 200, hide: true });
+    else { stay(foot); foot.hidden = true; }
+    return;
+  }
+  const appearing = foot.hidden;
+  stay(foot);
+  foot.innerHTML = html;
+  foot.hidden = false;
+  if (appearing && animate && !reducedMotion()) {
+    foot.animate([{ opacity: 0, transform: 'translateY(16px)' }, { opacity: 1, transform: 'none' }], { duration: 360, easing: 'cubic-bezier(0.2, 0.9, 0.3, 1)' });
+  }
 }
 
 /**
@@ -1300,11 +1326,12 @@ function renderPeople() {
  * below in full across the row with a pencil at its end. A pencil turns its
  * line into a box with a save button.
  */
+const heartLabelFor = (p, kept) => (kept ? `Saved on this device. Tap to forget ${p.name}’s address` : `Keep ${p.name}’s address on this device`);
 function personRow(p, i, count) {
   const kept = !!savedMatch(p);
   const open = state.open === p.id;
   const ed = state.edit?.id === p.id ? state.edit : null;
-  const heartLabel = kept ? `Saved on this device. Tap to forget ${p.name}’s address` : `Keep ${p.name}’s address on this device`;
+  const heartLabel = heartLabelFor(p, kept);
   const title = p.isHome ? (state.user.name ? `You (${state.user.name})` : 'You') : p.nickname || shortAddr(p.address);
   const named = p.isHome || !!p.nickname;
   const menuUp = count > 2 && i >= count - 2;
@@ -1350,28 +1377,27 @@ const peopleModeMenu = (p, up) => (state.modeMenu === p.id ? `<div class="menu${
   </div>` : '');
 
 /**
- * A tap on someone's row opens it (or closes it); two quick taps keep their
- * address with the heart instead. (So a single tap waits a moment to be sure.)
+ * A tap on someone's row opens it (or closes it) at once. A second tap
+ * straight after, where the first one was, puts the row back as it was and
+ * keeps their address instead (the heart): a double-tap. (The rows move as
+ * one opens, so the second tap is caught wherever it lands; see doubleTap.)
  */
-let personTapTimer = 0, personTapId = null;
-function personTap(id) {
-  if (everyone().find((x) => x.id === id)?.isHome) { // (your own row has no heart: it opens at once)
-    clearTimeout(personTapTimer);
-    personTapTimer = 0;
-    personTapId = null;
-    togglePersonOpen(id);
-    return;
-  }
-  if (personTapTimer && personTapId === id) {
-    clearTimeout(personTapTimer);
-    personTapTimer = 0;
-    personTapId = null;
-    toggleSavedPerson(id);
-    return;
-  }
-  clearTimeout(personTapTimer);
-  personTapId = id;
-  personTapTimer = setTimeout(() => { personTapTimer = 0; personTapId = null; togglePersonOpen(id); }, 260);
+let lastTap = null;
+function personTap(id, e) {
+  const p = everyone().find((x) => x.id === id);
+  if (state.modeMenu) { lastTap = null; togglePersonOpen(id); return; } // (that tap closes the travel menu)
+  lastTap = p && !p.isHome ? { id, was: state.open, t: performance.now(), x: e?.clientX ?? 0, y: e?.clientY ?? 0 } : null;
+  togglePersonOpen(id);
+}
+/** The second tap of a double-tap goes to the row the first one was on, as the heart, and to nothing else. */
+function doubleTap(e) {
+  const t = lastTap;
+  if (!t || performance.now() - t.t > 320 || Math.hypot(e.clientX - t.x, e.clientY - t.y) > 40) return;
+  e.stopPropagation();
+  e.preventDefault();
+  lastTap = null;
+  togglePersonOpen(t.was && t.was !== t.id ? t.was : t.id); // (the rows back as they were before the first tap)
+  toggleSavedPerson(t.id);
 }
 
 /**
@@ -1556,10 +1582,29 @@ async function toggleSavedPerson(id) {
   const p = everyone().find((x) => x.id === id);
   if (!p || p.isHome) return; // (no heart on your own row)
   await toggleSaved(p, p.nickname || '');
+  const kept = !!savedMatch(p);
   clearTimeout(heartPopTimer);
-  state.pop = savedMatch(p) ? id : null;
+  state.pop = kept ? id : null;
   if (state.pop) heartPopTimer = setTimeout(() => { state.pop = null; }, 800);
-  if (state.view === 'people') render({ keepScroll: true });
+  if (state.view !== 'people') return;
+  const li = $$('#panel-body .person').find((x) => x.dataset.id === id);
+  const badge = li && $('.badge-heart', li);
+  if (!badge) { render({ keepScroll: true }); return; }
+  const label = heartLabelFor(p, kept);
+  badge.classList.toggle('on', kept);
+  badge.setAttribute('aria-pressed', String(kept));
+  badge.setAttribute('aria-label', label);
+  badge.title = label;
+  badge.innerHTML = heart(kept, 13);
+  $('.heart-pop', li)?.remove();
+  if (kept) {
+    const pop = document.createElement('span');
+    pop.className = 'heart-pop';
+    pop.setAttribute('aria-hidden', 'true');
+    pop.innerHTML = heart(true, 46);
+    $('.avatar-wrap', li).append(pop);
+    setTimeout(() => pop.remove(), 800);
+  }
 }
 
 /** Forget a saved address. */
@@ -3157,7 +3202,7 @@ async function enterShare() {
 
 function initPanel() {
   const body = $('#panel-body');
-  body.addEventListener('click', async (e) => {
+  const onPanelClick = async (e) => {
     const el = e.target.closest('[data-action]');
     if (!el) return;
     const action = el.dataset.action;
@@ -3174,7 +3219,7 @@ function initPanel() {
         break;
       }
       case 'person-tap': // (not a tap on the switch beside them, or in the travel menu)
-        if (!e.target.closest('label.switch, .menu')) personTap(id);
+        if (!e.target.closest('label.switch, .menu')) personTap(id, e);
         break;
       case 'edit': state.edit = { id, field: el.dataset.field === 'address' ? 'address' : 'name' }; state.open = id; state.modeMenu = null; render({ keepScroll: true }); break;
       case 'edit-cancel': state.edit = null; render({ keepScroll: true }); break;
@@ -3250,7 +3295,10 @@ function initPanel() {
       }
       default: break;
     }
-  });
+  };
+  body.addEventListener('click', doubleTap, true); // (before anything the second tap of a double-tap lands on)
+  body.addEventListener('click', onPanelClick);
+  $('#panel-foot').addEventListener('click', onPanelClick); // (Let's meet, at the foot of the sheet)
   // Pictures fade in once loaded; broken ones disappear.
   body.addEventListener('load', (e) => { if (e.target.tagName === 'IMG') e.target.classList.add('in'); }, true);
   body.addEventListener('error', (e) => { if (e.target.tagName === 'IMG') e.target.classList.add('broken'); }, true);

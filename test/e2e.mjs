@@ -555,6 +555,14 @@ try {
   await page.waitForSelector('.person');
   await page.waitForTimeout(500);
   await shot('13-mobile-people');
+  // Let's meet stays at the foot of the sheet (not in what scrolls), whole, however small the sheet is.
+  assert.equal(await page.locator('#panel-foot [data-action=find]').count(), 1);
+  assert.equal(await page.locator('#panel-body [data-action=find]').count(), 0);
+  await page.focus('#panel-handle');
+  for (const k of ['ArrowDown', 'ArrowDown']) { await page.keyboard.press(k); await page.waitForTimeout(500); }
+  const [sheetBox, meetBox] = [await page.locator('#panel').boundingBox(), await page.locator('[data-action=find]').boundingBox()];
+  assert.ok(meetBox.y >= sheetBox.y && meetBox.y + meetBox.height <= sheetBox.y + sheetBox.height, "Let's meet whole in the smallest sheet");
+  assert.ok(await page.locator('.sheet-title h2').isVisible(), 'and the heading above it');
 
   // The Privacy & Terms page: its own address, the terms at /terms, who to contact, and a button
   // that deletes what Meet saved on this device.
