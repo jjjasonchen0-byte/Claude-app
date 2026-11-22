@@ -840,6 +840,10 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .switch span::after { content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: linear-gradient(180deg, #fff, #f4f4f7); transition: transform 0.25s cubic-bezier(0.3, 1.3, 0.5, 1); box-shadow: inset 0 1px 0 #fff, 0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0, 0, 0, 0.16); }
 .switch input:checked + span { background: var(--green); }
 .switch input:checked + span::after { transform: translateX(20px); }
+/* Held, the knob stretches toward the side it will go to (as on an iPhone); let go, it slides there. */
+.switch span::after { transition: transform 0.34s cubic-bezier(0.3, 1.3, 0.5, 1), width 0.2s ease; }
+.switch:active span::after { width: 33px; }
+.switch:active input:checked + span::after { transform: translateX(14px); }
 .switch input:focus-visible + span { outline: 3px solid var(--accent-tint); outline-offset: 2px; }
 
 /* ---------------------------------------------------------------- address search */
@@ -950,13 +954,10 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
   .panel-handle:active { cursor: grabbing; }
   /* (and fades as it goes, so the pull tab stays clear) */
   .panel-body, .page-leaving {
-    -webkit-mask-image: linear-gradient(to bottom, transparent 2px, #000 24px); mask-image: linear-gradient(to bottom, transparent 2px, #000 24px);
-  }
-  .panel-body { padding-top: 30px; }
-  .panel.has-foot .panel-body {
     -webkit-mask-image: linear-gradient(to bottom, transparent 2px, #000 24px, #000 calc(100% - 18px), transparent);
     mask-image: linear-gradient(to bottom, transparent 2px, #000 24px, #000 calc(100% - 18px), transparent);
   }
+  .panel-body { padding-top: 30px; }
   .leaflet-control-zoom { display: none; }
   /* The map's credits just above the sheet (see setSheet in app.js); back at the bottom while the sheet is away,
      and out of sight under it once it covers the map. */
@@ -1127,6 +1128,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .person.home .p-addr { grid-column: 2 / 4; }
 .p-addr.only-open { display: none; } /* (someone without a name shows their street as one; the whole address when open) */
 .person.one-line:not(.open) .avatar-wrap, .person.one-line:not(.open) .p-end { grid-row: 1; }
+.person .avatar, .person .p-line1, .person .p-addr { transition: opacity 0.3s; }
 .person.inactive .avatar, .person.inactive .p-line1, .person.inactive .p-addr { opacity: 0.4; }
 /* Open: taller. Everything on the top line beside the picture; the address lower, in full, across the row. */
 .person.open .person-cell { padding-bottom: 16px; }
@@ -1192,13 +1194,12 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .add-row { display: flex; gap: 8px; }
 .add-row input { flex: 1; min-width: 0; }
 .add-row .btn { flex: none; min-width: 76px; min-height: 44px; }
-/* At the foot of the sheet, below what scrolls (Let's meet): always in sight, whatever the sheet's size.
-   What scrolls fades out just above it. */
-.panel-foot { position: relative; flex: none; padding: 4px 20px 14px; }
-@media (min-width: 760px) { .panel.has-foot .panel-body { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); } }
+/* Let's meet: the last thing in the list. What scrolls fades out softly at the panel's bottom edge. */
+.cta { margin-top: 18px; }
+@media (min-width: 760px) { .panel-body, .page-leaving { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); } }
 /* Typing an address on a phone: the sheet is fully open with the box at its top (room to scroll it there, no button in the way). */
 .panel.typing .panel-content { padding-bottom: 900px; }
-.panel.typing .panel-foot { display: none; }
+.panel.typing .cta { display: none; }
 
 /* results */
 .result-head { display: flex; align-items: center; gap: 14px; margin: 4px 4px 22px; }
@@ -1768,7 +1769,6 @@ img.broken { display: none; }
     <aside class="panel" id="panel" aria-live="polite">
       <div class="panel-handle" id="panel-handle" role="button" tabindex="0" aria-label="Drag or tap to resize"><span></span></div>
       <div class="panel-body" id="panel-body"></div>
-      <div class="panel-foot" id="panel-foot" hidden></div>
     </aside>
   </section>
 
@@ -6845,18 +6845,13 @@ function bringIntoSight(latlngs, signal) {
 
 function sheetSizes() {
   const H = $('#screen-main').clientHeight;
-  const panel = $('#panel'), body = $('#panel-body');
-  const inner = $('.panel-content', body);
-  const foot = $('#panel-foot');
-  // Below what scrolls: the foot (Let's meet) and the room kept for a phone's home bar.
-  const below = (foot.hidden ? 0 : foot.offsetHeight) + (parseFloat(getComputedStyle(panel).paddingBottom) || 0);
+  const inner = $('#panel-body .panel-content');
+  // (and the room kept below what scrolls for a phone's home bar)
+  const below = parseFloat(getComputedStyle($('#panel')).paddingBottom) || 0;
   const content = 26 + (inner ? inner.offsetHeight : 200) + 22 + below;
   const full = Math.min(content, H - 72);
   const mid = Math.min(Math.round(H * 0.48), full);
-  // At its smallest: down to the page's heading, and the foot below it.
-  const title = inner && $('.sheet-title', inner);
-  const head = title ? title.getBoundingClientRect().bottom - body.getBoundingClientRect().top + body.scrollTop + 8 : 0;
-  const peek = Math.min(Math.max(132, below ? head + below : 0), mid);
+  const peek = Math.min(132, mid);
   return { peek, mid, full, max: H - 72 };
 }
 
@@ -7219,7 +7214,6 @@ function render({ keepScroll = false } = {}) {
     afterRender[state.view]?.();
     body.scrollTop = keepScroll ? scroll : 0;
     if (tabsScroll && $('.pills', body)) $('.pills', body).scrollLeft = tabsScroll;
-    setFoot(FEET[state.view]?.() || '', { animate: !!from });
     placeThumbs(body, was);
     if (isMobile() && sheet.snap) setSheet(sheet.snap);
     if (leaving) turnPage(leaving, PAGE_ORDER.indexOf(state.view) < PAGE_ORDER.indexOf(from));
@@ -7398,28 +7392,10 @@ function renderPeople() {
     <ul class="group icons people">${rows}</ul>
     ${addBox()}
     <p class="footnote" style="margin:0 6px">Or tap the map to drop a pin. Drag any pin to move it.</p>
-    ${leaveRow()}`;
-}
-
-/** What stays at the foot of the sheet, below what scrolls: on the people page, Let's meet. */
-const FEET = {
-  people: () => `<button class="btn btn-primary btn-block btn-lg" data-action="find" ${activePeople().length < 2 ? 'disabled' : ''}>Let’s meet</button>`,
-};
-function setFoot(html, { animate = true } = {}) {
-  const foot = $('#panel-foot');
-  $('#panel').classList.toggle('has-foot', !!html);
-  if (!html) {
-    if (animate) leave(foot, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(14px)' }], { duration: 200, hide: true });
-    else { stay(foot); foot.hidden = true; }
-    return;
-  }
-  const appearing = foot.hidden;
-  stay(foot);
-  foot.innerHTML = html;
-  foot.hidden = false;
-  if (appearing && animate && !reducedMotion()) {
-    foot.animate([{ opacity: 0, transform: 'translateY(16px)' }, { opacity: 1, transform: 'none' }], { duration: 360, easing: 'cubic-bezier(0.2, 0.9, 0.3, 1)' });
-  }
+    ${leaveRow()}
+    <div class="cta">
+      <button class="btn btn-primary btn-block btn-lg" data-action="find" ${active < 2 ? 'disabled' : ''}>Let’s meet</button>
+    </div>`;
 }
 
 /**
@@ -7899,6 +7875,36 @@ async function deletePlace(id) {
     render();
     toast(err.message, { error: true });
   }
+}
+
+/**
+ * Someone in or left out, from the switch beside them. The switch slides by
+ * itself (it isn't drawn again, which would stop it where it is); the rest of
+ * the page follows where it is: their row, the count, Let's meet, the map.
+ */
+async function setIncluded(id, on) {
+  const p = state.places.find((x) => x.id === id);
+  if (!p) return;
+  p.active = on;
+  showIncluded();
+  try { await api.updatePlace(id, { active: on }); }
+  catch (err) { p.active = !on; render({ keepScroll: true }); toast(err.message, { error: true }); }
+}
+function showIncluded() {
+  if (state.view !== 'people') { render({ keepScroll: true }); return; }
+  const all = everyone();
+  for (const li of $$('#panel-body .person')) {
+    const p = all.find((x) => x.id === li.dataset.id);
+    if (!p) continue;
+    li.classList.toggle('inactive', !p.active);
+    const sw = $('label.switch', li);
+    if (sw) sw.title = p.active ? 'Included' : 'Left out';
+  }
+  const badge = $('#panel-body .sheet-title .badge');
+  if (badge) badge.textContent = `${all.filter((p) => p.active).length} of ${all.length}`;
+  const find = $('[data-action=find]');
+  if (find) find.disabled = activePeople().length < 2;
+  drawPeople();
 }
 
 async function patchPlace(id, patch) {
@@ -9329,7 +9335,7 @@ function initPanel() {
       case 'edit-cancel': state.edit = null; render({ keepScroll: true }); break;
       case 'heart-person': toggleSavedPerson(id); break;
       case 'delete': deletePlace(id); break;
-      case 'toggle': patchPlace(id, { active: el.checked }); break;
+      case 'toggle': setIncluded(id, el.checked); break;
       case 'tab': s.tab = el.dataset.tab; render(); break;
       case 'group': s.markersKey = null; s.group = el.dataset.group; s.sort = s.sort || 'near'; setView('group'); break;
       case 'replay': findPlaces({ replay: true }); break;
@@ -9402,7 +9408,6 @@ function initPanel() {
   };
   body.addEventListener('click', doubleTap, true); // (before anything the second tap of a double-tap lands on)
   body.addEventListener('click', onPanelClick);
-  $('#panel-foot').addEventListener('click', onPanelClick); // (Let's meet, at the foot of the sheet)
   // Pictures fade in once loaded; broken ones disappear.
   body.addEventListener('load', (e) => { if (e.target.tagName === 'IMG') e.target.classList.add('in'); }, true);
   body.addEventListener('error', (e) => { if (e.target.tagName === 'IMG') e.target.classList.add('broken'); }, true);

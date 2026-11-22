@@ -174,6 +174,10 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .switch span::after { content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: linear-gradient(180deg, #fff, #f4f4f7); transition: transform 0.25s cubic-bezier(0.3, 1.3, 0.5, 1); box-shadow: inset 0 1px 0 #fff, 0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0, 0, 0, 0.16); }
 .switch input:checked + span { background: var(--green); }
 .switch input:checked + span::after { transform: translateX(20px); }
+/* Held, the knob stretches toward the side it will go to (as on an iPhone); let go, it slides there. */
+.switch span::after { transition: transform 0.34s cubic-bezier(0.3, 1.3, 0.5, 1), width 0.2s ease; }
+.switch:active span::after { width: 33px; }
+.switch:active input:checked + span::after { transform: translateX(14px); }
 .switch input:focus-visible + span { outline: 3px solid var(--accent-tint); outline-offset: 2px; }
 
 /* ---------------------------------------------------------------- address search */
@@ -284,13 +288,10 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
   .panel-handle:active { cursor: grabbing; }
   /* (and fades as it goes, so the pull tab stays clear) */
   .panel-body, .page-leaving {
-    -webkit-mask-image: linear-gradient(to bottom, transparent 2px, #000 24px); mask-image: linear-gradient(to bottom, transparent 2px, #000 24px);
-  }
-  .panel-body { padding-top: 30px; }
-  .panel.has-foot .panel-body {
     -webkit-mask-image: linear-gradient(to bottom, transparent 2px, #000 24px, #000 calc(100% - 18px), transparent);
     mask-image: linear-gradient(to bottom, transparent 2px, #000 24px, #000 calc(100% - 18px), transparent);
   }
+  .panel-body { padding-top: 30px; }
   .leaflet-control-zoom { display: none; }
   /* The map's credits just above the sheet (see setSheet in app.js); back at the bottom while the sheet is away,
      and out of sight under it once it covers the map. */
@@ -461,6 +462,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .person.home .p-addr { grid-column: 2 / 4; }
 .p-addr.only-open { display: none; } /* (someone without a name shows their street as one; the whole address when open) */
 .person.one-line:not(.open) .avatar-wrap, .person.one-line:not(.open) .p-end { grid-row: 1; }
+.person .avatar, .person .p-line1, .person .p-addr { transition: opacity 0.3s; }
 .person.inactive .avatar, .person.inactive .p-line1, .person.inactive .p-addr { opacity: 0.4; }
 /* Open: taller. Everything on the top line beside the picture; the address lower, in full, across the row. */
 .person.open .person-cell { padding-bottom: 16px; }
@@ -526,13 +528,12 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .add-row { display: flex; gap: 8px; }
 .add-row input { flex: 1; min-width: 0; }
 .add-row .btn { flex: none; min-width: 76px; min-height: 44px; }
-/* At the foot of the sheet, below what scrolls (Let's meet): always in sight, whatever the sheet's size.
-   What scrolls fades out just above it. */
-.panel-foot { position: relative; flex: none; padding: 4px 20px 14px; }
-@media (min-width: 760px) { .panel.has-foot .panel-body { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); } }
+/* Let's meet: the last thing in the list. What scrolls fades out softly at the panel's bottom edge. */
+.cta { margin-top: 18px; }
+@media (min-width: 760px) { .panel-body, .page-leaving { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); } }
 /* Typing an address on a phone: the sheet is fully open with the box at its top (room to scroll it there, no button in the way). */
 .panel.typing .panel-content { padding-bottom: 900px; }
-.panel.typing .panel-foot { display: none; }
+.panel.typing .cta { display: none; }
 
 /* results */
 .result-head { display: flex; align-items: center; gap: 14px; margin: 4px 4px 22px; }

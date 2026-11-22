@@ -740,18 +740,13 @@ function bringIntoSight(latlngs, signal) {
 
 function sheetSizes() {
   const H = $('#screen-main').clientHeight;
-  const panel = $('#panel'), body = $('#panel-body');
-  const inner = $('.panel-content', body);
-  const foot = $('#panel-foot');
-  // Below what scrolls: the foot (Let's meet) and the room kept for a phone's home bar.
-  const below = (foot.hidden ? 0 : foot.offsetHeight) + (parseFloat(getComputedStyle(panel).paddingBottom) || 0);
+  const inner = $('#panel-body .panel-content');
+  // (and the room kept below what scrolls for a phone's home bar)
+  const below = parseFloat(getComputedStyle($('#panel')).paddingBottom) || 0;
   const content = 26 + (inner ? inner.offsetHeight : 200) + 22 + below;
   const full = Math.min(content, H - 72);
   const mid = Math.min(Math.round(H * 0.48), full);
-  // At its smallest: down to the page's heading, and the foot below it.
-  const title = inner && $('.sheet-title', inner);
-  const head = title ? title.getBoundingClientRect().bottom - body.getBoundingClientRect().top + body.scrollTop + 8 : 0;
-  const peek = Math.min(Math.max(132, below ? head + below : 0), mid);
+  const peek = Math.min(132, mid);
   return { peek, mid, full, max: H - 72 };
 }
 
@@ -1114,7 +1109,6 @@ function render({ keepScroll = false } = {}) {
     afterRender[state.view]?.();
     body.scrollTop = keepScroll ? scroll : 0;
     if (tabsScroll && $('.pills', body)) $('.pills', body).scrollLeft = tabsScroll;
-    setFoot(FEET[state.view]?.() || '', { animate: !!from });
     placeThumbs(body, was);
     if (isMobile() && sheet.snap) setSheet(sheet.snap);
     if (leaving) turnPage(leaving, PAGE_ORDER.indexOf(state.view) < PAGE_ORDER.indexOf(from));
@@ -1293,28 +1287,10 @@ function renderPeople() {
     <ul class="group icons people">${rows}</ul>
     ${addBox()}
     <p class="footnote" style="margin:0 6px">Or tap the map to drop a pin. Drag any pin to move it.</p>
-    ${leaveRow()}`;
-}
-
-/** What stays at the foot of the sheet, below what scrolls: on the people page, Let's meet. */
-const FEET = {
-  people: () => `<button class="btn btn-primary btn-block btn-lg" data-action="find" ${activePeople().length < 2 ? 'disabled' : ''}>Let’s meet</button>`,
-};
-function setFoot(html, { animate = true } = {}) {
-  const foot = $('#panel-foot');
-  $('#panel').classList.toggle('has-foot', !!html);
-  if (!html) {
-    if (animate) leave(foot, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(14px)' }], { duration: 200, hide: true });
-    else { stay(foot); foot.hidden = true; }
-    return;
-  }
-  const appearing = foot.hidden;
-  stay(foot);
-  foot.innerHTML = html;
-  foot.hidden = false;
-  if (appearing && animate && !reducedMotion()) {
-    foot.animate([{ opacity: 0, transform: 'translateY(16px)' }, { opacity: 1, transform: 'none' }], { duration: 360, easing: 'cubic-bezier(0.2, 0.9, 0.3, 1)' });
-  }
+    ${leaveRow()}
+    <div class="cta">
+      <button class="btn btn-primary btn-block btn-lg" data-action="find" ${active < 2 ? 'disabled' : ''}>Let’s meet</button>
+    </div>`;
 }
 
 /**
@@ -1794,6 +1770,36 @@ async function deletePlace(id) {
     render();
     toast(err.message, { error: true });
   }
+}
+
+/**
+ * Someone in or left out, from the switch beside them. The switch slides by
+ * itself (it isn't drawn again, which would stop it where it is); the rest of
+ * the page follows where it is: their row, the count, Let's meet, the map.
+ */
+async function setIncluded(id, on) {
+  const p = state.places.find((x) => x.id === id);
+  if (!p) return;
+  p.active = on;
+  showIncluded();
+  try { await api.updatePlace(id, { active: on }); }
+  catch (err) { p.active = !on; render({ keepScroll: true }); toast(err.message, { error: true }); }
+}
+function showIncluded() {
+  if (state.view !== 'people') { render({ keepScroll: true }); return; }
+  const all = everyone();
+  for (const li of $$('#panel-body .person')) {
+    const p = all.find((x) => x.id === li.dataset.id);
+    if (!p) continue;
+    li.classList.toggle('inactive', !p.active);
+    const sw = $('label.switch', li);
+    if (sw) sw.title = p.active ? 'Included' : 'Left out';
+  }
+  const badge = $('#panel-body .sheet-title .badge');
+  if (badge) badge.textContent = `${all.filter((p) => p.active).length} of ${all.length}`;
+  const find = $('[data-action=find]');
+  if (find) find.disabled = activePeople().length < 2;
+  drawPeople();
 }
 
 async function patchPlace(id, patch) {
@@ -3225,7 +3231,7 @@ function initPanel() {
       case 'edit-cancel': state.edit = null; render({ keepScroll: true }); break;
       case 'heart-person': toggleSavedPerson(id); break;
       case 'delete': deletePlace(id); break;
-      case 'toggle': patchPlace(id, { active: el.checked }); break;
+      case 'toggle': setIncluded(id, el.checked); break;
       case 'tab': s.tab = el.dataset.tab; render(); break;
       case 'group': s.markersKey = null; s.group = el.dataset.group; s.sort = s.sort || 'near'; setView('group'); break;
       case 'replay': findPlaces({ replay: true }); break;
@@ -3298,7 +3304,6 @@ function initPanel() {
   };
   body.addEventListener('click', doubleTap, true); // (before anything the second tap of a double-tap lands on)
   body.addEventListener('click', onPanelClick);
-  $('#panel-foot').addEventListener('click', onPanelClick); // (Let's meet, at the foot of the sheet)
   // Pictures fade in once loaded; broken ones disappear.
   body.addEventListener('load', (e) => { if (e.target.tagName === 'IMG') e.target.classList.add('in'); }, true);
   body.addEventListener('error', (e) => { if (e.target.tagName === 'IMG') e.target.classList.add('broken'); }, true);
