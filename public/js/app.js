@@ -365,14 +365,15 @@ function onUser(user) {
 
 // ---------------------------------------------------------------- start screen (your address)
 
-function showHomeScreen(cancellable) {
+function showHomeScreen(cancellable, { focus = true } = {}) {
   showScreen('screen-home');
   $('#home-cancel').hidden = !cancellable;
   homeSearchCtl.clear();
   $('#screen-home').classList.remove('typing');
   // With a keyboard and mouse the cursor goes straight into the box. On a touch
   // screen it waits for a tap (the on-screen keyboard would cover half the page unasked).
-  if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) setTimeout(() => homeSearchCtl.input.focus(), 50);
+  // (Not when just going back there with the wordmark: the saved addresses it opens would cover Cancel.)
+  if (focus && window.matchMedia('(hover: hover) and (pointer: fine)').matches) setTimeout(() => homeSearchCtl.input.focus(), 50);
 }
 
 async function saveHome(loc) {
@@ -820,7 +821,7 @@ function setSheet(snap) {
  * finger holds it ({ top, h, peek }: its top, from the top of the screen, how
  * much of it shows and how much at its smallest); otherwise where it is going.
  */
-const GO = { size: 54, gap: 12, fade: 64 };
+const GO = { size: 60, gap: 12, fade: 64 };
 const SHEET_FLOAT = 8; // (how far the sheet floats above the bottom of the screen: .panel's bottom in styles.css)
 function placeGo(at = null) {
   const btn = $('#btn-go');
@@ -3507,6 +3508,11 @@ function initPanel() {
   });
   $('#btn-skip').onclick = () => anim?.skip();
   $('#btn-cancel-search').onclick = cancelSearch;
+  // The wordmark: back to the start page (its Cancel comes back to the map as it was).
+  $('#btn-home').onclick = () => {
+    document.activeElement?.blur();
+    showHomeScreen(true, { focus: false });
+  };
   $('#btn-recenter').onclick = () => {
     const pts = viewPoints();
     if (pts.length < 2) map.flyTo(pts[0] || [state.user.home.lat, state.user.home.lon], 15, { duration: 0.6 });

@@ -553,6 +553,13 @@ try {
 
   // On a computer there's no play button above the panel (the panel is always open beside the map).
   assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('#btn-go')).display), 'none', 'no play button on a computer');
+  // The wordmark at the top goes back to the start page; Cancel there comes back to the map as it was (the results still there).
+  await page.click('#btn-home');
+  await page.waitForSelector('#screen-home:not([hidden])');
+  assert.ok(await page.isVisible('#home-cancel'), 'Cancel on the start page');
+  await page.click('#home-cancel');
+  await page.waitForSelector('#screen-home', { state: 'hidden' });
+  await page.waitForSelector('#screen-main:not([hidden]) .panel .pills');
 
   // Mobile layout check
   await page.setViewportSize({ width: 390, height: 844 });

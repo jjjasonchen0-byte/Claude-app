@@ -146,7 +146,7 @@ input, textarea { font: inherit; letter-spacing: inherit; color: inherit; }
 .go-btn {
   --go-ease: cubic-bezier(0.2, 0.9, 0.3, 1); --go-spring: cubic-bezier(0.3, 1.6, 0.5, 1);
   position: absolute; top: 0; right: max(14px, env(safe-area-inset-right, 0px)); z-index: 1001; display: none;
-  width: 54px; height: 54px; padding: 0; border: 0; border-radius: 50%; place-items: center; color: var(--accent);
+  width: 60px; height: 60px; padding: 0; border: 0; border-radius: 50%; place-items: center; color: var(--accent);
   background:
     radial-gradient(120% 75% at 50% -8%, var(--go-light), transparent 58%),
     radial-gradient(closest-side, transparent 70%, var(--go-rim) 100%),
@@ -169,7 +169,8 @@ input, textarea { font: inherit; letter-spacing: inherit; color: inherit; }
   content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity 0.35s;
   background: radial-gradient(circle at var(--px, 50%) var(--py, 50%), var(--go-glow), transparent 62%);
 }
-.go-btn svg { position: relative; z-index: 1; margin-left: 2px; filter: drop-shadow(0 1px 1.5px var(--go-icon-shadow)); transition: opacity 0.2s; }
+/* (the triangle centred in it: its box just right of centre, so it looks centred) */
+.go-btn svg { position: relative; z-index: 1; filter: drop-shadow(0 1px 1.5px var(--go-icon-shadow)); transition: opacity 0.2s; }
 .go-btn:active:not(:disabled) {
   scale: 1.1; /* (and slightly grey, as every button: see --press) */
   transition: translate 0.32s var(--go-ease), transform 0.32s var(--go-ease), opacity 0.26s, scale 0.2s var(--go-spring), filter 0.12s;
@@ -304,10 +305,13 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
   padding: calc(12px + env(safe-area-inset-top, 0px)) max(14px, env(safe-area-inset-right, 0px)) 12px max(14px, env(safe-area-inset-left, 0px));
 }
 .topbar > * { pointer-events: auto; }
+/* (a button: back to the start page) */
 .topbar .wordmark {
-  position: relative; height: 46px; padding: 0 20px; border-radius: 999px; align-items: center; box-shadow: var(--glass-rim), var(--shadow-2);
+  position: relative; height: 46px; padding: 0 20px; border: 0; border-radius: 999px; align-items: center; color: var(--text); box-shadow: var(--glass-rim), var(--shadow-2);
   background: var(--glass-sheen), var(--material-strong); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  transition: transform 0.2s cubic-bezier(0.3, 1.6, 0.5, 1);
 }
+.topbar .wordmark:active { transform: scale(0.94); }
 .topbar-actions { display: flex; gap: 10px; }
 
 .panel {
