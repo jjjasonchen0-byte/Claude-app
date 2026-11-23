@@ -362,7 +362,7 @@ export async function findMeetingPoint(people, { rule = 'similar', travelTimes, 
     add(await evaluate(people, grid(fine, ROUND), { travelTimes, signal, down }));
     cellLat *= 2 / (ROUND - 1); cellLon *= 2 / (ROUND - 1);
   }
-  if (!all.some((r) => Number.isFinite(r.score))) throw new Error('No spot can be reached by everyone');
+  if (!all.some((r) => Number.isFinite(r.score))) throw new Error('No spot everyone can reach. Change someone’s way of travelling, or move their pin.');
 
   // The best few spots, at least 250 m apart.
   const ranked = all.filter((r) => Number.isFinite(r.score)).sort((a, b) => a.score - b.score);

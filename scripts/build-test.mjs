@@ -34,7 +34,7 @@ app = app.replace(/\/\/ basemap:start[\s\S]*?\/\/ basemap:end\n/, 'function addB
 if (app.includes('basemaps.cartocdn.com')) throw new Error('build-test: base map not replaced');
 // (That this is the test version is said in the menu, beside where the version goes; the map keeps only its credits.)
 // Calendar files can't be saved from inside the test page.
-app = replaceOnce(app, '      <button class="btn btn-tinted" data-action="calendar">Calendar</button>\n', '', 'calendar button');
+app = replaceOnce(app, '      <button class="btn btn-tinted" data-action="calendar">Add to calendar</button>\n', '', 'calendar button');
 // The test version has no timetables, so start on walking directions.
 app = replaceOnce(app, "const DEFAULT_SETTINGS = { mode: 'similar', travel: 'transit',", "const DEFAULT_SETTINGS = { mode: 'similar', travel: 'walk',", 'default travel mode');
 // Directions come from the streets built into the page, not the real routing services.
@@ -55,9 +55,9 @@ if (body.split('href="/privacy"').length !== 3) throw new Error('build-test: exp
 body = body.replaceAll('href="/privacy" target="_blank" rel="noopener"', 'href="/privacy"')
   .replaceAll('href="/privacy"', `href="${SITE}/privacy" target="_blank" rel="noopener"`);
 // A sample group of friends, to try it in one tap.
-body = replaceOnce(body, '      <button class="btn btn-plain" type="button" id="home-cancel" hidden>Cancel</button>',
+body = replaceOnce(body, '      <button class="btn btn-plain" type="button" id="home-cancel" hidden>Back to map</button>',
   `      <button class="btn btn-plain" type="button" id="demo-sample">Try a sample group</button>
-      <button class="btn btn-plain" type="button" id="home-cancel" hidden>Cancel</button>`, 'sample group');
+      <button class="btn btn-plain" type="button" id="home-cancel" hidden>Back to map</button>`, 'sample group');
 
 // ---- styles
 const tokens = (t) => Object.entries(t).map(([k, v]) => `--map-${k}: ${v};`).join(' ');

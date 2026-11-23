@@ -89,10 +89,10 @@ export async function reverseGeocode(lat, lon, { signal } = {}) {
 /** Browser geolocation as a promise. */
 export function currentPosition() {
   return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) return reject(new Error('Location is not available in this browser'));
+    if (!navigator.geolocation) return reject(new Error('This browser can’t share your location. Type your address instead.'));
     navigator.geolocation.getCurrentPosition(
       (p) => resolve({ lat: p.coords.latitude, lon: p.coords.longitude }),
-      (e) => reject(new Error(e.code === 1 ? 'Location permission was denied' : 'Could not get your location')),
+      (e) => reject(new Error(e.code === 1 ? 'Location is blocked for Meet. Allow it in your browser’s settings, or type your address.' : 'Couldn’t find your location. Try again, or type your address.')),
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
     );
   });

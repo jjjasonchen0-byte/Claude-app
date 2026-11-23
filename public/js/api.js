@@ -73,7 +73,7 @@ export const api = {
   async updatePlace(id, patch) {
     const d = load();
     const place = d.places.find((x) => x.id === id);
-    if (!place) throw Object.assign(new Error('Address not found'), { status: 404 });
+    if (!place) throw Object.assign(new Error('Address not found. Add the suburb or postcode, then try again.'), { status: 404 });
     if ('address' in patch || 'lat' in patch || 'lon' in patch) Object.assign(place, clean({ ...place, ...patch }));
     if ('nickname' in patch) place.nickname = String(patch.nickname || '').trim().slice(0, 60);
     if ('active' in patch) place.active = !!patch.active;

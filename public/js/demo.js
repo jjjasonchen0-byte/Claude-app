@@ -336,7 +336,7 @@ export async function currentPosition() {
 // Directions in the test version: real shortest routes over Sydney's streets
 // for walking, cycling and driving. There are no timetables, so no public transport.
 const SPEED = { walk: 1.35, bike: 4.2, drive: 8.5 }; // m/s
-const noTimetables = () => Object.assign(new Error('No timetables in the test version'), { status: 404, friendly: true });
+const noTimetables = () => Object.assign(new Error('No timetables in the test version. Walk, bike or drive instead.'), { status: 404, friendly: true });
 
 // Shortest-path trees are kept for the last few starting corners: a search
 // asks for several routes from the same people to the same meeting point.

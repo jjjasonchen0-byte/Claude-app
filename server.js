@@ -171,7 +171,7 @@ export function clientOf(req) {
 function rateLimit(req, max = VISITOR_LIMIT, windowMs = RATE_WINDOW_MS) {
   const now = Date.now();
   if (now - everyone.start > windowMs) { everyone.start = now; everyone.n = 0; }
-  if (++everyone.n > TOTAL_LIMIT) throw new HttpError(429, 'Meet is very busy right now. Try again in a few minutes.');
+  if (++everyone.n > TOTAL_LIMIT) throw new HttpError(429, 'Meet is busy. Try again in a few minutes.');
   const who = clientOf(req);
   const v = visitors.get(who);
   if (!v || now - v.start > windowMs) {
@@ -180,7 +180,7 @@ function rateLimit(req, max = VISITOR_LIMIT, windowMs = RATE_WINDOW_MS) {
     visitors.set(who, { start: now, n: 1 });
     return;
   }
-  if (++v.n > max) throw new HttpError(429, 'Too many requests — try again in a few minutes');
+  if (++v.n > max) throw new HttpError(429, 'Too many requests. Try again in a few minutes.');
 }
 
 /** GET JSON (20 seconds at most). → { res, data } */
@@ -195,7 +195,7 @@ async function fetchJson(url) {
 function spendTransit() {
   const today = new Date().toISOString().slice(0, 10);
   if (today !== transitDay) { transitDay = today; transitCount = 0; }
-  if (transitCount >= TRANSIT_DAILY_LIMIT) throw new HttpError(429, 'Public transport directions are paused until tomorrow (daily limit reached)');
+  if (transitCount >= TRANSIT_DAILY_LIMIT) throw new HttpError(429, 'Public transport directions are paused until tomorrow. Walk, bike or drive for now.');
   transitCount++;
 }
 
@@ -211,7 +211,7 @@ let routingFreeAt = 0;
 function routingTurn() {
   const now = Date.now();
   const at = Math.max(now, routingFreeAt);
-  if (at - now > ROUTING_MAX_WAIT_MS) throw new HttpError(503, 'Directions are busy right now. Try again in a moment.');
+  if (at - now > ROUTING_MAX_WAIT_MS) throw new HttpError(503, 'Directions are busy. Try again in a moment.');
   routingFreeAt = at + ROUTING_GAP_MS;
   return new Promise((resolve) => setTimeout(resolve, at - now));
 }
@@ -239,15 +239,15 @@ async function ask(url, ttlMs, { transit = false } = {}) {
     try {
       ({ res, data } = await fetchJson(url));
     } catch {
-      throw new HttpError(502, 'The directions service could not be reached');
+      throw new HttpError(502, 'Couldn’t reach the directions service. Try again in a moment.');
     }
     // Refused for asking too fast all the same (others share this server's address): once more, after a pause.
     if (res.status === 429 && !transit && attempt === 0) { routingFreeAt = Math.max(routingFreeAt, Date.now() + 2 * ROUTING_GAP_MS); continue; }
     break;
   }
-  if (!res.ok && !data) throw new HttpError(502, `The directions service answered ${res.status}`);
+  if (!res.ok && !data) throw new HttpError(502, `Directions failed (error ${res.status}). Try again in a moment.`);
   // A busy or failing service is not an answer: nothing is kept, so the next try asks again.
-  if (res.status === 429 || res.status >= 500) throw new HttpError(502, 'The directions service is busy right now. Try again in a moment.');
+  if (res.status === 429 || res.status >= 500) throw new HttpError(502, 'Directions are busy. Try again in a moment.');
   if (upstreamCache.size > 800) upstreamCache.delete(upstreamCache.keys().next().value);
   // "No route between these points" is an answer (sent as an error status): kept, but only for a while.
   upstreamCache.set(url, { at: Date.now(), ttl: res.ok ? ttlMs : Math.min(ttlMs, 10 * 60 * 1000), data });
@@ -361,7 +361,7 @@ route('GET', '/api/transit/reach', async (req, res) => {
     if (!r.ok || !json) throw new Error(`status ${r.status}`);
     data = reduceReach(json, box);
   } catch {
-    throw new HttpError(502, 'Public transport times could not be loaded');
+    throw new HttpError(502, 'Public transport times didn’t load. Try again in a moment.');
   }
   if (reachCache.size > 100) reachCache.delete(reachCache.keys().next().value);
   reachCache.set(key, { at: Date.now(), data });
@@ -383,7 +383,7 @@ route('GET', '/api/checktimes', async (req, res) => {
   try {
     send(res, 200, await google.matrix(mode, sources, destinations, { time: q.get('time') }), { 'Cache-Control': 'private, max-age=300' });
   } catch (err) {
-    throw new HttpError(err.limit ? 429 : err.status || 502, err.limit ? 'Travel time checks are paused until tomorrow' : 'Travel times unavailable');
+    throw new HttpError(err.limit ? 429 : err.status || 502, err.limit ? 'Travel time checks are paused until tomorrow' : 'Travel times didn’t load. Try again in a moment.');
   }
 });
 
@@ -646,7 +646,7 @@ export const server = http.createServer((req, res) => {
     const status = err.status || 500;
     if (status === 500) console.error(err);
     if (res.headersSent) { res.destroy(); return; }
-    send(res, status, { error: status === 500 ? 'Something went wrong' : err.message });
+    send(res, status, { error: status === 500 ? 'Something went wrong on our side. Try again.' : err.message });
   });
 });
 

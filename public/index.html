@@ -27,7 +27,7 @@
         </button>
         <ul class="suggestions" role="listbox" hidden></ul>
       </div>
-      <button class="btn btn-plain" type="button" id="home-cancel" hidden>Cancel</button>
+      <button class="btn btn-plain" type="button" id="home-cancel" hidden>Back to map</button>
     </div>
     <p class="home-legal">Your addresses stay on this device. <a href="/privacy">Privacy &amp; Terms</a></p>
   </section>
@@ -65,8 +65,8 @@
     <div class="status-chip" id="search-status" hidden>
       <span class="spinner" aria-hidden="true"></span>
       <span class="status-text">Finding routes…</span>
-      <button class="chip-btn" id="btn-skip" hidden>Skip</button>
-      <button class="chip-btn" id="btn-cancel-search">Cancel</button>
+      <button class="chip-btn" id="btn-skip" aria-label="Skip animation" hidden>Skip</button>
+      <button class="chip-btn" id="btn-cancel-search" aria-label="Stop search">Stop</button>
     </div>
 
     <aside class="panel" id="panel" aria-live="polite">
@@ -96,7 +96,7 @@
     <div class="drawer-section">
       <h3>Starting point</h3>
       <div id="drawer-home"></div>
-      <button class="btn btn-plain" id="btn-edit-home">Change</button>
+      <button class="btn btn-plain" id="btn-edit-home">Change address</button>
     </div>
     <div class="drawer-section">
       <h3>Default way to travel</h3>

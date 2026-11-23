@@ -132,7 +132,7 @@ let warnedUnsaved = false;
 function warnIfUnsaved() {
   if (warnedUnsaved || api.saved()) return;
   warnedUnsaved = true;
-  toast('This browser isn’t letting Meet save. What you add will be forgotten when you close the page.', { ms: 7000 });
+  toast('Can’t save in this browser. Turn off private browsing to keep your list.', { ms: 7000 });
 }
 
 function showScreen(id) {
@@ -238,6 +238,8 @@ function attachSearch(root, { near, onPick, saved = null, onUnsave = null }) {
   let sel = -1;
   let timer;
   let ctrl;
+  let failed = false; // (the last lookup didn't get through)
+  const looking = (on) => root.classList.toggle('searching', on);
   /** Saved addresses with these words in their name or address, as suggestions. */
   const savedFor = (q, max) => {
     const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -279,7 +281,7 @@ function attachSearch(root, { near, onPick, saved = null, onUnsave = null }) {
   };
   const close = () => { list.hidden = true; sel = -1; if (fitSuggestions === fit) fitSuggestions = null; };
   // A lookup still on its way is dropped when something newer happens (typing on, picking, clearing).
-  const stop = () => { clearTimeout(timer); ctrl?.abort(); ctrl = null; };
+  const stop = () => { clearTimeout(timer); ctrl?.abort(); ctrl = null; looking(false); };
   const render = () => {
     list.innerHTML = items.length
       ? items.map((r, i) => `<li role="option" data-i="${i}" aria-selected="${i === sel}"${r.saved ? ' class="saved"' : ''}>
@@ -287,7 +289,8 @@ function attachSearch(root, { near, onPick, saved = null, onUnsave = null }) {
           <div class="s-text"><div class="s-title">${esc(r.title)}</div><div class="s-sub">${esc(r.subtitle)}</div></div>
           ${r.saved && onUnsave ? `<button type="button" class="s-forget" data-forget="${esc(r.id)}" aria-label="Forget ${esc(r.title)}" title="Forget this address">${glyph('close', 11, 2.6)}</button>` : ''}
         </li>`).join('')
-      : '<li class="s-empty">No matches. Try adding a town or postcode.</li>';
+      : failed ? '<li class="s-empty failed">Address search didn’t load. Check your connection, then type again.</li>'
+        : '<li class="s-empty">No matches. Try adding a town or postcode.</li>';
     list.hidden = false;
     fitSuggestions = fit;
     fit();
@@ -309,16 +312,20 @@ function attachSearch(root, { near, onPick, saved = null, onUnsave = null }) {
     items = savedFor(q, 3);
     sel = items.length ? 0 : -1;
     if (items.length && document.activeElement === input) render(); else close();
+    looking(true);
     timer = setTimeout(async () => {
       const mine = ctrl = new AbortController();
       try {
         const found = await searchAddress(q, { near: near?.(), signal: mine.signal });
         if (mine.signal.aborted) return;
+        failed = false;
         items = [...savedFor(q, 3), ...found];
         sel = items.length ? 0 : -1;
         if (document.activeElement === input) render();
       } catch (err) {
-        if (!mine.signal.aborted) { items = savedFor(q, 3); if (document.activeElement === input) render(); }
+        if (!mine.signal.aborted) { failed = true; items = savedFor(q, 3); if (document.activeElement === input) render(); }
+      } finally {
+        if (ctrl === mine) { ctrl = null; looking(false); }
       }
     }, 300);
   });
@@ -790,10 +797,12 @@ function sheetSizes() {
   const inner = $('#panel-body .panel-content');
   // (and the room kept below what scrolls for a phone's home bar)
   const below = parseFloat(getComputedStyle($('#panel')).paddingBottom) || 0;
-  const content = 26 + (inner ? inner.offsetHeight : 200) + 22 + below;
+  const pad = getComputedStyle($('#panel-body'));
+  // (its content from just under the pull tab to its own padding at the foot)
+  const content = parseFloat(pad.paddingTop) - 4 + (inner ? inner.offsetHeight : 200) + parseFloat(pad.paddingBottom) + 2 + below;
   const full = Math.min(content, H - 72);
   const mid = Math.min(Math.round(H * 0.48), full);
-  const peek = Math.min(132, mid);
+  const peek = Math.min(136, mid);
   return { peek, mid, full, max: H - 72 };
 }
 
@@ -867,7 +876,7 @@ function typingBoxToTop() {
   if (!box || !$('#panel').classList.contains('typing')) return;
   // Just below the pull tab (what scrolls goes on up under it).
   const under = $('#panel-handle')?.offsetHeight || 0;
-  const target = body.scrollTop + box.getBoundingClientRect().top - body.getBoundingClientRect().top - under - 6;
+  const target = body.scrollTop + box.getBoundingClientRect().top - body.getBoundingClientRect().top - under - 8;
   // Room below what's there for the box to come up so far, and no more (nothing to scroll down into):
   // for the sheet's height now or the one it is easing to (opening, or a keyboard coming up), whichever
   // is taller, so the box stays put meanwhile; once it is there, again for that height alone.
@@ -1455,7 +1464,7 @@ function renderPeople() {
     <div class="sheet-title"><h2>Who's meeting</h2><span class="badge">${active} of ${all.length}</span></div>
     <ul class="group icons people">${rows}</ul>
     ${addBox()}
-    <p class="footnote" style="margin:0 6px">Or tap the map to drop a pin. Drag any pin to move it.</p>
+    <p class="footnote" style="margin:0 8px">Or tap the map to drop a pin. Drag any pin to move it.</p>
     ${leaveRow()}
     <div class="cta">
       <button class="btn btn-primary btn-block btn-lg" data-action="find" ${active < 2 ? 'disabled' : ''}>Let’s meet</button>
@@ -1655,7 +1664,7 @@ function addBox() {
       </div>
       <div class="add-row">
         <input id="add-nick" maxlength="60" placeholder="Their name (optional)" aria-label="Their name" autocomplete="off" enterkeyhint="done" value="${esc(d.nick || '')}">
-        <button class="btn btn-primary" type="button" data-action="add-person">Add</button>
+        <button class="btn btn-primary" type="button" data-action="add-person">Add person</button>
       </div>
     </div>`;
 }
@@ -1913,7 +1922,7 @@ async function addPlace(loc) {
     render();
     // (From Saved while a meeting point is on show: it was picked without them.)
     const shown = state.search && ['results', 'group', 'place'].includes(state.view);
-    toast(`Added ${place.nickname || shortAddr(place.address)}`, shown ? { action: 'Find again', onAction: () => findPlaces(), ms: 6000 } : {});
+    toast(`Added ${place.nickname || shortAddr(place.address)}`, shown ? { action: 'Find new spot', onAction: () => findPlaces(), ms: 6000 } : {});
     warnIfUnsaved();
     fitTo(activePeople().map((p) => [p.lat, p.lon]), { maxZoom: 15 });
   } catch (err) { toast(err.message, { error: true }); }
@@ -2345,7 +2354,7 @@ function applyMode(id, mode) {
 
 function afterModeChange() {
   if (state.search && ['results', 'group', 'place'].includes(state.view)) {
-    toast('The meeting point was picked for the old ways of travelling', { action: 'Update it', onAction: () => findPlaces(), ms: 6000 });
+    toast('Ways of travelling changed', { action: 'Find new spot', onAction: () => findPlaces(), ms: 6000 });
   }
 }
 
@@ -2461,16 +2470,16 @@ function renderResults() {
     <ul class="group icons">${s.people.map((p, i) => tripRow(p, s.routes?.[i]?.distance ?? s.meeting.dists[i], s.meetTimes?.values[i], s.meetTimes?.approx?.[i])).join('')}
       <li><button class="cell cell-btn" data-action="edit-people">${tile('pencil')}<span class="cell-main cell-title">Edit people</span>${CHEV}</button></li></ul>
     ${s.leaveAt ? `<p class="footnote times-note">Times for leaving at ${esc(fmtLeave(s.leaveAt))}.</p>` : ''}
-    ${s.meeting.approx ? '<p class="notice">Travel times could not be checked right now, so this spot is estimated from distance.</p>' : ''}
+    ${s.meeting.approx ? '<p class="notice">Travel times didn’t load, so this spot is based on distance. Replay the search to check it.</p>' : ''}
     <div class="meet-actions">
-      ${s.people.some((p) => p.isHome) ? `<button class="btn btn-tinted" data-action="your-route">${glyph('route', 17)}<span>Your route</span></button>` : ''}
-      <button class="btn btn-primary" data-action="send-meet">${glyph('send', 16)}<span>Send</span></button>
+      ${s.people.some((p) => p.isHome) ? `<button class="btn btn-tinted" data-action="your-route">${glyph('route', 17)}<span>Show route</span></button>` : ''}
+      <button class="btn btn-primary" data-action="send-meet">${glyph('send', 16)}<span>Send invite</span></button>
     </div>
     <div class="pills" data-seg="tabs" role="tablist">${tabs}</div>
     ${list}
     ${radiusRow(s, total)}
     <div class="actions">
-      <button class="btn btn-tinted" data-action="replay">Replay</button>
+      <button class="btn btn-tinted" data-action="replay">Replay search</button>
     </div>`;
 }
 
@@ -2904,8 +2913,8 @@ function renderPlace() {
       : `<div class="hero-art" style="--c:${TAB_COLOR[p.tab] || '#007aff'}">${glyph(placeGlyph(p), 40, 1.6)}</div>`;
   const meta = [p.id === 'meet' ? 'Meeting point' : p.group, PRICE[r?.priceLevel], p.id === 'meet' ? '' : `${fmtDist(p.fromCenter)} from the meeting point`].filter(Boolean);
   const quick = [
-    `<button class="q primary" data-action="choose">${glyph('send', 19)}<span>Send</span></button>`,
-    `<button class="q" data-action="jump" data-to="getting-there">${glyph('route', 19)}<span>Directions</span></button>`,
+    `<button class="q primary" data-action="choose">${glyph('send', 19)}<span>Send invite</span></button>`,
+    `<button class="q" data-action="jump" data-to="getting-there">${glyph('route', 19)}<span>Get directions</span></button>`,
     phone ? `<a class="q" href="tel:${esc(phone.replace(/[^\d+]/g, ''))}">${glyph('phone', 19)}<span>Call</span></a>` : '',
     site ? `<a class="q" href="${esc(site)}" target="_blank" rel="noopener">${glyph('globe', 19)}<span>Website</span></a>` : '',
     menu ? `<a class="q" href="${esc(menu)}" target="_blank" rel="noopener">${glyph('menu', 19)}<span>Menu</span></a>` : '',
@@ -3202,8 +3211,8 @@ function loadPlaceDirections() {
 
 function friendlyError(err, mode) {
   if (err.status === 429 || err.friendly) return err.message;
-  if (err.status === 404) return mode === 'transit' ? 'No public transport route found' : 'No route found';
-  return mode === 'transit' ? 'Public transport times unavailable right now' : 'Directions unavailable right now';
+  if (err.status === 404) return mode === 'transit' ? 'No public transport at this time. Try another time, or another way to travel.' : 'No route found. Try another way to travel.';
+  return mode === 'transit' ? 'Public transport times didn’t load. Try again in a minute, or another way to travel.' : 'Directions didn’t load. Check your connection, then try again.';
 }
 
 const currentOption = (r) => r.data.options?.[r.option || 0];
@@ -3332,21 +3341,21 @@ function renderShare() {
   const links = mapLinks(p);
   return `
     ${backBtn('back-share', 'Back')}
-    <div class="eyebrow" style="margin-left:4px">Send location</div>
+    <div class="eyebrow" style="margin-left:4px">Send invite</div>
     <div class="sheet-title" style="margin-top:0"><h2>${esc(p.name)}</h2></div>
     <p class="footnote" style="margin:-8px 4px 14px">${esc(p.address || `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`)}</p>
     <ul class="group share-form">
       <li><div class="cell"><label for="share-when">When</label><input type="datetime-local" id="share-when" value="${esc(state.shareWhen || '')}"></div></li>
       <li><textarea id="share-text" aria-label="Message">${esc(text)}</textarea></li>
     </ul>
-    <button class="btn btn-primary btn-block btn-lg" data-action="native-share">Share…</button>
+    <button class="btn btn-primary btn-block btn-lg" data-action="native-share">Share invite…</button>
     <div class="share-grid">
-      <button class="btn btn-tinted" data-action="copy">Copy</button>
+      <button class="btn btn-tinted" data-action="copy">Copy text</button>
       <a class="btn btn-tinted" href="${esc(msg.whatsapp)}" target="_blank" rel="noopener" data-share="whatsapp">WhatsApp</a>
       <a class="btn btn-tinted" href="${esc(msg.sms)}" data-share="sms">Messages</a>
       <a class="btn btn-tinted" href="${esc(msg.email)}" data-share="email">Email</a>
       <a class="btn btn-tinted" href="${esc(msg.telegram)}" target="_blank" rel="noopener" data-share="telegram">Telegram</a>
-      <button class="btn btn-tinted" data-action="calendar">Calendar</button>
+      <button class="btn btn-tinted" data-action="calendar">Add to calendar</button>
       <a class="btn btn-tinted" href="${esc(links.google)}" target="_blank" rel="noopener">Google Maps</a>
       <a class="btn btn-tinted" href="${esc(links.apple)}" target="_blank" rel="noopener">Apple Maps</a>
     </div>`;
@@ -3469,8 +3478,12 @@ function initPanel() {
         setView('people');
         break;
       case 'native-share': {
-        const ok = await nativeShare(shareContext(), state.shareText);
-        if (!ok && await copyText(state.shareText)) toast('Copied. Paste it into your group chat.');
+        // (busy until the share sheet is done: pressed again meanwhile, it would fail)
+        el.setAttribute('aria-busy', 'true');
+        try {
+          const ok = await nativeShare(shareContext(), state.shareText);
+          if (!ok && await copyText(state.shareText)) toast('Copied. Paste it into your group chat.');
+        } finally { el.removeAttribute('aria-busy'); }
         break;
       }
       case 'copy': if (await copyText(state.shareText)) toast('Copied'); break;
