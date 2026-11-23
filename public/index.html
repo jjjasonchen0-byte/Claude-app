@@ -71,7 +71,10 @@
 
     <aside class="panel" id="panel" aria-live="polite">
       <div class="panel-handle" id="panel-handle" role="button" tabindex="0" aria-label="Drag or tap to resize"><span></span></div>
-      <div class="panel-body" id="panel-body"></div>
+      <!-- (the soft fade at its foot, in a layer that stays put while the sheet moves; what's in it moves with the sheet: see sheetAt in app.js) -->
+      <div class="panel-fade" id="panel-fade"><div class="panel-ride" id="panel-ride">
+        <div class="panel-body" id="panel-body"></div>
+      </div></div>
     </aside>
 
     <!-- Let's meet, above the sheet while it is pulled all the way down (see placeGo in app.js). -->

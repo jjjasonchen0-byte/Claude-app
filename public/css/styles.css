@@ -315,6 +315,12 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
   background: var(--glass-sheen), var(--material); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
 }
 .panel-body { overflow-x: hidden; overflow-y: auto; padding: 20px; flex: 1; min-height: 0; overscroll-behavior: contain; }
+/* What scrolls fades out softly at the panel's foot (see sheetAt in app.js). */
+.panel-fade, .panel-ride { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.panel-fade {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent);
+}
 .panel-handle { display: none; }
 /* Out of the way while the search runs: it slides away gradually (and back up once there are results). */
 .panel.away { pointer-events: none; }
@@ -352,11 +358,17 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
   }
   .panel-handle span { width: 38px; height: 5px; border-radius: 3px; background: var(--text-3); }
   .panel-handle:active { cursor: grabbing; }
-  /* (and fades as it goes, so the pull tab stays clear) */
-  .panel-body, .page-leaving {
-    -webkit-mask-image: linear-gradient(to bottom, transparent 2px, #000 24px, #000 calc(var(--fade-at, 100%) - 18px), transparent var(--fade-at, 100%));
-    mask-image: linear-gradient(to bottom, transparent 2px, #000 24px, #000 calc(var(--fade-at, 100%) - 18px), transparent var(--fade-at, 100%));
+  /* (and fades as it goes, so the pull tab stays clear; at the foot, see .panel-fade) */
+  .panel-body {
+    -webkit-mask-image: linear-gradient(to bottom, transparent 2px, #000 24px);
+    mask-image: linear-gradient(to bottom, transparent 2px, #000 24px);
   }
+  .page-leaving {
+    -webkit-mask-image: linear-gradient(to bottom, transparent 2px, #000 24px, #000 calc(100% - 18px), transparent);
+    mask-image: linear-gradient(to bottom, transparent 2px, #000 24px, #000 calc(100% - 18px), transparent);
+  }
+  /* (each in a layer of its own, moved as a whole while the sheet moves) */
+  .panel, .panel-fade, .panel-ride { will-change: transform; }
   .panel-body { padding-top: 30px; }
   .leaflet-control-zoom { display: none; }
   /* The map's credits just above the sheet (see setSheet in app.js); back at the bottom while the sheet is away,
@@ -600,7 +612,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .add-row .btn { flex: none; min-width: 76px; min-height: 44px; }
 /* Let's meet: the last thing in the list. What scrolls fades out softly at the panel's bottom edge. */
 .cta { margin-top: 18px; }
-@media (min-width: 760px) { .panel-body, .page-leaving { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); } }
+@media (min-width: 760px) { .page-leaving { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); } }
 /* Typing an address on a phone: the sheet is fully open with the box at its top (just room enough to scroll it there; see typingBoxToTop), no button in the way. */
 .panel.typing .cta { display: none; }
 

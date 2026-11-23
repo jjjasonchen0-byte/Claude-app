@@ -839,8 +839,8 @@ function placeGo(at = null) {
   btn.style.translate = `0 ${Math.round(top - GO.gap - GO.size)}px`;
   btn.style.transform = `scale(${(0.82 + 0.18 * o).toFixed(3)})`;
   btn.style.opacity = o.toFixed(3);
-  btn.inert = o < 0.5;
-  btn.disabled = activePeople().length < 2;
+  if (btn.inert !== o < 0.5) btn.inert = o < 0.5;
+  if (!at) btn.disabled = activePeople().length < 2; // (not while held: who's in doesn't change then)
 }
 
 /**
@@ -893,16 +893,30 @@ let roomTimer = 0;
  * way nothing in it is laid out or painted again (its glass, sheen and shadow
  * included), only moved. Let go, it settles at a size (see settleSheet).
  */
-const held = { on: false, max: 0, h: 0, pad: 0, frame: 0 };
+const held = { on: false, max: 0, h: 0, frame: 0 };
 /**
- * Where what scrolls fades out at the bottom, measured from the sheet's top:
- * its own foot (null), or, while it is taller than it shows (held, or sliding
- * down to a size), the foot of the part in sight, so the fade stays there.
+ * The sheet moved by `y` (a translateY in px; 0 where it is). What scrolls
+ * fades out softly at the foot of the part in sight, and while the sheet is
+ * taller than it shows (held, or sliding down to a size) that foot stays put
+ * at the bottom of the screen. So the fade is in a layer of its own
+ * (#panel-fade) that stays put while the sheet moves (moved back by as much),
+ * and what's in it (#panel-ride) moves with the sheet: three layers moved,
+ * nothing in them laid out, styled or painted again, however long the list.
  */
-function fadeAt(px) {
-  const body = $('#panel-body');
-  if (px == null) body.style.removeProperty('--fade-at');
-  else body.style.setProperty('--fade-at', `${Math.round(px)}px`);
+function sheetAt(y) {
+  const t = y ? `translateY(${y}px)` : '';
+  $('#panel').style.transform = t;
+  $('#panel-fade').style.transform = y ? `translateY(${-y}px)` : '';
+  $('#panel-ride').style.transform = t;
+}
+/** The same, sliding from `from` to `to` (see settleSheet). */
+function slideSheet(from, to) {
+  const k = (y) => ({ transform: y ? `translateY(${y}px)` : 'none' });
+  return [
+    $('#panel').animate([k(from), k(to)], SETTLE),
+    $('#panel-fade').animate([k(-from), k(-to)], SETTLE),
+    $('#panel-ride').animate([k(from), k(to)], SETTLE),
+  ];
 }
 function holdSheet() {
   const panel = $('#panel');
@@ -910,15 +924,14 @@ function holdSheet() {
   stopSettling();
   const max = sheetSizes().max;
   panel.classList.add('dragging');
-  panel.style.transform = '';
+  sheetAt(0);
   panel.style.height = `${max}px`;
   const foot = panel.getBoundingClientRect().bottom;
   Object.assign(held, {
-    on: true, max, foot, h: Math.round(foot - top), pad: parseFloat(getComputedStyle(panel).paddingBottom) || 0,
+    on: true, max, foot, h: Math.round(foot - top),
     screenTop: $('#screen-main').getBoundingClientRect().top, peek: sheetSizes().peek,
   });
-  panel.style.transform = `translateY(${max - held.h}px)`;
-  fadeAt(held.h - held.pad);
+  sheetAt(max - held.h);
   placeGo({ top: held.foot - held.h - held.screenTop, h: held.h, peek: held.peek });
   return held.h; // how much of it shows
 }
@@ -928,8 +941,7 @@ function moveSheet(h) {
   if (!held.frame) {
     held.frame = requestAnimationFrame(() => {
       held.frame = 0;
-      $('#panel').style.transform = `translateY(${held.max - held.h}px)`;
-      fadeAt(held.h - held.pad);
+      sheetAt(held.max - held.h);
       placeGo({ top: held.foot - held.h - held.screenTop, h: held.h, peek: held.peek });
     });
   }
@@ -951,22 +963,20 @@ function settleSheet(snap) {
   held.on = false;
   const from = panel.getBoundingClientRect().top;
   stopSettling();
-  panel.style.transform = '';
+  sheetAt(0);
   panel.classList.remove('dragging');
-  if (reducedMotion() || !isMobile()) { fadeAt(null); setSheet(snap); return; }
+  if (reducedMotion() || !isMobile()) { setSheet(snap); return; }
   panel.classList.add('settling'); // (its height changes at once; its sides and corners still ease, to and from the screen's edges)
   setSheet(snap);
   const target = sheet.target;
   const d = from - panel.getBoundingClientRect().top;
-  if (Math.abs(d) < 1) { fadeAt(null); panel.classList.remove('settling'); return; }
-  if (d < 0) {
-    panel.style.height = `${target - d}px`; // (taller for now: its foot stays off the screen until it's there)
-    fadeAt(target - (parseFloat(getComputedStyle(panel).paddingBottom) || 0)); // (and the fade where its foot will be)
-  } else fadeAt(null);
-  const a = panel.animate(d > 0 ? [{ transform: `translateY(${d}px)` }, { transform: 'none' }] : [{ transform: 'none' }, { transform: `translateY(${-d}px)` }], SETTLE);
-  settling = { a, target, d };
+  if (Math.abs(d) < 1) { panel.classList.remove('settling'); return; }
+  if (d < 0) panel.style.height = `${target - d}px`; // (taller for now: its foot stays off the screen until it's there)
+  const anims = d > 0 ? slideSheet(d, 0) : slideSheet(0, -d);
+  const a = anims[0];
+  settling = { anims, target, d };
   const done = () => {
-    if (settling?.a !== a) return;
+    if (settling?.anims[0] !== a) return;
     settling = null;
     takeOwnHeight(panel, target);
   };
@@ -975,15 +985,14 @@ function settleSheet(snap) {
 /** Stop a settling sheet where it is supposed to end (a finger has caught it, or it is going away). */
 function stopSettling() {
   if (!settling) return;
-  const { a, target, d } = settling;
+  const { anims, target, d } = settling;
   settling = null;
-  a.cancel();
+  for (const a of anims) a.cancel();
   if (d < 0) takeOwnHeight($('#panel'), target);
   else $('#panel').classList.remove('settling');
 }
 /** Back to its own height (it was taller to slide down), taken at once before its height eases again. */
 function takeOwnHeight(panel, target) {
-  fadeAt(null);
   if (sheet.target === target) {
     panel.style.height = `${target}px`;
     void getComputedStyle(panel).opacity; // (the new height is taken here, while it doesn't ease)
