@@ -23,7 +23,7 @@ const seq: Omit<Shot, 'from'>[] = [
   { id: 'modes', dur: MODES_DUR, component: Modes },
   { id: 'race', dur: GO_DUR, component: Race, blur: GO_BLUR },
   { id: 'tabs', dur: TABS_DUR, component: Tabs },
-  { id: 'glide', dur: GLIDE_DUR, component: Glide, blur: [[0, 30]] },
+  { id: 'glide', dur: GLIDE_DUR, component: Glide }, // (its own speed ghosts carry the motion)
   { id: 'invite', dur: INVITE_DUR, component: Invite },
   { id: 'live', dur: LIVE_DUR, component: Live, live: true },
   { id: 'brand', dur: BRAND_DUR, component: Brand },

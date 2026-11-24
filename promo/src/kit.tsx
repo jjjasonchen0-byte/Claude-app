@@ -68,6 +68,9 @@ export const Camera: React.FC<{ cam: Cam; persp?: number; children: React.ReactN
  * The camera's tilt, for whatever needs to know which way the light falls (the phone's edge, its glass,
  * the hand's shadow).
  */
+/** True while a frame is being drawn several times over for motion blur: costly extras step aside. */
+export const FastCtx = React.createContext(false);
+
 export const CamCtx = React.createContext<Cam>({ x: W / 2, y: H / 2, zoom: 1, rx: 0, ry: 0, rz: 0 });
 
 /** The photographed phone (public/phone/frame.png): body and bezel, the display cut out. */
@@ -115,7 +118,7 @@ export const Phone: React.FC<{ x?: number; y?: number; screenBg?: string; glow?:
   return (
     <div style={{ position: 'absolute', left: x, top: y, width: PHONE_W, height: PHONE_H, ...style }}>
       {/* the soft shadow it throws */}
-      <div style={{ position: 'absolute', left: fx + 30, top: fy + 50, width: FRAME.w - 60, height: FRAME.h - 60, borderRadius: OUTER_R, background: 'rgba(0,0,0,.85)', filter: 'blur(60px)', opacity: 0.9 }} />
+      <Img src={staticFile('phone/shadow.png')} style={{ position: 'absolute', left: fx - 180, top: fy - 180 + 20, width: FRAME.w + 360, height: FRAME.h + 360, opacity: 0.9 }} />
       {glow > 0 && <div style={{ position: 'absolute', left: fx - 40, top: fy - 40, width: FRAME.w + 80, height: FRAME.h + 80, borderRadius: OUTER_R + 40, boxShadow: `0 0 160px rgba(0,122,255,${0.12 * glow})` }} />}
       {/* the edge (aluminium under a dark finish: a bright streak along its middle) */}
       {layers.map((i) => {
@@ -143,7 +146,7 @@ export const Phone: React.FC<{ x?: number; y?: number; screenBg?: string; glow?:
         }} />
         {/* the glass: a softbox's reflection sliding over it, and a faint sheen */}
         <div style={{
-          position: 'absolute', inset: 0, zIndex: 55, pointerEvents: 'none', mixBlendMode: 'screen',
+          position: 'absolute', inset: 0, zIndex: 55, pointerEvents: 'none',
           background: `linear-gradient(118deg, rgba(255,255,255,0) ${lx - 14}%, rgba(255,255,255,.055) ${lx - 4}%, rgba(255,255,255,.085) ${lx}%, rgba(255,255,255,.03) ${lx + 7}%, rgba(255,255,255,0) ${lx + 20}%),
             radial-gradient(120% 60% at ${50 + (cam.ry ?? 0) * 3}% ${ly - 25}%, rgba(255,255,255,.05), rgba(255,255,255,0) 60%)`,
         }} />
@@ -204,11 +207,13 @@ export const Finger: React.FC<FingerProps> = ({ x, y, at, down = at + 7, up = do
     const px = (p ? p.x : x) * K + HAND.axisX * REACH * away;
     const py = (p ? p.y : y) * K + HAND.axisY * REACH * away;
     const lift = Math.min(1, away * 2.2); // height above the glass (it's off within the first part of the reach)
-    const press = g >= down && g <= up ? interpolate(g, [down, down + 2, up - 1, up], [1, 0.985, 0.985, 1], clamp) : 1;
+    // the fingertip flattens a touch against the glass, and recovers as it lifts
+    const press = g >= down && g <= up && up - down >= 1 ? interpolate(g, [down, down + (up - down) / 2, up], [1, 0.985, 1], clamp) : 1;
     return { px, py, lift, s: HS * (1 + 0.1 * lift) * press, away };
   };
   const st = state(f);
-  const op = interpolate(f, [at - 1, at + 2, leave - 2, leave + 1], [0, 1, 1, 0], clamp);
+  const inEnd = Math.min(at + 2, (at + leave) / 2 - 0.01), outStart = Math.max(leave - 2, (at + leave) / 2 + 0.01);
+  const op = interpolate(f, [at - 1, inEnd, outStart, leave + 1], [0, 1, 1, 0], clamp);
   if (part === 'shadow') {
     // light from the upper left: the shadow falls down and right, further and softer the higher the finger
     const off = { x: 10 + 70 * st.lift, y: 16 + 110 * st.lift };
@@ -216,7 +221,7 @@ export const Finger: React.FC<FingerProps> = ({ x, y, at, down = at + 7, up = do
     const base = { position: 'absolute' as const, left: st.px - HAND.contactX * st.s - pad + off.x, top: st.py - HAND.contactY * st.s - pad + off.y, width: W2, height: H2 };
     const o = op * (0.5 - 0.3 * st.lift);
     return (
-      <div style={{ position: 'absolute', inset: 0, zIndex: 45, pointerEvents: 'none', mixBlendMode: 'multiply' }}>
+      <div style={{ position: 'absolute', inset: 0, zIndex: 45, pointerEvents: 'none' }}>
         <Img src={staticFile('phone/hand-shadow-near.png')} style={{ ...base, opacity: o * (1 - st.lift) }} />
         <Img src={staticFile('phone/hand-shadow-far.png')} style={{ ...base, opacity: o * st.lift }} />
       </div>
@@ -226,7 +231,7 @@ export const Finger: React.FC<FingerProps> = ({ x, y, at, down = at + 7, up = do
   // last half frame, weighted evenly: drawn back to front at 1, 1/2, 1/3…)
   const prev = state(f - 0.5);
   const speed = Math.hypot(st.px - prev.px, st.py - prev.py) * 2;
-  const n = speed > 22 ? Math.min(7, 2 + Math.round(speed / 18)) : 1;
+  const n = speed > 22 ? Math.min(5, 2 + Math.round(speed / 22)) : 1;
   const draw = (s: ReturnType<typeof state>, o: number, key: string) => (
     <Img key={key} src={staticFile('phone/hand.png')} style={{
       position: 'absolute', left: s.px - HAND.contactX * s.s, top: s.py - HAND.contactY * s.s, width: HAND.w * s.s, height: HAND.h * s.s, opacity: o,
@@ -248,19 +253,24 @@ export const Finger: React.FC<FingerProps> = ({ x, y, at, down = at + 7, up = do
  * sits (0–1 of the frame's height).
  */
 export const Lens: React.FC<{ zoom: number; focusY?: number }> = ({ zoom, focusY = 0.5 }) => {
+  const fast = React.useContext(FastCtx);
   const amount = interpolate(zoom, [1.35, 2.3], [0, 1], clamp);
-  if (amount <= 0.02) return null;
+  if (amount <= 0.02 || fast) return null;
   const blur = 2 + 9 * amount;
   const band = 26 - 8 * amount; // half-height of the sharp band, % of the frame
   const top = Math.max(0, focusY * 100 - band), bottom = Math.min(100, focusY * 100 + band);
-  const layer = (mask: string): React.CSSProperties => ({
-    position: 'absolute', inset: 0, backdropFilter: `blur(${blur}px)`, WebkitBackdropFilter: `blur(${blur}px)`,
-    maskImage: mask, WebkitMaskImage: mask, pointerEvents: 'none', zIndex: 55,
-  });
+  // each band is only as tall as the part it blurs (a backdrop blur costs its whole area)
+  const band2 = (edge: 'top' | 'bottom', h: number): React.CSSProperties => {
+    const mask = `linear-gradient(${edge === 'top' ? 180 : 0}deg, #000 0%, rgba(0,0,0,.6) 60%, transparent 100%)`;
+    return {
+      position: 'absolute', left: 0, right: 0, [edge]: 0, height: `${h}%`, backdropFilter: `blur(${blur}px)`, WebkitBackdropFilter: `blur(${blur}px)`,
+      maskImage: mask, WebkitMaskImage: mask, pointerEvents: 'none', zIndex: 55,
+    };
+  };
   return (
     <AbsoluteFill style={{ pointerEvents: 'none' }}>
-      <div style={layer(`linear-gradient(180deg, #000 0%, rgba(0,0,0,.6) ${top * 0.6}%, transparent ${top}%)`)} />
-      <div style={layer(`linear-gradient(0deg, #000 0%, rgba(0,0,0,.6) ${(100 - bottom) * 0.6}%, transparent ${100 - bottom}%)`)} />
+      {top > 0.5 && <div style={band2('top', top)} />}
+      {bottom < 99.5 && <div style={band2('bottom', 100 - bottom)} />}
     </AbsoluteFill>
   );
 };

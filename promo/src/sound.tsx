@@ -9,8 +9,12 @@ import { O, TYPE_RATE } from './shots/Opening';
 import { CAP } from './captures';
 import { clamp } from './theme';
 
-/** The output's audio lags its picture by the AAC encoder's priming (~2048 samples at 48 kHz). */
-const OUTPUT_AUDIO_OFFSET_F = 1.28;
+/**
+ * How late the delivered audio sits against the picture. The soundtrack is rendered to WAV and muxed
+ * by ffmpeg (render.sh), whose AAC encoder writes an edit list over its priming: no lag to make up.
+ * (Remotion's own mp4 mux lags ~1.28f; use that if rendering straight to mp4.)
+ */
+const OUTPUT_AUDIO_OFFSET_F = 0;
 /** Where each file is loudest (frames from its start; measured: src/sfx-peaks, ffmpeg + numpy). */
 const PEAK_F: Record<string, number> = {
   'air-woosh-quick': 7.2, 'air-zoom-vacuum': 13.5, cheer: 21.2, clink: 29.4, 'hit-weak': 4.4, 'impact-cine-big': 65.1,

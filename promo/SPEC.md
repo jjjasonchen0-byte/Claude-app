@@ -113,23 +113,20 @@ Deliberate departures (aesthetic rules): **Q8** (outro as a group photo at peak 
 alternatives. **R3** chat timing follows a real conversation, slightly quicker than reading every
 bubble twice: each bubble holds ≥ 18f before the next arrives.
 
-## 3. Storyboard (30fps; frame budget includes holds)
+## 3. Storyboard (as built; 30fps, 1650 frames = 55 s; music: Cat Walk, its first loud bar at frame 409)
 
-| # | Frames | Shot | Picture | Main move | Caption / type | SFX |
+| # | Frames | Shot | Picture | Main move | Caption | Sound |
 |---|---|---|---|---|---|---|
-| 1 | 0–232 | Chat | Black → glows fade up; the phone close, tilted −8°. Typing dots, then Sam "Wassup yall", Priya "Yoooooo", Leo "let's catch up!", Priya "But where?" (crash zoom on it, rebound, hold). You type "I've got just the thing" in the field, tap send: the blue bubble flies up; the frame rolls level. | dutch-roll + crash zoom | — (the chat is the text) | message pops (alternating), whoosh on the punch, key taps, send swish |
-| 2 | 232–352 | Home | A swipe-up gesture: the chat shrinks into its icon on page 1 of a home screen; camera pulls back to the whole phone. Swipe left to page 2; a finger taps Meet's icon; the icon grows into Meet's start screen while the camera dives in. | shared-element morph ×2 + dive | — | swipe whoosh, soft tap |
-| 3 | 352–436 | Headline | The dive comes out on black: **Meet** huge, then "Meet in the middle." assembles; sub "The fairest place for everyone." | lead-word zoom | Meet in the **middle.** | riser into a soft impact |
-| 4 | 436–556 | Crew | The phone returns (whip-pan): Who's meeting with 4 people; someone is added (address → name → Add person): their row drops in, their pin lands on the map. | slow orbit 12° | Add your crew. | pops for the row/pin |
-| 5 | 556–646 | Modes | Macro on a row's mode pill: the menu opens, the highlight slides from Walk to Bike, the pill updates. | segmented-thumb hero (macro) | Walk, bike, bus or drive. | tap, slide |
-| 6 | 646–706 | Go | Sheet pulled down: the glass play button fades in above it; a finger taps it. | cursor-performance punch-in | — | press + whoosh |
-| 7 | 706–896 | Race | The map fills the phone; everyone's routes race out in their colours (fast), slow to 0.2× as they meet, then fast again. | speed ramp, push-in | Everyone's route, racing. | riser under the race |
-| 8 | 896–986 | Spot | The meeting point lands: crash zoom to the halo; then the results sheet: "27 min · 27 min · 28 min". | crash zoom (impact) | Fair for everyone. | impact, sparkle |
-| 9 | 986–1106 | Places | Tabs Food → Drinks (highlight slides); the place list glides past at a steep angle; a place page opens. | steep-tilt glide | Then pick a place. | whoosh |
-| 10 | 1106–1216 | Invite | "Send invite" pressed: a paper plane leaves the phone and flies to the chat, where the invite lands; friends reply "omw 🔥", "perfect". | paper-plane messenger | Sorted. | send, plane whoosh, pops |
-| 11 | 1216–1350 | Brand | The play button flips into the blue dot; "meet" lands beside it; "Meet in the middle." and the address. Hold ≥ 30f. | icon-flip bloom | meet• / Meet in the middle. / meet-hhdt.onrender.com | riser → impact → sparkle |
-
-Total ≈ 1350f (45s). Acceptance frames for each shot: one mid-move, one at its settled hold.
+| 1 | 0–409 | Opening | The group chat on the photographed phone, tilted −9°: typing dots, Sam "Wassup yall", Priya "Yoooooo", Leo "let's catch up!", Priya "But where?" (crash zoom onto it, depth of field). A hand taps the field; the keyboard slides up; "I've got just the thing" is typed key by key and sent (the frame rolls level). Swipe up: the chat shrinks into its icon; swipe to page 2; the hand taps Meet; its icon grows into Meet's start screen as the camera dives into the wordmark. | crash zoom, dutch roll to level, shared-element morph, dive | — | pops per message, crash impact, a real tap per touch and key, swooshes, vacuum zoom on the dive |
+| 2 | 409–501 | Headline | Black studio: "Meet" huge, then "Meet in the middle." assembles; "The fairest place for everyone." | lead-word zoom-assemble | Meet in the *middle.* | cinematic impact on the music's first loud bar |
+| 3 | 501–634 | Crew | Close on the map: the hand taps Leo's corner of North Sydney, his address card opens, "Use this address"; cut wide: Leo is in the list (4 of 4) and on the map, a slow orbit. | close → wide orbit | Add your *crew.* | taps, soft transition |
+| 4 | 634–718 | Modes | Macro on Sam's mode pill: tap, the menu opens, Bike chosen, the pill updates. | segmented-thumb macro, depth of field | — | taps, switch |
+| 5 | 718–955 | Race | The sheet dragged down, the glass play button appears; the press (punch-in); everyone's area floods out over the streets (fast), "Longest trip: 17 min" (0.75× stare), the routes with everyone's time (fast), everyone travels to the spot; crash zoom onto it; pull back. | cursor punch-in, speed ramp, crash zoom (impact) | Everyone's route, *racing.* · Fair for *everyone.* | tap, riser → impact |
+| 6 | 955–1094 | Tabs | The results sheet pulled up (everyone's time); macro on the tabs: Drinks, then Food, the highlight sliding. | follow, macro, depth of field | — | taps, switch clicks |
+| 7 | 1094–1212 | Glide | Four real screens on real phones (drinks list, restaurants, the place page, the invite page) gliding past at −60°. | steep-tilt glide | Then pick a *place.* | swirl whoosh |
+| 8 | 1212–1426 | Invite | "Share invite…" tapped; a paper plane flies to the group chat; the invite card (the map of everyone gathered, "Let's meet at Headquarters Bistro · Fri, 27 Nov, 6:30 pm") lands; "omw 🔥", "perfect 🙌", "see you there!". | paper-plane messenger | — | tap, throw, whoosh, pops |
+| 9 | 1426–1494 | Live | Real life: the four friends at the pub, the hug turning into glasses clinking; a slow handheld push-in. | live action | — | beer-garden crowd, a cheer, the clink |
+| 10 | 1494–1650 | Brand | The glass play button flips into the blue dot; "meet" lands beside it; "Plan your next catch-up." and the address. | icon-flip bloom | meet• · Plan your next catch-up. · meet-hhdt.onrender.com | shimmer, soft impact |
 
 ## 7. The ultra-realistic pass (after the brief: "I want the entire thing to be ultra realistic")
 

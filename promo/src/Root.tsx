@@ -2,6 +2,7 @@ import React from 'react';
 import { AbsoluteFill, Composition, Sequence, staticFile, useCurrentFrame } from 'remotion';
 import { CameraMotionBlur } from '@remotion/motion-blur';
 import { FPS, H, W } from './theme';
+import { FastCtx } from './kit';
 import { SHOTS, TOTAL, type Shot } from './timeline';
 import { Sound, lateSfx } from './sound';
 import { RACE_BEATS } from './shots/Race';
@@ -19,7 +20,7 @@ const ShotView: React.FC<{ shot: Shot }> = ({ shot }) => {
   const fast = shot.blur?.some(([a, b]) => f >= a && f <= b);
   return (
     <AbsoluteFill>
-      {fast ? <CameraMotionBlur shutterAngle={200} samples={12}><C /></CameraMotionBlur> : <C />}
+      {fast ? <FastCtx.Provider value><CameraMotionBlur shutterAngle={200} samples={5}><C /></CameraMotionBlur></FastCtx.Provider> : <C />}
       {!shot.live && <Film />}
     </AbsoluteFill>
   );
