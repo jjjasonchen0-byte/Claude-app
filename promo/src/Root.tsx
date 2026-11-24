@@ -20,7 +20,7 @@ const ShotView: React.FC<{ shot: Shot }> = ({ shot }) => {
   const fast = shot.blur?.some(([a, b]) => f >= a && f <= b);
   return (
     <AbsoluteFill>
-      {fast ? <FastCtx.Provider value><CameraMotionBlur shutterAngle={200} samples={5}><C /></CameraMotionBlur></FastCtx.Provider> : <C />}
+      {fast ? <FastCtx.Provider value><CameraMotionBlur shutterAngle={200} samples={10}><C /></CameraMotionBlur></FastCtx.Provider> : <C />}
       {!shot.live && <Film />}
     </AbsoluteFill>
   );
