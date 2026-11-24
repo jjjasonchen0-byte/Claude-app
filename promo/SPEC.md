@@ -113,20 +113,20 @@ Deliberate departures (aesthetic rules): **Q8** (outro as a group photo at peak 
 alternatives. **R3** chat timing follows a real conversation, slightly quicker than reading every
 bubble twice: each bubble holds ≥ 18f before the next arrives.
 
-## 3. Storyboard (as built; 30fps, 1650 frames = 55 s; music: Cat Walk, its first loud bar at frame 409)
+## 3. Storyboard (as built; 30fps, 1652 frames = 55 s; music: Cat Walk, its first loud bar at frame 409)
 
 | # | Frames | Shot | Picture | Main move | Caption | Sound |
 |---|---|---|---|---|---|---|
 | 1 | 0–409 | Opening | The group chat on the photographed phone, tilted −9°: typing dots, Sam "Wassup yall", Priya "Yoooooo", Leo "let's catch up!", Priya "But where?" (crash zoom onto it, depth of field). A hand taps the field; the keyboard slides up; "I've got just the thing" is typed key by key and sent (the frame rolls level). Swipe up: the chat shrinks into its icon; swipe to page 2; the hand taps Meet; its icon grows into Meet's start screen as the camera dives into the wordmark. | crash zoom, dutch roll to level, shared-element morph, dive | — | pops per message, crash impact, a real tap per touch and key, swooshes, vacuum zoom on the dive |
 | 2 | 409–501 | Headline | Black studio: "Meet" huge, then "Meet in the middle." assembles; "The fairest place for everyone." | lead-word zoom-assemble | Meet in the *middle.* | cinematic impact on the music's first loud bar |
-| 3 | 501–634 | Crew | Close on the map: the hand taps Leo's corner of North Sydney, his address card opens, "Use this address"; cut wide: Leo is in the list (4 of 4) and on the map, a slow orbit. | close → wide orbit | Add your *crew.* | taps, soft transition |
-| 4 | 634–718 | Modes | Macro on Sam's mode pill: tap, the menu opens, Bike chosen, the pill updates. | segmented-thumb macro, depth of field | — | taps, switch |
-| 5 | 718–955 | Race | The sheet dragged down, the glass play button appears; the press (punch-in); everyone's area floods out over the streets (fast), "Longest trip: 17 min" (0.75× stare), the routes with everyone's time (fast), everyone travels to the spot; crash zoom onto it; pull back. | cursor punch-in, speed ramp, crash zoom (impact) | Everyone's route, *racing.* · Fair for *everyone.* | tap, riser → impact |
-| 6 | 955–1094 | Tabs | The results sheet pulled up (everyone's time); macro on the tabs: Drinks, then Food, the highlight sliding. | follow, macro, depth of field | — | taps, switch clicks |
-| 7 | 1094–1212 | Glide | Four real screens on real phones (drinks list, restaurants, the place page, the invite page) gliding past at −60°. | steep-tilt glide | Then pick a *place.* | swirl whoosh |
-| 8 | 1212–1426 | Invite | "Share invite…" tapped; a paper plane flies to the group chat; the invite card (the map of everyone gathered, "Let's meet at Headquarters Bistro · Fri, 27 Nov, 6:30 pm") lands; "omw 🔥", "perfect 🙌", "see you there!". | paper-plane messenger | — | tap, throw, whoosh, pops |
-| 9 | 1426–1494 | Live | Real life: the four friends at the pub, the hug turning into glasses clinking; a slow handheld push-in. | live action | — | beer-garden crowd, a cheer, the clink |
-| 10 | 1494–1650 | Brand | The glass play button flips into the blue dot; "meet" lands beside it; "Plan your next catch-up." and the address. | icon-flip bloom | meet• · Plan your next catch-up. · meet-hhdt.onrender.com | shimmer, soft impact |
+| 3 | 501–636 | Crew | Close on the map: the hand taps Leo's corner of North Sydney, his address card opens, "Use this address"; cut wide: Leo is in the list (4 of 4) and on the map, a slow orbit. | close → wide orbit | Add your *crew.* | taps, soft transition |
+| 4 | 636–720 | Modes | Macro on Sam's mode pill: tap, the menu opens, Bike chosen, the pill updates. | segmented-thumb macro, depth of field | — | taps, switch |
+| 5 | 720–957 | Race | The sheet dragged down, the glass play button appears; the press (punch-in); everyone's area floods out over the streets (fast), "Longest trip: 18 min" (0.75× stare), the routes with everyone's time (fast), everyone travels to the spot (Al Aseel, Newtown); crash zoom onto it; pull back. | cursor punch-in, speed ramp, crash zoom (impact) | Everyone's route, *racing.* · Fair for *everyone.* | tap, riser → impact |
+| 6 | 957–1096 | Tabs | The results sheet pulled up (everyone's time); macro on the tabs: Drinks, then Food, the highlight sliding. | follow, macro, depth of field | — | taps, switch clicks |
+| 7 | 1096–1214 | Glide | Four real screens on real phones (drinks list, restaurants, the place page, the invite page) gliding past at −60°. | steep-tilt glide | Then pick a *place.* | swirl whoosh |
+| 8 | 1214–1428 | Invite | "Share invite…" tapped; a paper plane flies to the group chat; the invite card (the routes coming in to the spot, "Let's meet at Al Aseel · 189 Missenden Road, Newtown · Fri, 27 Nov, 6:30 pm") lands; "omw 🔥", "perfect 🙌", "see you there!". | paper-plane messenger | — | tap, throw, whoosh, pops |
+| 9 | 1428–1496 | Live | Real life: the four friends at the pub, the hug turning into glasses clinking; a slow handheld push-in. | live action | — | beer-garden crowd, a cheer, the clink |
+| 10 | 1496–1652 | Brand | The glass play button flips into the blue dot; "meet" lands beside it; "Plan your next catch-up." and the address. | icon-flip bloom | meet• · Plan your next catch-up. · meet-hhdt.onrender.com | shimmer, soft impact |
 
 ## 7. The ultra-realistic pass (after the brief: "I want the entire thing to be ultra realistic")
 

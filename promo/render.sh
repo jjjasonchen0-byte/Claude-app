@@ -6,7 +6,7 @@
 set -e
 cd "$(dirname "$0")"
 mkdir -p out/chunks
-TOTAL=$(npx remotion compositions src/index.ts 2>/dev/null | awk '/^MeetAd/ {print $4}')
+TOTAL=$(npx remotion compositions src/index.ts 2>/dev/null | awk '$1 == "MeetAd" {print $4; exit}')
 SIZE=420
 N=$(( (TOTAL + SIZE - 1) / SIZE ))
 for ((i = 0; i < N; i++)); do
