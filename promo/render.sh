@@ -18,8 +18,8 @@ done
 ls out/chunks/part*.mp4 | sort -V | sed 's/^/file /; s#out/chunks/#./#' > out/chunks/list.txt
 ffmpeg -v error -y -f concat -safe 0 -i out/chunks/list.txt -c copy out/picture.mp4
 echo "soundtracks"
-npx remotion render src/index.ts MeetAd out/sound-bgm.wav --codec=wav --log=error --timeout=120000
-npx remotion render src/index.ts MeetAd out/sound-nobgm.wav --codec=wav --props=props-nobgm.json --log=error --timeout=120000
+npx remotion render src/index.ts MeetAdSound out/sound-bgm.wav --codec=wav --log=error --timeout=120000
+npx remotion render src/index.ts MeetAdSound out/sound-nobgm.wav --codec=wav --props=props-nobgm.json --log=error --timeout=120000
 for v in bgm nobgm; do
   name=meet-ad; [ $v = nobgm ] && name=meet-ad-nobgm
   ffmpeg -v error -y -i out/picture.mp4 -i out/sound-$v.wav -map 0:v -map 1:a -c:v copy -c:a aac -b:a 256k -shortest -movflags +faststart out/$name.mp4

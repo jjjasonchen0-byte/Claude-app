@@ -52,9 +52,13 @@ export const MeetAd: React.FC<{ bgm?: boolean }> = ({ bgm = true }) => (
   </AbsoluteFill>
 );
 
+/** The soundtrack alone (rendering audio needs no pictures): render.sh mixes it to WAV and muxes it. */
+export const MeetAdSound: React.FC<{ bgm?: boolean }> = ({ bgm = true }) => <Sound bgm={bgm} extra={LATE} />;
+
 export const Root: React.FC = () => (
   <>
     <Composition id="MeetAd" component={MeetAd} durationInFrames={TOTAL} fps={FPS} width={W} height={H} defaultProps={{ bgm: true }} />
+    <Composition id="MeetAdSound" component={MeetAdSound} durationInFrames={TOTAL} fps={FPS} width={W} height={H} defaultProps={{ bgm: true }} />
     {SHOTS.map((s) => (
       <Composition key={s.id} id={`Shot-${s.id}`} component={() => <ShotView shot={s} />} durationInFrames={s.dur} fps={FPS} width={W} height={H} />
     ))}
