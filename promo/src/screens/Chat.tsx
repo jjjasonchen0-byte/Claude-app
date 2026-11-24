@@ -139,7 +139,8 @@ const pop = (frame: number, at: number) => interpolate(frame, [at, at + 14], [0,
 
 const TypingDots: React.FC<{ frame: number; from: number; to: number }> = ({ frame, from, to }) => {
   // (stays a couple of frames into the bubble's arrival, so the two overlap: no blank frame)
-  const t = interpolate(frame, [from, from + 8, to, to + 3], [0, 1, 1, 0], clamp);
+  if (to <= from) return null;
+  const t = interpolate(frame, [from, Math.min(from + 8, from + (to - from) * 0.6), to, to + 3], [0, 1, 1, 0], clamp);
   if (t <= 0) return null;
   return (
     <div style={{ display: 'inline-flex', gap: 5, padding: '13px 15px', borderRadius: 20, borderTopLeftRadius: 6, background: CH.inBubble, boxShadow: '0 1px 2px rgba(20,20,40,.08)', opacity: t, transform: `scale(${0.7 + 0.3 * t})`, transformOrigin: 'left top' }}>

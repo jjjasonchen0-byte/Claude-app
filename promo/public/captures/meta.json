@@ -35,20 +35,20 @@
     "tapUse": {
       "x": 225,
       "y": 250,
-      "frame": 39
+      "frame": 38
     },
-    "typeFrom": 63,
+    "typeFrom": 62,
     "tapAdd": {
       "x": 300.7890625,
       "y": 201.9765625,
-      "frame": 92
+      "frame": 91
     }
   },
   "frames": {
-    "crew": 167,
+    "crew": 166,
     "modes": 78,
     "go": 369,
-    "places": 300
+    "places": 302
   },
   "modes": {
     "tapPill": {
@@ -93,45 +93,45 @@
     },
     "tabs": [
       {
-        "text": "Food45",
-        "x": 72.2578125,
+        "text": "Food49",
+        "x": 72.34375,
         "y": 578.75
       },
       {
-        "text": "Drinks26",
-        "x": 197.4921875,
+        "text": "Drinks33",
+        "x": 197.71875,
         "y": 578.75
       },
       {
-        "text": "Fun3",
-        "x": 314.015625,
+        "text": "Fun4",
+        "x": 314.5,
         "y": 578.75
       },
       {
-        "text": "Culture4",
-        "x": 429.4609375,
+        "text": "Culture8",
+        "x": 429.9609375,
         "y": 578.75
       },
       {
-        "text": "Outdoors10",
-        "x": 566.6328125,
+        "text": "Outdoors14",
+        "x": 567.015625,
         "y": 578.75
       },
       {
-        "text": "Shopping9",
-        "x": 710.9765625,
+        "text": "Shopping11",
+        "x": 712.7578125,
         "y": 578.75
       }
     ],
     "tapDrinks": {
-      "text": "Drinks26",
-      "x": 197.4921875,
+      "text": "Drinks33",
+      "x": 197.71875,
       "y": 578.75,
       "frame": 106
     },
     "tapFood": {
-      "text": "Food45",
-      "x": 72.2578125,
+      "text": "Food49",
+      "x": 72.34375,
       "y": 578.75,
       "frame": 142
     },
@@ -147,13 +147,13 @@
     },
     "tapSend": {
       "x": 103.5,
-      "y": 378.6640625,
-      "frame": 256
+      "y": 258.6640625,
+      "frame": 258
     },
     "shareBtn": {
       "x": 195,
-      "y": 582.546875
+      "y": 556.546875
     }
   },
-  "shareText": "Let's meet at Al Aseel\n189 Missenden Road, Newtown\nFri, 27 Nov, 6:30 pm\nhttps://www.google.com/maps/search/?api=1&query=-33.8928703,151.1830373\nSent with Meet"
+  "shareText": "Let's meet at Charles Thai\n45 King Street, Newtown\nFri, 27 Nov, 6:30 pm\nhttps://www.google.com/maps/search/?api=1&query=-33.8924268,151.186457\nSent with Meet"
 }

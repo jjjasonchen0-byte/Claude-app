@@ -40,10 +40,13 @@ const TAPS = [
   { ...SEND_UP, t: O.sendTap },
 ];
 
+/** The dive's target on Meet's start screen (app px): the end of the wordmark, its blue dot. */
+const WORD = { x: 242, y: 333 };
+
 // "But where?": the 4th incoming bubble's centre (app px), and the field.
 const WHERE_AT = onScreen(98, 403);
 const FIELD_AT = onScreen(190, 803);
-const WORD_AT = onScreen(185, 302); // Meet's wordmark on its start screen
+const WORD_AT = onScreen(WORD.x, WORD.y); // Meet's wordmark on its start screen
 const MEET_AT = onScreen(66.75, 149); // Meet's icon on page 2
 
 /** The shared-element curve (card transition-travel A): 25f to 1.03, then 10f back to 1. */
@@ -86,7 +89,7 @@ export const openingCam = (f: number): Cam => {
     const p = morphP(f, O.launch);
     const icon = iconBox(0, 0);
     const ow = lerp(icon.w, 390, p), ox = lerp(icon.x, 0, p), oy = lerp(icon.y, 0, p);
-    const now = onScreen(ox + 185 * (ow / 390), oy + 302 * (ow / 390));
+    const now = onScreen(ox + WORD.x * (ow / 390), oy + WORD.y * (ow / 390));
     const t = Easing.in(Easing.quad)(Math.min(1, (f - O.launch) / (O.end - O.launch)));
     base.x += (now.x - WORD_AT.x) * t;
     base.y += (now.y - WORD_AT.y) * t;

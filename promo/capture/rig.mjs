@@ -67,7 +67,7 @@ export async function openRig({ scale = 3, start = '2026-11-27T18:30:00+11:00', 
   });
   // Installed, the fake clock still flows with real time; paused, it moves only when stepped (or
   // run on while idle). Otherwise each slow screenshot would let the page race ahead.
-  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 5));
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
   const cdp = await ctx.newCDPSession(page);
   await cdp.send('Animation.enable');
 
