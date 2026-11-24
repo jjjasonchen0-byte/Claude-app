@@ -25,7 +25,7 @@ export const RACE = {
   end: Math.min(last, tap + 222), // (after this the app zooms out to the results)
 };
 /** The spot (app px, in this clip's view), where everyone gathers. */
-const SPOT = (CAP as { raceSpot?: { x: number; y: number } }).raceSpot ?? { x: 60, y: 495 }; // (measured on the clip: where the routes meet, by The Camperdown Hotel)
+const SPOT = (CAP as { raceSpot?: { x: number; y: number } }).raceSpot ?? { x: 80, y: 555 }; // (measured on the clip: where the routes meet, by Al Aseel in Newtown)
 
 // ---- the edit, as [output frame, clip frame] knots (linear between knots) ----
 const A0 = drag - 4;
