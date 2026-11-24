@@ -1,0 +1,163 @@
+{
+  "group": {
+    "home": {
+      "address": "325 Eliza Street, Newtown",
+      "lat": -33.89724,
+      "lon": 151.17893,
+      "mode": "walk"
+    },
+    "friends": [
+      {
+        "address": "9 Paternoster Row, Pyrmont",
+        "lat": -33.86982,
+        "lon": 151.19446,
+        "nickname": "Sam",
+        "mode": "walk"
+      },
+      {
+        "address": "246 Oxford Street, Paddington",
+        "lat": -33.88488,
+        "lon": 151.22638,
+        "nickname": "Priya",
+        "mode": "walk"
+      },
+      {
+        "address": "115 Brett Whiteley Place, North Sydney",
+        "lat": -33.83911,
+        "lon": 151.20746,
+        "nickname": "Leo",
+        "mode": "walk"
+      }
+    ]
+  },
+  "crew": {
+    "tapMap": {
+      "x": 225,
+      "y": 242,
+      "frame": 15
+    },
+    "tapUse": {
+      "x": 224.5,
+      "y": 192,
+      "frame": 37
+    },
+    "typeFrom": 61,
+    "tapAdd": {
+      "x": 300.7890625,
+      "y": 201.9765625,
+      "frame": 90
+    }
+  },
+  "frames": {
+    "crew": 165,
+    "modes": 78,
+    "go": 369,
+    "places": 300
+  },
+  "modes": {
+    "tapPill": {
+      "x": 169.484375,
+      "y": 605.4296875,
+      "frame": 12
+    },
+    "tapBike": {
+      "x": 228.5625,
+      "y": 742.625,
+      "frame": 38
+    }
+  },
+  "go": {
+    "drag": {
+      "x": 195,
+      "y": 443,
+      "frame": 10,
+      "to": 963
+    },
+    "tapPlay": {
+      "x": 344,
+      "y": 658,
+      "frame": 48
+    },
+    "resultsAt": 289
+  },
+  "spot": {
+    "x": 200,
+    "y": 407
+  },
+  "places": {
+    "pull": {
+      "x": 195,
+      "y": 712,
+      "frame": 16,
+      "to": 110
+    },
+    "scroll": {
+      "by": 16.75,
+      "frame": 74
+    },
+    "tabs": [
+      {
+        "text": "Food17",
+        "x": 70.2421875,
+        "y": 578.75
+      },
+      {
+        "text": "Drinks27",
+        "x": 193.046875,
+        "y": 578.75
+      },
+      {
+        "text": "Fun2",
+        "x": 309.078125,
+        "y": 578.75
+      },
+      {
+        "text": "Culture3",
+        "x": 424.2421875,
+        "y": 578.75
+      },
+      {
+        "text": "Outdoors21",
+        "x": 561,
+        "y": 578.75
+      },
+      {
+        "text": "Shopping8",
+        "x": 705.1328125,
+        "y": 578.75
+      }
+    ],
+    "tapDrinks": {
+      "text": "Drinks27",
+      "x": 193.046875,
+      "y": 578.75,
+      "frame": 106
+    },
+    "tapFood": {
+      "text": "Food17",
+      "x": 70.2421875,
+      "y": 578.75,
+      "frame": 142
+    },
+    "tapGroup": {
+      "x": 195,
+      "y": 664.75,
+      "frame": 178
+    },
+    "tapPlace": {
+      "x": 195,
+      "y": 313.15625,
+      "frame": 212
+    },
+    "tapSend": {
+      "x": 103.5,
+      "y": 378.6640625,
+      "frame": 256
+    },
+    "shareBtn": {
+      "x": 195,
+      "y": 582.546875
+    }
+  },
+  "shareText": "Let's meet at Headquarters Bistro\nLayton Street, Camperdown\nFri, 27 Nov, 6:30 pm\nhttps://www.google.com/maps/search/?api=1&query=-33.88626,151.17743\nSent with Meet"
+}

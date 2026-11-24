@@ -1,0 +1,104 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+@font-face { font-family: Inter; font-weight: 400; src: url(../node_modules/@fontsource/inter/files/inter-latin-400-normal.woff2); }
+@font-face { font-family: Inter; font-weight: 500; src: url(../node_modules/@fontsource/inter/files/inter-latin-500-normal.woff2); }
+@font-face { font-family: Inter; font-weight: 600; src: url(../node_modules/@fontsource/inter/files/inter-latin-600-normal.woff2); }
+@font-face { font-family: Inter; font-weight: 700; src: url(../node_modules/@fontsource/inter/files/inter-latin-700-normal.woff2); }
+@font-face { font-family: Inter; font-weight: 800; src: url(../node_modules/@fontsource/inter/files/inter-latin-800-normal.woff2); }
+:root { --accent: #007aff; --accent-dark: #0a84ff; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #222; display: flex; gap: 40px; padding: 40px; font-family: Inter, sans-serif; }
+.frame { position: relative; width: 1080px; height: 1920px; overflow: hidden; background: #000; flex: none; }
+/* Stage glows from the app wallpaper */
+.glow { position: absolute; inset: 0;
+  background: radial-gradient(45% 30% at 20% 22%, rgba(0,122,255,.30), transparent 70%),
+              radial-gradient(40% 28% at 85% 30%, rgba(175,82,222,.22), transparent 70%),
+              radial-gradient(50% 30% at 70% 85%, rgba(48,176,199,.20), transparent 70%),
+              radial-gradient(40% 25% at 15% 88%, rgba(255,149,0,.14), transparent 70%); }
+/* Generic phone */
+.phone { position: absolute; width: 790px; height: 1702px; border-radius: 118px; padding: 15px;
+  background: linear-gradient(140deg, #3a3a40, #121214 30%, #0b0b0c 60%, #2c2c31);
+  box-shadow: 0 0 0 2px #4b4b52, 0 0 0 3.5px #18181a, 0 60px 120px rgba(0,0,0,.7), 0 0 120px rgba(0,122,255,.18); }
+.screen { position: relative; width: 760px; height: 1672px; border-radius: 104px; overflow: hidden; background: #fff; }
+.cam { position: absolute; top: 26px; left: 50%; width: 30px; height: 30px; margin-left: -15px; border-radius: 50%; background: #050506; box-shadow: inset 0 0 0 4px #121216, inset 4px -3px 6px rgba(80,90,140,.5); z-index: 9; }
+/* Chat app (original design, Meet's language) */
+.chat { position: absolute; inset: 0; background: #fff; font-size: 31px; }
+.status { height: 104px; display: flex; justify-content: space-between; align-items: flex-end; padding: 0 66px 14px; font-weight: 600; font-size: 31px; }
+.chat-head { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 0 22px; border-bottom: 1px solid rgba(60,60,67,.14);
+  background: rgba(248,248,252,.9); }
+.avs { display: flex; }
+.av { width: 62px; height: 62px; border-radius: 50%; color: #fff; font-weight: 700; font-size: 28px; display: grid; place-items: center; border: 3px solid #fff; margin-left: -14px; }
+.av:first-child { margin-left: 0; }
+.chat-title { font-weight: 700; font-size: 31px; }
+.chat-sub { font-size: 23px; color: rgba(60,60,67,.6); margin-top: -6px; }
+.msgs { padding: 26px 28px; display: flex; flex-direction: column; gap: 14px; }
+.row { display: flex; align-items: flex-end; gap: 14px; }
+.row .av { width: 54px; height: 54px; font-size: 24px; margin: 0; border: 0; flex: none; }
+.who { font-size: 22px; color: rgba(60,60,67,.6); margin: 0 0 4px 22px; }
+.bub { padding: 18px 28px; border-radius: 40px; max-width: 520px; line-height: 1.25; }
+.in .bub { background: #ebebf0; color: #000; border-bottom-left-radius: 14px; }
+.out { justify-content: flex-end; }
+.out .bub { background: var(--accent); color: #fff; border-bottom-right-radius: 14px; }
+.typing { display: inline-flex; gap: 8px; padding: 24px 28px; background: #ebebf0; border-radius: 40px; }
+.typing i { width: 14px; height: 14px; border-radius: 50%; background: #9a9aa2; }
+.compose { position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 26px 56px; display: flex; gap: 16px; align-items: center; background: rgba(248,248,252,.92); border-top: 1px solid rgba(60,60,67,.12); }
+.field { flex: 1; height: 76px; border-radius: 38px; border: 1.5px solid rgba(60,60,67,.18); display: flex; align-items: center; padding: 0 30px; color: rgba(60,60,67,.5); }
+.send { width: 76px; height: 76px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; }
+/* Type */
+.headline { position: absolute; left: 80px; right: 80px; color: #fff; font-weight: 800; letter-spacing: -0.035em; line-height: 1.02; }
+.headline em { font-style: normal; color: var(--accent-dark); }
+.sub { position: absolute; left: 80px; right: 80px; color: rgba(235,235,245,.72); font-weight: 600; font-size: 56px; letter-spacing: -0.02em; line-height: 1.15; }
+.wordmark { font-weight: 800; letter-spacing: -0.035em; color: #fff; display: inline-flex; align-items: baseline; }
+.wordmark i { display: inline-block; width: .34em; height: .34em; border-radius: 50%; background: var(--accent-dark); margin-left: .07em; }
+</style>
+</head>
+<body>
+
+<!-- 1. The chat: the camera close on the phone, the last message just sent -->
+<div class="frame" id="f1">
+  <div class="glow"></div>
+  <div class="phone" style="left:30px; top:330px; transform: perspective(2400px) rotateY(-14deg) rotateZ(3deg) scale(1.18); transform-origin: 60% 40%;">
+    <div class="screen">
+      <div class="cam"></div>
+      <div class="chat">
+        <div class="status"><span>6:12</span><span>▮▮▮ ◔</span></div>
+        <div class="chat-head">
+          <div class="avs"><div class="av" style="background:#ff9500">S</div><div class="av" style="background:#34c759">P</div><div class="av" style="background:#af52de">L</div></div>
+          <div class="chat-title">The Crew</div><div class="chat-sub">Sam, Priya, Leo</div>
+        </div>
+        <div class="msgs">
+          <div><div class="who">Sam</div><div class="row in"><div class="av" style="background:#ff9500">S</div><div class="bub">Wassup yall</div></div></div>
+          <div><div class="who">Priya</div><div class="row in"><div class="av" style="background:#34c759">P</div><div class="bub">Yoooooo</div></div></div>
+          <div><div class="who">Leo</div><div class="row in"><div class="av" style="background:#af52de">L</div><div class="bub">let's catch up!</div></div></div>
+          <div><div class="who">Priya</div><div class="row in"><div class="av" style="background:#34c759">P</div><div class="bub">But where?</div></div></div>
+          <div class="row out"><div class="bub">I've got just the thing</div></div>
+        </div>
+        <div class="compose"><div class="field">Message</div><div class="send"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 2. The headline card -->
+<div class="frame" id="f2">
+  <div class="glow" style="opacity:.8"></div>
+  <div class="headline" style="top:640px; font-size:150px;">Meet in<br>the <em>middle.</em></div>
+  <div class="sub" style="top:1000px;">The fairest place for everyone,<br>found in seconds.</div>
+  <div style="position:absolute; left:80px; bottom:150px; font-size:96px;" class="wordmark">meet<i></i></div>
+</div>
+
+<!-- 3. The phone tilted over the real Meet screen, with a caption -->
+<div class="frame" id="f3">
+  <div class="glow"></div>
+  <div class="headline" style="top:150px; font-size:104px;">Everyone's<br>route, <em>racing.</em></div>
+  <div class="phone" style="left:190px; top:520px; transform: perspective(2200px) rotateX(16deg) rotateY(18deg) rotateZ(-6deg) scale(0.92); transform-origin: 50% 30%;">
+    <div class="screen"><div class="cam"></div><img src="meet-peek.png" style="width:760px; height:1672px; object-fit:cover; display:block"></div>
+  </div>
+  <div class="sub" style="bottom:120px; font-size:56px;">Walk, bike, bus or drive.</div>
+</div>
+
+</body>
+</html>

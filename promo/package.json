@@ -1,0 +1,24 @@
+{
+  "name": "meet-promo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Meet advert (vertical 9:16), built with Remotion from real app captures.",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts MeetAd out/meet-ad.mp4 --concurrency=2",
+    "still": "remotion still src/index.ts MeetAd",
+    "render:nobgm": "remotion render src/index.ts MeetAd out/meet-ad-nobgm.mp4 --props=props-nobgm.json --concurrency=2"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.484",
+    "@remotion/motion-blur": "4.0.484",
+    "@fontsource/inter": "5.2.8",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "remotion": "4.0.484"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.17",
+    "typescript": "6.0.3"
+  }
+}
