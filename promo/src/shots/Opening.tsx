@@ -5,7 +5,7 @@ import React from 'react';
 import { AbsoluteFill, Easing, Img, interpolate, staticFile, useCurrentFrame } from 'remotion';
 import { Camera, Finger, Lens, Phone, Stage, camAt, type Cam } from '../kit';
 import { EASE, H, K, SCREEN_H, SCREEN_W, W, clamp, onScreen } from '../theme';
-import { ChatScreen, KB_H, type Msg } from '../screens/Chat';
+import { ChatScreen, FIELD_AT as CHAT_FIELD, SEND_UP, StatusBar, keyPoint, type Msg } from '../screens/Chat';
 import { AppIcon, HomeScreen, iconBox } from '../screens/Home';
 
 // ---- the beats (local frames) ----
@@ -13,12 +13,12 @@ export const O = {
   sam: 34, priya: 64, leo: 94, where: 124,
   crash: 127, // the crash zoom onto "But where?" (6f push, 5f rebound)
   pullBack: 160,
-  fieldTap: 172, typeFrom: 182, sendTap: 240, sent: 242,
-  roll: 242, // the frame rolls level as your answer goes
-  swipeUp: 268, morphIn: 276, // the chat shrinks into its icon (25f + 10f settle)
-  swipeLeft: 322, release: 336,
-  tapMeet: 356, launch: 368, // Meet's icon grows into the app (25f + 10f)
-  dive: 372, end: 409, // (the headline's "Meet" lands on the music's first loud bar: beat 28 = frame 409)
+  fieldTap: 172, typeFrom: 186, sendTap: 280, sent: 282,
+  roll: 282, // the frame rolls level as your answer goes
+  swipeUp: 306, morphIn: 314, // the chat shrinks into its icon (25f + 10f settle)
+  swipeLeft: 360, release: 374,
+  tapMeet: 394, launch: 406, // Meet's icon grows into the app (25f + 10f)
+  dive: 410, end: 443, // (the headline's "Meet" lands on the music's drop: frame 443)
 };
 export const OPENING_DUR = O.end;
 
@@ -30,8 +30,15 @@ export const MSGS: Msg[] = [
   { who: 'you', text: "I've got just the thing", at: O.sent },
 ];
 const DRAFT = "I've got just the thing";
-/** Frames a letter: a quick thumb (~12 a second), done just before the send. */
-export const TYPE_RATE = 2.5;
+/** Frames a letter: a quick one-finger typist (~7.5 keys a second), done just before the send. */
+export const TYPE_RATE = 4;
+
+/** The one hand that answers: the field, then every key, then send (app px, frame). */
+const TAPS = [
+  { ...CHAT_FIELD, t: O.fieldTap },
+  ...DRAFT.split('').map((ch, i) => ({ ...keyPoint(ch)!, t: O.typeFrom + i * TYPE_RATE })),
+  { ...SEND_UP, t: O.sendTap },
+];
 
 // "But where?": the 4th incoming bubble's centre (app px), and the field.
 const WHERE_AT = onScreen(98, 403);
@@ -68,8 +75,10 @@ export const openingCam = (f: number): Cam => {
   ]);
   // The dutch roll (card tension-camera-moves B): held at a tilt while there is no answer, then one
   // overshoot back to level as yours goes: −9° → +1.2° in 14f, → 0 in 10f; a slow drift while tilted.
-  const drift = Math.sin(Math.min(f, O.roll) * 0.035) * 0.8 * interpolate(f, [O.roll, O.roll + 6], [1, 0], clamp);
-  const rz = f < O.roll ? -9 : f < O.roll + 14
+  const drift = Math.sin(Math.min(f, O.roll) * 0.035) * 0.8 * interpolate(f, [O.crash, O.crash + 10, O.roll, O.roll + 6], [0, 1, 1, 0], clamp);
+  // level through the greetings; the tilt comes with "But where?" (the crash), and holds till the answer
+  const tilt = interpolate(f, [O.where - 2, O.crash + 6], [0, -9], { ...clamp, easing: Easing.out(Easing.cubic) });
+  const rz = f < O.roll ? tilt : f < O.roll + 14
     ? interpolate(f, [O.roll, O.roll + 14], [-9, 1.2], { easing: Easing.out(Easing.cubic) })
     : interpolate(f, [O.roll + 14, O.roll + 24], [1.2, 0], { ...clamp, easing: Easing.inOut(Easing.quad) });
   // While Meet opens out of its icon its wordmark is still on the move: the dive follows where it is.
@@ -100,7 +109,7 @@ export const Opening: React.FC = () => {
   const ch = lerp(844, chats.h, pClose) * (1 - 0.06 * lift * (1 - pClose));
   const cx = lerp(0, chats.x, pClose) + (390 - cw) / 2 * (1 - pClose);
   const cy = lerp(0, chats.y, pClose) + (844 - ch) / 2 * (1 - pClose) - 30 * lift * (1 - pClose);
-  const cr = lerp(48, 14, Math.min(1, pClose));
+  const cr = lerp(48, chats.w / 2, Math.min(1, pClose)); // (into a round icon)
   const appFade = interpolate(pClose, [0.55, 0.85], [1, 0], clamp);
   const homeIn = interpolate(f, [O.swipeUp, O.morphIn + 30], [0, 1], { ...clamp, easing: Easing.out(Easing.cubic) });
 
@@ -115,7 +124,7 @@ export const Opening: React.FC = () => {
   const pOpen = f < O.launch ? 0 : morphP(f, O.launch);
   const ow = lerp(meet.w, 390, pOpen), oh = lerp(meet.h, 844, pOpen);
   const ox = lerp(meet.x, 0, pOpen), oy = lerp(meet.y, 0, pOpen);
-  const or = lerp(14, 48, Math.min(1, pOpen));
+  const or = lerp(meet.w / 2, 48, Math.min(1, pOpen));
   const iconFade = interpolate(pOpen, [0, 0.3], [1, 0], clamp);
 
   const chatOn = f < O.morphIn + 36;
@@ -128,7 +137,7 @@ export const Opening: React.FC = () => {
             {f >= O.swipeUp - 2 && (
               <div style={{ position: 'absolute', inset: 0, zoom: K, width: 390, height: 844 }}>
                 <div style={{ position: 'absolute', inset: 0, transform: `scale(${lerp(0.9, 1, homeIn)})`, filter: homeIn < 1 ? `blur(${(1 - homeIn) * 8}px)` : undefined }}>
-                  <HomeScreen page={page} hide={chatOn && pClose < 0.98 ? 'chats' : f >= O.launch ? 'meet' : undefined} press={{ id: 'meet', s: press }} dim={(1 - homeIn) * 0.5} />
+                  <HomeScreen page={page} hide={chatOn ? 'chats' : f >= O.launch ? 'meet' : undefined} press={{ id: 'meet', s: press }} dim={(1 - homeIn) * 0.5} />
                 </div>
               </div>
             )}
@@ -136,7 +145,7 @@ export const Opening: React.FC = () => {
             {chatOn && (
               <div style={{ position: 'absolute', zoom: K, left: cx, top: cy, width: cw, height: ch, borderRadius: cr, overflow: 'hidden', boxShadow: pClose > 0 ? `0 ${lerp(30, 2, Math.min(1, pClose))}px ${lerp(80, 8, Math.min(1, pClose))}px rgba(0,0,0,${lerp(0.4, 0.15, Math.min(1, pClose))})` : undefined }}>
                 <div style={{ position: 'absolute', left: 0, top: 0, width: 390, height: 844, transform: `scale(${cw / 390})`, transformOrigin: '0 0', opacity: appFade }}>
-                  <ChatScreen frame={f} msgs={MSGS} draft={DRAFT} draftFrom={O.typeFrom} draftRate={TYPE_RATE} sentAt={O.sendTap + 2} fieldTapAt={O.fieldTap + 4} />
+                  <ChatScreen frame={f} msgs={MSGS} draft={DRAFT} draftFrom={O.typeFrom} draftRate={TYPE_RATE} sentAt={O.sendTap + 2} fieldTapAt={O.fieldTap + 3} />
                 </div>
                 {pClose > 0.5 && <div style={{ position: 'absolute', inset: 0, opacity: 1 - appFade }}><AppIcon id="chats" size={cw} /></div>}
               </div>
@@ -145,17 +154,17 @@ export const Opening: React.FC = () => {
             {f >= O.launch && (
               <div style={{ position: 'absolute', zoom: K, left: ox, top: oy, width: ow, height: oh, borderRadius: or, overflow: 'hidden', background: '#fff', boxShadow: `0 ${lerp(2, 30, Math.min(1, pOpen))}px ${lerp(8, 80, Math.min(1, pOpen))}px rgba(0,0,0,.3)` }}>
                 <Img src={staticFile('captures/start.png')} style={{ position: 'absolute', left: 0, top: 0, width: ow, height: (ow / 390) * 844, opacity: 1 - iconFade }} />
+                <div style={{ position: 'absolute', left: 0, top: 0, width: 390, height: 844, transform: `scale(${ow / 390})`, transformOrigin: '0 0', opacity: 1 - iconFade }}><StatusBar time="6:31" /></div>
                 {iconFade > 0 && <div style={{ position: 'absolute', inset: 0, opacity: iconFade }}><AppIcon id="meet" size={ow} /></div>}
               </div>
             )}
             {/* fingers */}
-            <Finger x={190} y={803} at={O.fieldTap - 6} down={O.fieldTap} up={O.fieldTap + 5} leave={O.fieldTap + 12} from={{ x: 260, y: 900 }} />
-            <Finger x={364} y={844 - KB_H - 27} at={O.sendTap - 8} down={O.sendTap} up={O.sendTap + 5} leave={O.sendTap + 12} from={{ x: 330, y: 900 }} />
-            <Finger x={195} y={830} at={O.swipeUp - 6} down={O.swipeUp} up={O.morphIn + 2} leave={O.morphIn + 6}
+            <Finger x={CHAT_FIELD.x} y={CHAT_FIELD.y} at={O.fieldTap - 8} taps={TAPS} leave={O.sendTap + 12} />
+            <Finger x={195} y={830} at={O.swipeUp - 6} down={O.swipeUp} up={O.morphIn + 2} leave={O.morphIn + 11}
               path={(fr) => (fr < O.swipeUp ? null : { x: 195, y: interpolate(fr, [O.swipeUp, O.morphIn + 2], [830, 560], { ...clamp, easing: Easing.in(Easing.quad) }) })} />
-            <Finger x={320} y={420} at={O.swipeLeft - 6} down={O.swipeLeft} up={O.release} leave={O.release + 4}
+            <Finger x={320} y={420} at={O.swipeLeft - 6} down={O.swipeLeft} up={O.release} leave={O.release + 10}
               path={(fr) => (fr < O.swipeLeft ? null : { x: interpolate(fr, [O.swipeLeft, O.release], [320, 78], { ...clamp, easing: Easing.inOut(Easing.sin) }), y: 420 - (fr - O.swipeLeft) * 0.6 })} />
-            <Finger x={meet.x + 31} y={meet.y + 31} at={O.tapMeet} down={O.tapMeet + 7} up={O.launch - 1} leave={O.launch + 4} from={{ x: 190, y: 360 }} />
+            <Finger x={meet.x + 31} y={meet.y + 31} at={O.tapMeet} down={O.tapMeet + 7} up={O.launch - 1} leave={O.launch + 9} from={{ x: 190, y: 360 }} />
           </Phone>
         </Camera>
       </AbsoluteFill>

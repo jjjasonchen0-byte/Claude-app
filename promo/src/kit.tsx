@@ -4,6 +4,7 @@ import { AbsoluteFill, Img, interpolate, staticFile, useCurrentFrame, Easing } f
 import { BEZEL, C, EASE, FONT, GLOWS, H, K, PHONE_H, PHONE_W, PHONE_X, PHONE_Y, SCREEN_H, SCREEN_W, W, clamp } from './theme';
 import { CAP } from './captures';
 import frameGeo from '../public/phone/frame.json';
+import { StatusBar } from './screens/Chat';
 import handGeo from '../public/phone/hand.json';
 
 // ---------------------------------------------------------------- the stage
@@ -68,8 +69,11 @@ export const Camera: React.FC<{ cam: Cam; persp?: number; children: React.ReactN
  * The camera's tilt, for whatever needs to know which way the light falls (the phone's edge, its glass,
  * the hand's shadow).
  */
-/** True while a frame is being drawn several times over for motion blur: costly extras step aside. */
-export const FastCtx = React.createContext(false);
+/**
+ * How much of the lens's depth of field to draw (1 normally): 0 while a frame is drawn several times
+ * over for motion blur, easing back over a few frames either side so focus never pops.
+ */
+export const FastCtx = React.createContext(1);
 
 export const CamCtx = React.createContext<Cam>({ x: W / 2, y: H / 2, zoom: 1, rx: 0, ry: 0, rz: 0 });
 
@@ -172,9 +176,18 @@ export const AppPx: React.FC<{ children: React.ReactNode; style?: React.CSSPrope
 export const CLIP_FRAMES: Record<string, number> = CAP.frames || {};
 
 /** One captured frame of a clip, filling the screen (1-based; clamped to the clip). */
-export const Footage: React.FC<{ clip: string; n: number; style?: React.CSSProperties }> = ({ clip, n, style }) => {
+export const Footage: React.FC<{ clip: string; n: number; style?: React.CSSProperties; time?: string }> = ({ clip, n, style, time = '6:31' }) => {
   const i = Math.max(1, Math.min(CLIP_FRAMES[clip] ?? 1, Math.round(n)));
-  return <Img src={staticFile(`captures/raw/${clip}/${String(i).padStart(5, '0')}.jpg`)} style={{ position: 'absolute', left: 0, top: 0, width: SCREEN_W, height: SCREEN_H, ...style }} />;
+  return (
+    <>
+      <Img src={staticFile(`captures/raw/${clip}/${String(i).padStart(5, '0')}.jpg`)} style={{ position: 'absolute', left: 0, top: 0, width: SCREEN_W, height: SCREEN_H, ...style }} />
+      {/* the phone's own status bar and home indicator over the app (it was filmed leaving room for them) */}
+      <AppPx style={{ pointerEvents: 'none' }}>
+        <StatusBar time={time} />
+        <div style={{ position: 'absolute', bottom: 8, left: 195 - 60, width: 120, height: 4.5, borderRadius: 3, background: '#1b1b22', zIndex: 20 }} />
+      </AppPx>
+    </>
+  );
 };
 
 // ---------------------------------------------------------------- a finger
@@ -182,68 +195,92 @@ export const Footage: React.FC<{ clip: string; n: number; style?: React.CSSPrope
 const HAND = handGeo as { w: number; h: number; contactX: number; contactY: number; axisX: number; axisY: number; fingerW: number };
 /** The hand's size: its finger ~14 mm across (a touch slimmer than life, so it hides less of the screen). */
 const HS = 155 / HAND.fingerW;
-const REACH = 760; // world px it travels in from (and back out to), along its own arm
+/** World px it travels in from (and back out to), along its own arm: far enough to leave the frame. */
+const REACH = 1700;
 
+type Tap = { x: number; y: number; t: number };
 type FingerProps = {
   x: number; y: number; at: number; down?: number; up?: number; leave?: number; from?: { x: number; y: number }; path?: (f: number) => { x: number; y: number } | null;
+  /** Typing: several touches in a row (app px, frame), the hand hovering between them. */
+  taps?: Tap[];
   part?: 'hand' | 'shadow';
 };
+type HandState = { px: number; py: number; lift: number; s: number };
 
 /**
- * A real hand (public/phone/hand.png) reaching in along its arm, touching the glass at (x, y) app px
- * from `down` to `up` (following `path` meanwhile, for drags and swipes), then drawing back. Lifted off
- * the glass it is a little larger (nearer the lens) and its shadow falls further away and softer.
- * A phone draws it twice: its shadow on the screen, the hand above the glass.
+ * A real hand (public/phone/hand.png) reaching in along its arm from out of frame, touching the glass
+ * at (x, y) app px from `down` to `up` (following `path` meanwhile, for drags and swipes), then drawing
+ * back out of frame. With `taps` it stays and types: a short touch on each key, lifting a little and
+ * moving to the next in between. Lifted off the glass it is a little larger (nearer the lens) and its
+ * shadow falls further away and softer. A phone draws it twice: its shadow on the screen, the hand
+ * above the glass.
  */
-export const Finger: React.FC<FingerProps> = ({ x, y, at, down = at + 7, up = down + 3, leave = up + 8, path, part = 'hand' }) => {
+export const Finger: React.FC<FingerProps> = (props) => {
+  const { x, y, at, path, taps, part = 'hand' } = props;
+  const down = taps ? taps[0].t : props.down ?? at + 7;
+  const up = taps ? taps[taps.length - 1].t + 1.5 : props.up ?? down + 3;
+  const leave = props.leave ?? up + 8;
   const f = useCurrentFrame();
   if (f < at - 1 || f > leave + 1) return null;
-  const state = (g: number) => {
-    // 0 on the glass … 1 far off along the arm
+  const contact = (g: number): { x: number; y: number; lift: number } => {
+    if (!taps) { const p = path?.(Math.min(Math.max(g, down), up)); return { x: p ? p.x : x, y: p ? p.y : y, lift: 0 }; }
+    // typing: on each key for 1.5 frames, then across to the next, lifting with the distance in time
+    let i = 0;
+    while (i < taps.length - 1 && g >= taps[i + 1].t) i++;
+    const a = taps[i], b = taps[Math.min(i + 1, taps.length - 1)];
+    const hold = 1.5;
+    if (g - a.t < hold || a === b) return { x: a.x, y: a.y, lift: 0 };
+    const s = Math.min(1, (g - a.t - hold) / Math.max(0.5, b.t - a.t - hold));
+    const e = Easing.inOut(Easing.sin)(s);
+    const hover = Math.min(0.32, (b.t - a.t) / 40 + 0.05);
+    return { x: a.x + (b.x - a.x) * e, y: a.y + (b.y - a.y) * e, lift: hover * Math.sin(Math.PI * s) };
+  };
+  const state = (g: number): HandState => {
+    // the reach: 0 on (or over) the glass … 1 out of frame along the arm
     const inT = interpolate(g, [at, down], [1, 0], { ...clamp, easing: Easing.out(Easing.cubic) });
     const outT = interpolate(g, [up, leave], [0, 1], { ...clamp, easing: Easing.in(Easing.cubic) });
     const away = g < down ? inT : g > up ? outT : 0;
-    const p = path?.(Math.min(Math.max(g, down), up));
-    const px = (p ? p.x : x) * K + HAND.axisX * REACH * away;
-    const py = (p ? p.y : y) * K + HAND.axisY * REACH * away;
-    const lift = Math.min(1, away * 2.2); // height above the glass (it's off within the first part of the reach)
-    // the fingertip flattens a touch against the glass, and recovers as it lifts
-    const press = g >= down && g <= up && up - down >= 1 ? interpolate(g, [down, down + (up - down) / 2, up], [1, 0.985, 1], clamp) : 1;
-    return { px, py, lift, s: HS * (1 + 0.1 * lift) * press, away };
+    const c = contact(g);
+    const lift = Math.min(1, Math.max(c.lift, away * 5)); // height above the glass (well off within the first part of the reach)
+    const pressing = c.lift === 0 && away === 0;
+    return {
+      px: c.x * K + HAND.axisX * REACH * away, py: c.y * K + HAND.axisY * REACH * away, lift,
+      s: HS * (1 + 0.1 * lift) * (pressing ? 0.988 : 1), // (the fingertip flattens a touch against the glass)
+    };
   };
   const st = state(f);
-  const inEnd = Math.min(at + 2, (at + leave) / 2 - 0.01), outStart = Math.max(leave - 2, (at + leave) / 2 + 0.01);
-  const op = interpolate(f, [at - 1, inEnd, outStart, leave + 1], [0, 1, 1, 0], clamp);
   if (part === 'shadow') {
-    // light from the upper left: the shadow falls down and right, further and softer the higher the finger
-    const off = { x: 10 + 70 * st.lift, y: 16 + 110 * st.lift };
+    // light from the upper left: the shadow falls down and right, further and softer the higher the
+    // finger; on the glass, a tight dark pool right under the fingertip
+    const off = { x: 6 + 70 * st.lift, y: 10 + 110 * st.lift };
     const W2 = 556 * 4 * st.s, H2 = 704 * 4 * st.s, pad = 240 * st.s;
     const base = { position: 'absolute' as const, left: st.px - HAND.contactX * st.s - pad + off.x, top: st.py - HAND.contactY * st.s - pad + off.y, width: W2, height: H2 };
-    const o = op * (0.5 - 0.3 * st.lift);
+    const o = 0.72 - 0.42 * st.lift;
+    const pool = Math.max(0, 1 - st.lift * 4);
     return (
       <div style={{ position: 'absolute', inset: 0, zIndex: 45, pointerEvents: 'none' }}>
         <Img src={staticFile('phone/hand-shadow-near.png')} style={{ ...base, opacity: o * (1 - st.lift) }} />
         <Img src={staticFile('phone/hand-shadow-far.png')} style={{ ...base, opacity: o * st.lift }} />
+        {pool > 0 && <div style={{ position: 'absolute', left: st.px - 30, top: st.py - 14, width: 110, height: 80, borderRadius: '50%', background: 'radial-gradient(closest-side, rgba(0,0,0,.42), rgba(0,0,0,.16) 55%, rgba(0,0,0,0))', opacity: pool }} />}
       </div>
     );
   }
-  // the hand; moving fast it smears like it would on a 180° shutter (several faint exposures over the
-  // last half frame, weighted evenly: drawn back to front at 1, 1/2, 1/3…)
+  // the hand; moving fast it smears as on a 180° shutter: many faint exposures over the last half
+  // frame, weighted evenly (drawn back to front at 1, 1/2, 1/3…)
   const prev = state(f - 0.5);
   const speed = Math.hypot(st.px - prev.px, st.py - prev.py) * 2;
-  const n = speed > 22 ? Math.min(5, 2 + Math.round(speed / 22)) : 1;
-  const draw = (s: ReturnType<typeof state>, o: number, key: string) => (
+  const n = speed > 24 ? Math.min(14, Math.ceil(speed / 7)) : 1; // (copies ≤7 px apart: a continuous smear, not ghosts)
+  const draw = (s: HandState, o: number, key: string) => (
     <Img key={key} src={staticFile('phone/hand.png')} style={{
       position: 'absolute', left: s.px - HAND.contactX * s.s, top: s.py - HAND.contactY * s.s, width: HAND.w * s.s, height: HAND.h * s.s, opacity: o,
     }} />
   );
   return (
-    <div style={{ position: 'absolute', inset: 0, overflow: 'visible', opacity: op }}>
+    <div style={{ position: 'absolute', inset: 0, overflow: 'visible' }}>
       {Array.from({ length: n }, (_, i) => draw(n === 1 ? st : state(f - 0.5 + (0.5 * i) / (n - 1)), 1 / (i + 1), `h${i}`))}
     </div>
   );
 };
-
 
 // ---------------------------------------------------------------- the lens
 
@@ -253,9 +290,9 @@ export const Finger: React.FC<FingerProps> = ({ x, y, at, down = at + 7, up = do
  * sits (0–1 of the frame's height).
  */
 export const Lens: React.FC<{ zoom: number; focusY?: number }> = ({ zoom, focusY = 0.5 }) => {
-  const fast = React.useContext(FastCtx);
-  const amount = interpolate(zoom, [1.35, 2.3], [0, 1], clamp);
-  if (amount <= 0.02 || fast) return null;
+  const lensK = React.useContext(FastCtx);
+  const amount = interpolate(zoom, [1.35, 2.3], [0, 1], clamp) * lensK;
+  if (amount <= 0.02) return null;
   const blur = 2 + 9 * amount;
   const band = 26 - 8 * amount; // half-height of the sharp band, % of the frame
   const top = Math.max(0, focusY * 100 - band), bottom = Math.min(100, focusY * 100 + band);

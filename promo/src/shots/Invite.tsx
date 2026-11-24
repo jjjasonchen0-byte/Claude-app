@@ -7,7 +7,7 @@ import React from 'react';
 import { AbsoluteFill, Easing, Img, interpolate, staticFile, useCurrentFrame } from 'remotion';
 import { Finger, Footage, Phone, Stage } from '../kit';
 import { C, FONT, H, K, PHONE_X, PHONE_Y, BEZEL, W, clamp } from '../theme';
-import { ChatScreen, type Msg } from '../screens/Chat';
+import { CH, ChatScreen, type Msg } from '../screens/Chat';
 import { CAP } from '../captures';
 
 export const INVITE_DUR = 214;
@@ -45,7 +45,7 @@ const PROPS = (() => {
 
 /** The invite as it lands in the chat: a small map of the spot and the plan. */
 const InviteCard: React.FC = () => (
-  <div style={{ width: 250, borderRadius: 18, overflow: 'hidden', background: `linear-gradient(180deg, #2b8fff, ${C.accent})`, color: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,.12)' }}>
+  <div style={{ width: 250, borderRadius: 20, borderTopRightRadius: 6, overflow: 'hidden', background: CH.out, color: '#fff', boxShadow: '0 2px 8px rgba(77,58,230,.25)' }}>
     <div style={{ height: 118, position: 'relative', overflow: 'hidden', background: '#eef2f5' }}>
       <Img src={staticFile('captures/spot-card.png')} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
     </div>
@@ -67,7 +67,7 @@ const MSGS: Msg[] = [
 ];
 
 const Plane: React.FC<{ x: number; y: number; angle: number; scale: number; opacity: number }> = ({ x, y, angle, scale, opacity }) => (
-  <svg width={240} height={150} viewBox="0 0 180 110" style={{ position: 'absolute', left: x - 120, top: y - 75, transform: `rotate(${angle}deg) scale(${scale})`, overflow: 'visible', opacity, filter: 'drop-shadow(0 18px 24px rgba(0,0,0,.45))' }}>
+  <svg width={240} height={150} viewBox="0 0 180 110" style={{ position: 'absolute', left: x - 120, top: y - 75, transform: `rotate(${angle}deg) scale(${scale})`, overflow: 'visible', opacity, filter: 'drop-shadow(0 6px 6px rgba(20,20,60,.35)) drop-shadow(0 22px 26px rgba(0,0,0,.45))' }}>
     <polygon points="176,30 6,4 62,66" fill="#ffffff" stroke="#c9d8ec" strokeWidth={2.5} />
     <polygon points="176,30 62,66 78,102" fill="#cfe2ff" stroke="#b6cbe6" strokeWidth={2.5} />
     <polygon points="176,30 6,4 50,44" fill="#eef5ff" stroke="#c9d8ec" strokeWidth={2} />
@@ -103,7 +103,9 @@ export const Invite: React.FC = () => {
     const x = camX(p.x, p.depth) + wob, y = camY(p.y, p.depth) + Math.cos(frame * 0.03 + p.drift) * (near ? 16 : 10);
     const s = p.size * z * p.depth;
     const fade = interpolate(takeP, near ? [0.2, 0.7] : [0.3, 0.9], [1, 0], clamp) * interpolate(frame, [ZOOM_OUT[0], ZOOM_OUT[0] + 16], [0, 1], clamp);
-    return <div key={`${near}${i}`} style={{ position: 'absolute', left: x - s / 2, top: y - s / 2, width: s, height: s, borderRadius: p.ring ? '50%' : s * 0.22, opacity: (near ? 0.35 : p.depth < 0.6 ? 0.3 : 0.45) * fade, background: p.ring ? 'transparent' : `${p.color}55`, border: p.ring ? `${Math.max(s * 0.1, 4)}px solid ${p.color}88` : 'none', filter: `blur(${near ? 8 : p.depth < 0.6 ? 3 : 0}px)`, boxSizing: 'border-box' }} />;
+    // out-of-focus lights in Meet's colours (lens bokeh: soft discs, nearer = bigger and softer)
+    const o = (near ? 0.3 : p.depth < 0.6 ? 0.22 : 0.3) * fade;
+    return <div key={`${near}${i}`} style={{ position: 'absolute', left: x - s / 2, top: y - s / 2, width: s, height: s, borderRadius: '50%', opacity: o, background: `radial-gradient(circle, ${p.color}cc 0%, ${p.color}88 55%, ${p.color}33 72%, transparent 74%)`, filter: `blur(${near ? 10 : p.depth < 0.6 ? 2 : 4}px)` }} />;
   };
   return (
     <Stage>
@@ -118,7 +120,7 @@ export const Invite: React.FC = () => {
           </Phone>
           <Phone x={BX} y={BY}>
             <div style={{ position: 'absolute', inset: 0, zoom: K, width: 390, height: 844 }}>
-              <ChatScreen frame={frame} msgs={MSGS} />
+              <ChatScreen frame={frame} msgs={MSGS} time="6:34" />
             </div>
           </Phone>
           {frame >= FLY[0] - 2 && planeOpacity > 0.01 && <Plane x={pos.x} y={pos.y} angle={angle} scale={planeScale} opacity={planeOpacity} />}

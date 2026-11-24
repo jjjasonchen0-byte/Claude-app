@@ -18,6 +18,8 @@ export const FPS = 30;
 const DT = 1000 / FPS;
 
 export const LIVE = 'https://meet-hhdt.onrender.com/';
+/** The phone's safe areas, app px (the punch-hole status bar; the home indicator). */
+export const SAFE = { top: 50, bottom: 34 };
 
 export async function openRig({ scale = 3, start = '2026-11-27T18:30:00+11:00', dark = false, out = path.join(REPO, 'promo/public/captures'), url = null } = {}) {
   let server = null;
@@ -38,15 +40,21 @@ export async function openRig({ scale = 3, start = '2026-11-27T18:30:00+11:00', 
     r.fulfill({ path: path.join(INTER, `inter-latin-${w}-normal.woff2`), contentType: 'font/woff2' });
   });
   const page = await ctx.newPage();
+  // A phone's safe areas (the status bar above, the home indicator below): the app lays itself out
+  // around them as it does on a real phone (the advert draws the status bar and indicator on top)
+  const cdp0 = await ctx.newCDPSession(page);
+  await cdp0.send('Emulation.setSafeAreaInsetsOverride', { insets: { top: SAFE.top, topMax: SAFE.top, bottom: SAFE.bottom, bottomMax: SAFE.bottom, left: 0, leftMax: 0, right: 0, rightMax: 0 } });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   if (url) {
-    // the live site sleeps when idle (its host shows a "waking up" page meanwhile): wait for the app itself
-    for (let i = 0; i < 60; i++) {
-      const r = await ctx.request.get(url, { timeout: 30000 }).catch(() => null);
-      if (r && r.ok() && /id="panel"|id="map"/.test(await r.text())) break;
-      await new Promise((res) => setTimeout(res, 5000));
+    // the live site sleeps when idle (its host shows a "waking up" page meanwhile): wake it in a plain
+    // page (real time) until the app itself is up, then film in a fresh one
+    const warm = await ctx.newPage();
+    for (let i = 0; i < 30; i++) {
+      await warm.goto(url, { waitUntil: 'load', timeout: 120000 }).catch(() => {});
+      if (await warm.waitForFunction(() => !!window.__meet, null, { timeout: 20000 }).then(() => true, () => false)) break;
     }
+    await warm.close();
   }
   await page.clock.install({ time: new Date(start) });
   await page.goto(url || `http://localhost:${server.address().port}/`, { waitUntil: 'load', timeout: 120000 });

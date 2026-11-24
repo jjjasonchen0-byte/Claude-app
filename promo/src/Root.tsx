@@ -18,9 +18,13 @@ const ShotView: React.FC<{ shot: Shot }> = ({ shot }) => {
   const f = useCurrentFrame();
   const C = shot.component;
   const fast = shot.blur?.some(([a, b]) => f >= a && f <= b);
+  // the lens's depth of field steps aside inside motion blur, and eases back over 6 frames either side
+  const lensK = fast ? 0 : Math.min(1, ...(shot.blur ?? []).map(([a, b]) => Math.min(1, Math.max(a - f, f - b) / 6)));
   return (
     <AbsoluteFill>
-      {fast ? <FastCtx.Provider value><CameraMotionBlur shutterAngle={200} samples={10}><C /></CameraMotionBlur></FastCtx.Provider> : <C />}
+      <FastCtx.Provider value={lensK}>
+        {fast ? <CameraMotionBlur shutterAngle={200} samples={12}><C /></CameraMotionBlur> : <C />}
+      </FastCtx.Provider>
       {!shot.live && <Film />}
     </AbsoluteFill>
   );

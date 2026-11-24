@@ -20,8 +20,14 @@ ffmpeg -v error -y -f concat -safe 0 -i out/chunks/list.txt -c copy out/picture.
 echo "soundtracks"
 npx remotion render src/index.ts MeetAdSound out/sound-bgm.wav --codec=wav --log=error --timeout=120000
 npx remotion render src/index.ts MeetAdSound out/sound-nobgm.wav --codec=wav --props=props-nobgm.json --log=error --timeout=120000
+# Mastered for social feeds: the music version raised to about -14 LUFS (a limiter holding peaks under
+# -1 dBTP); the version without music gets the same gain, so the effects sit at the same level in both.
+I=$(ffmpeg -hide_banner -i out/sound-bgm.wav -af ebur128=peak=true -f null - 2>&1 | awk '/^ +I:/ {v=$2} END {print v}')
+GAIN=$(python3 -c "print(round(-14 - ($I), 2))")
+echo "loudness $I LUFS, gain $GAIN dB"
 for v in bgm nobgm; do
   name=meet-ad; [ $v = nobgm ] && name=meet-ad-nobgm
-  ffmpeg -v error -y -i out/picture.mp4 -i out/sound-$v.wav -map 0:v -map 1:a -c:v copy -c:a aac -b:a 256k -shortest -movflags +faststart out/$name.mp4
+  ffmpeg -v error -y -i out/picture.mp4 -i out/sound-$v.wav -map 0:v -map 1:a -c:v copy \
+    -af "volume=${GAIN}dB,alimiter=limit=0.85:attack=4:release=60:level=false" -c:a aac -b:a 256k -ar 48000 -shortest -movflags +faststart out/$name.mp4
 done
 ls -la out/meet-ad.mp4 out/meet-ad-nobgm.mp4

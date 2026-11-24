@@ -52,12 +52,12 @@ export const Crew: React.FC = () => {
 export const MODES_DUR = (F.modes ?? 78) + 6;
 export const Modes: React.FC = () => {
   const f = useCurrentFrame();
-  const pill = at(CAP.modes.tapPill);
+  // a hard cut straight into the macro, framed so each row reads whole (name · mode), drifting in
+  const c = onScreen(186, CAP.modes.tapPill.y + 70);
   const keys: Key[] = [
-    { f: 0, cam: { x: 540, y: 1000, zoom: 1.0, rz: -3 } },
-    { f: 14, cam: { x: pill.x + 120, y: pill.y + 70, zoom: 2.3, rz: 0 } },
-    { f: MODES_DUR - 16, cam: { x: pill.x + 110, y: pill.y + 80, zoom: 2.4 }, ease: Easing.inOut(Easing.sin) },
-    { f: MODES_DUR, cam: { x: pill.x + 60, y: pill.y + 40, zoom: 2.0 }, ease: Easing.in(Easing.cubic) },
+    { f: 0, cam: { x: c.x, y: c.y, zoom: 2.0, rz: -1.5 } },
+    { f: MODES_DUR - 14, cam: { x: c.x + 10, y: c.y + 10, zoom: 2.14, rz: 0 }, ease: Easing.inOut(Easing.sin) },
+    { f: MODES_DUR, cam: { x: c.x, y: c.y, zoom: 2.1 }, ease: Easing.inOut(Easing.sin) },
   ];
   return (
     <PhoneShot keys={keys}>

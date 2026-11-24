@@ -98,7 +98,7 @@ export const Brand: React.FC = () => {
       <div style={{ position: 'absolute', left: 0, right: 0, top: cy + 190, textAlign: 'center', fontFamily: FONT, fontWeight: 700, fontSize: 60, letterSpacing: '-0.03em', color: C.white, opacity: tag, transform: `translateY(${(1 - tag) * 24}px)`, filter: tag < 1 ? `blur(${(1 - tag) * 8}px)` : undefined }}>
         Plan your next catch-up.
       </div>
-      <div style={{ position: 'absolute', left: 0, right: 0, top: cy + 290, textAlign: 'center', fontFamily: FONT, fontWeight: 600, fontSize: 44, letterSpacing: '-0.01em', color: C.accentOnBlack, opacity: url, transform: `translateY(${(1 - url) * 18}px)` }}>
+      <div style={{ position: 'absolute', left: 0, right: 0, top: cy + 286, textAlign: 'center', fontFamily: FONT, fontWeight: 700, fontSize: 58, letterSpacing: '-0.01em', color: C.accentOnBlack, opacity: url, transform: `translateY(${(1 - url) * 18}px)` }}>
         meet-hhdt.onrender.com
       </div>
     </Stage>

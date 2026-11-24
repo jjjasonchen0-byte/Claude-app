@@ -17,8 +17,9 @@ Mode: **autonomous free creation** (the user chose "you direct it"). Format: **v
      Friend2 "But where?" · You "I've got just the thing".
   3. The user closes the messaging app, swipes the home screen, taps the Meet app.
   4. Then a showcase of most of the interesting parts of the app, its animations especially.
-- **Data.** The app footage comes from Meet's own test build (central Sydney, built into the page):
-  fictional people (Sam, Priya, Leo, You) at public street addresses; nothing personal, nothing live.
+- **Data.** The app footage is filmed on the live site (its real map, routing and places): fictional
+  people (Sam, Priya, Leo, You) at public street addresses; the venues are real businesses as the app
+  lists them. Nothing personal.
   The three friends in the chat are those same people, so the story carries through.
 - **Brand safety.** The look is *inspired by* phone launch films; nothing of a real brand is copied:
   a generic phone (no maker's shapes or marks), an original chat app and home screen in Meet's own
@@ -96,14 +97,15 @@ Gallery cards (checked in `gallery/api/library.json`; each card read in full; it
 | 2 | Chat: problem → "I've got just the thing" | `tension-camera-moves` · `dutch-roll-to-level` | camera/tension-camera-moves/DutchRollToLevel.tsx | Problem held at a tilt, the answer rolls it level. |
 | 3 | Close the chat app; open Meet | `transition-travel` · `shared-element-morph` | transition/transition-travel/SharedElementMorph.tsx | The app shrinks into its icon; Meet's icon grows into the app (the same morph, both ways). |
 | 4 | Headline | `lead-word-zoom-assemble` | typography/lead-word-zoom-assemble/LeadWordZoomAssemble.tsx | "Meet" huge, then "Meet in the middle." assembles round it. |
-| 5 | Travel modes | `segmented-thumb-hero` | interaction/segmented-thumb-hero/SegmentedThumbHero.tsx | Macro on the mode menu: tap, the highlight slides, the new mode pops. |
+| 5 | Travel modes | — (a macro on the mode menu; the card's sliding highlight lives in the tabs shot) | — | A hard cut into a macro on Sam's row: tap, the menu, Bike. |
+| 5b | Tabs | `segmented-thumb-hero` | interaction/segmented-thumb-hero/SegmentedThumbHero.tsx | Macro on the tabs: the highlight slides Drinks → Food. |
 | 6 | Tap the play button | `input-trigger-moves` · `cursor-performance` | interaction/input-trigger-moves/CursorPerformancePunchIn.tsx | A finger (touch dot) presses; the camera punches in 1.4× and eases back. |
 | 7 | Routes racing (hero) | `speed-ramp-freeze` · `speed-ramp` | rhythm/speed-ramp-freeze/SpeedRampReal.tsx | Fast → 0.2× stare as routes meet → fast. |
 | 8 | The meeting point | `crash-zoom-punch` (impact) | camera/crash-zoom-punch/CrashImpactReal.tsx | "That's the spot." Crash zoom 2 of 2. |
 | 9 | Places nearby | `steep-tilt-glide` | camera/steep-tilt-glide/SteepTiltGlide.tsx | The screen stood at a steep angle, the place list gliding past. |
 | 10 | Send invite → back to the chat | `paper-plane-messenger` | transition/paper-plane-messenger/PaperPlaneMessenger.tsx | Meet's own send icon is a paper plane: it carries the invite into the chat. |
 | 11 | Brand | `ui-to-brand-morph` · `icon-flip-bloom` | outro/ui-to-brand-morph/IconFlipBloomLogo.tsx | The play button flips and becomes the wordmark's blue dot; "meet" lands. |
-| — | Seams | `shot-transitions` E whip-pan / C focus hand-off / A flash-cut | transition/shot-transitions/*.tsx | One transition per seam. |
+| — | Seams | hard cuts on the beat (the `shot-transitions` card is not used) | — | Every cut lands on a beat of the music (timeline.ts snaps each one); a launch film's cutting. Two fades to black: into the headline, out of real life. |
 
 People list, results and the glass sheet need no card: they are real footage, carried by one camera
 move each (slow orbit, macro push), with a caption.
@@ -139,3 +141,6 @@ bubble twice: each bubble holds ≥ 18f before the next arrives.
 | Real life | `public/live/pub.mp4` (Higgsfield, Kling 3.0 pro): the four friends meeting at the pub, the clink. 2.3 s after "see you there!" | The product's promise, shown, not said |
 | Real sound | Epidemic Sound (via Higgsfield): taps on a phone screen (one per touch and keystroke), a beer-garden crowd, glasses clinking, a cheer; film whooshes/impacts from the skill's library on the camera moves | Synthetic UI tones break the illusion (rule S1) |
 | Capture | The live site (meet-hhdt.onrender.com): its real map (Google's, through the site), real routing and real places, filmed frame by frame on a held clock. A fictional group at real Sydney addresses; Australian locale (dates as 27/11/2026), the invite time set (Fri 27 Nov, 6:30 pm); every map tile drawn before a clip starts | The user asked for the real map, not the offline test build's simplified one |
+| Brand rule | The chat app, its keyboard and the home screen are our own designs: a left-aligned chat header, white/violet bubbles with coloured names, a pill composer with a round send button, a flat keyboard with a plain suggestion strip; round icons for invented apps and a search bar on the home screen. The share page's "Apple Maps" button is hidden in the capture | No phone maker's look or name on screen (the independent review's B-1, B-2) |
+| A phone's safe areas | The capture tells the browser about a status bar (50 px) and a home indicator (34 px), as a phone does; the app lays itself out around them and the advert draws the status bar and indicator on top | The app's top line was under the camera hole; and footage without a status bar never looks like a phone |
+| Pace | The opening is 34 frames longer: the message is typed by the hand at ~7.5 keys a second; "Meet" lands on the music's drop (frame 443); every later cut is on a beat; mastered to −14 LUFS | The review's B-4, S-9, S-10, S-11 |

@@ -71,7 +71,7 @@ export const Tabs: React.FC = () => {
 // ---------------------------------------------------------------- the glide
 
 /** The place screens, in order (frames of the places clip, each once its page has settled). */
-const SCREENS = [fr(P.tapDrinks) + 30, fr(P.tapGroup) + 30, fr(P.tapSend) - 4, CAP.placesLast];
+const SCREENS = [fr(P.tapFood) + 30, fr(P.tapGroup) + 30, fr(P.tapSend) - 4, CAP.placesLast]; // (Food: the tab chosen last)
 export const GLIDE_DUR = 118;
 const GAP = 110;
 const STRIP_W = SCREENS.length * SCREEN_W + (SCREENS.length - 1) * GAP;

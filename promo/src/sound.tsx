@@ -51,11 +51,11 @@ export const SFX: Sfx[] = [
   { at: S('headline') + 2, src: 'impact-cine-big', volume: 0.42, dur: 110, fadeOut: 30 },
   // ---- crew
   tap(S('crew') + fr(CAP.crew.tapMap, 15), 0.5),
-  tap(S('crew') + fr(CAP.crew.tapUse, 37), 0.5),
+  tap(S('crew') + fr(CAP.crew.tapUse, 37), 0.9),
   { at: S('crew') + fr(CAP.crew.tapUse, 37) + 13, src: 'transition-soft', volume: 0.3, dur: 40 }, // cut to Leo in the list
   // ---- modes
-  tap(S('modes') + fr(CAP.modes.tapPill, 12), 0.5),
-  tap(S('modes') + fr(CAP.modes.tapBike, 38), 0.5),
+  tap(S('modes') + fr(CAP.modes.tapPill, 12), 0.9),
+  tap(S('modes') + fr(CAP.modes.tapBike, 38), 0.9),
   { at: S('modes') + fr(CAP.modes.tapBike, 38) + 1, src: 'switch-tap', volume: 0.18, dur: 20 },
 ];
 
@@ -87,11 +87,11 @@ export const lateSfx = (beats: {
   { at: S('invite') + beats.invite.fly[0] + 6, src: 'wind-woosh-throw', volume: 0.38, dur: 30 },
   { at: S('invite') + beats.invite.fly[1] - 10, src: 'whoosh-fast', volume: 0.3, dur: 50 },
   { at: S('invite') + beats.invite.land, src: 'pop', volume: 0.42, dur: 15 },
-  ...beats.invite.replies.map((r, i) => ({ at: S('invite') + r, src: 'pop', volume: 0.34 - i * 0.03, dur: 15 })),
+  ...beats.invite.replies.map((r, i) => ({ at: S('invite') + r, src: 'pop', volume: 0.5 - i * 0.02, dur: 15 })),
   // ---- real life: the beer garden, the cheer, the clink
   { at: S('live') - 2, src: 'beer-garden', volume: 0.55, dur: shot('live').dur + 12, fadeIn: 5, fadeOut: 14 },
   { at: S('live') + 18, src: 'cheer', volume: 0.32, dur: 60, fadeOut: 12 },
-  { at: S('live') + beats.live.clink, src: 'clink', volume: 0.8, dur: 52, fadeOut: 12 },
+  { at: S('live') + beats.live.clink, src: 'clink', volume: 0.8, dur: 52, fadeOut: 12 }, // (on the cut, as the glasses meet)
   // ---- the brand
   { at: S('brand') + beats.brand.flip, src: 'shimmer-sparkle-sweep', volume: 0.3, dur: 80, fadeOut: 20 },
   { at: S('brand') + beats.brand.word, src: 'impact-deep-whoosh', volume: 0.32, dur: 90, fadeOut: 30 },

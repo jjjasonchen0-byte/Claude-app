@@ -43,6 +43,15 @@ async function finish() {
   process.exit(0);
 }
 
+// The share page's map-app buttons, without the one named after a phone maker (the advert's brand rule);
+// and the place page without Google's embedded place card (its photos can't load from the capture
+// machine: the app's own place page instead, as it shows when Google has no match)
+await page.evaluate(() => {
+  const hide = () => { for (const a of document.querySelectorAll('a.btn')) if (/^\s*Apple Maps\s*$/.test(a.textContent)) a.remove(); };
+  new MutationObserver(hide).observe(document.body, { childList: true, subtree: true });
+  document.head.appendChild(Object.assign(document.createElement('style'), { textContent: 'gmp-place-details { display: none !important; }' }));
+});
+
 // ---------------------------------------------------------------- the start screen (still)
 await rig.idle(1500);
 await page.evaluate(() => document.fonts.ready);
@@ -80,7 +89,7 @@ await page.evaluate((g) => {
   // opens clear of the buttons at the top.
   const leo = g.friends[2];
   m.setView([leo.lat, leo.lon], 13.25, { animate: false });
-  m.panBy([-30, 180], { animate: false });
+  m.panBy([-30, 122], { animate: false }); // (Leo ~300 down: his card opens below the status bar and the buttons)
 }, g);
 await rig.idle(2500);
 await tilesDrawn('crew');
@@ -129,7 +138,7 @@ await rig.thaw();
 await page.evaluate((g) => {
   const m = window.__meet.map;
   const pts = [g.home, ...g.friends].map((p) => [p.lat, p.lon]);
-  m.fitBounds(pts, { paddingTopLeft: [48, 150], paddingBottomRight: [48, 230], animate: false });
+  m.fitBounds(pts, { paddingTopLeft: [48, 200], paddingBottomRight: [48, 250], animate: false });
 }, g);
 await rig.idle(2500);
 await tilesDrawn('go');
@@ -225,10 +234,13 @@ meta.places.tapPlace = { x: place.x, y: place.y, frame: rig.frame() };
 await page.touchscreen.tap(place.x, place.y);
 for (let i = 0; i < 60 && !(await page.$('[data-action=choose]')); i++) await rig.step(1);
 await rig.step(44);
+await page.evaluate(() => document.querySelector('[data-action=choose]')?.scrollIntoView({ block: 'nearest' }));
+await rig.step(2);
 const send = await box('[data-action=choose]');
 meta.places.tapSend = { x: send.x, y: send.y, frame: rig.frame() };
 await page.touchscreen.tap(send.x, send.y);
 for (let i = 0; i < 60 && !(await page.$('[data-action=native-share]')); i++) await rig.step(1);
+if (!(await page.$('#share-when'))) throw new Error('the invite page did not open: ' + (await page.textContent('#panel-body')).replace(/\s+/g, ' ').slice(0, 300));
 await rig.step(6);
 // when: this Friday, 6:30 pm (picked in the date field)
 await page.evaluate(() => {
