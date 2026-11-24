@@ -1,8 +1,8 @@
-// Meet's start screen as the real app shows it (the test build's own extras hidden).
-import { openRig } from './rig.mjs';
-const rig = await openRig({ out: '/home/user/Claude-app/promo/public/captures' });
+// Meet's start screen, from the live site.
+import { openRig, LIVE } from './rig.mjs';
+const rig = await openRig({ out: '/home/user/Claude-app/promo/public/captures', url: LIVE });
 const { page } = rig;
-await rig.idle(1500);
+await rig.idle(4000);
 await page.evaluate(() => {
   document.querySelector('#demo-sample')?.remove();
   const i = document.querySelector('#home-input');

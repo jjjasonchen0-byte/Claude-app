@@ -32,7 +32,7 @@ Mode: **autonomous free creation** (the user chose "you direct it"). Format: **v
 | Vertical | 1080×1920 @ 30fps, ~40s. Text sized for a phone screen (headlines ≥ 96px, captions ≥ 56px). |
 | Chat opening | Original chat UI built in Meet's design language (a non-replica scene, Q1). Messages arrive one by one with typing dots; the camera pushes in. |
 | Close app → swipe → tap Meet | Original home screen (two pages of generic icons, Meet's real icon on page two). Chat shrinks into its icon; swipe; tap; Meet's icon zooms open into the app. |
-| Showcase | Real footage of the Meet test build, captured at 3× with a controlled clock (slow motion, then re-timed) so every animation is smooth and sharp. |
+| Showcase | Real footage of Meet's live site, captured at 3× with a controlled clock (slow motion, then re-timed) so every animation is smooth and sharp. |
 | Audio | Strong-beat electronic bed + film-style SFX; two renders: with and without music. |
 
 ### Feature checklist (each gets one shot, one main move)
@@ -138,4 +138,4 @@ bubble twice: each bubble holds ≥ 18f before the next arrives.
 | Lens and sensor | Charcoal studio sweep instead of black; vignette and per-frame grain on every graphic shot | Clean black and perfect pixels read as CG |
 | Real life | `public/live/pub.mp4` (Higgsfield, Kling 3.0 pro): the four friends meeting at the pub, the clink. 2.3 s after "see you there!" | The product's promise, shown, not said |
 | Real sound | Epidemic Sound (via Higgsfield): taps on a phone screen (one per touch and keystroke), a beer-garden crowd, glasses clinking, a cheer; film whooshes/impacts from the skill's library on the camera moves | Synthetic UI tones break the illusion (rule S1) |
-| Capture | Australian locale (dates as 27/11/2026), the invite time set (Fri 27 Nov, 6:30 pm), the race filmed with the map closer in (the built-in map of central Sydney ends south of Newtown), every map tile drawn before a clip starts | Nothing on screen that a real phone in Sydney wouldn't show |
+| Capture | The live site (meet-hhdt.onrender.com): its real map (Google's, through the site), real routing and real places, filmed frame by frame on a held clock. A fictional group at real Sydney addresses; Australian locale (dates as 27/11/2026), the invite time set (Fri 27 Nov, 6:30 pm); every map tile drawn before a clip starts | The user asked for the real map, not the offline test build's simplified one |

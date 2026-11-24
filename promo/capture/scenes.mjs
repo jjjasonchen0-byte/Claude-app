@@ -1,13 +1,13 @@
-// The advert's app footage, captured in one session of Meet's test build (central Sydney, fictional
-// people). Usage: node scenes.mjs [--until <clip>]
+// The advert's app footage, captured in one session of the live site (meet-hhdt.onrender.com: its real
+// map, routing and places), with a fictional group in Sydney. Usage: node scenes.mjs [--until <clip>]
 import fs from 'node:fs';
 import path from 'node:path';
-import { openRig } from './rig.mjs';
+import { openRig, LIVE } from './rig.mjs';
 
 const until = process.argv.includes('--until') ? process.argv[process.argv.indexOf('--until') + 1] : null;
 const OUT = path.resolve('/home/user/Claude-app/promo/public/captures');
 fs.mkdirSync(OUT, { recursive: true });
-const rig = await openRig({ out: OUT });
+const rig = await openRig({ out: OUT, url: LIVE });
 const { page } = rig;
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 const meta = {};
@@ -50,12 +50,20 @@ await rig.still('start');
 log('start still');
 
 // ---------------------------------------------------------------- off camera: the group (Leo comes later)
-const g = await page.evaluate(() => __m.demo.sampleGroup());
+// The group (fictional people at real Sydney addresses; the same as the test build's sample group)
+const g = {
+  home: { address: '325 Eliza Street, Newtown', lat: -33.89724, lon: 151.17893 },
+  friends: [
+    { address: '9 Paternoster Row, Pyrmont', lat: -33.86982, lon: 151.19446, nickname: 'Sam' },
+    { address: '246 Oxford Street, Paddington', lat: -33.88488, lon: 151.22638, nickname: 'Priya' },
+    { address: '115 Brett Whiteley Place, North Sydney', lat: -33.83911, lon: 151.20746, nickname: 'Leo' },
+  ],
+};
 meta.group = g;
 await page.evaluate(async (g) => {
   const { api, onUser } = window.__meet;
-  // The ways of travelling that give this group the most even trips (capture/fairest.mjs):
-  // you walk, Sam bikes (he switches on camera), Priya and Leo drive (17 · 11 · 11 · 16 min).
+  // You walk, Sam bikes (he switches on camera), Priya and Leo drive: on the live site's routing the
+  // fairest spot is then on King Street, Newtown (13 · 19 · 16 · 15 min).
   await api.updateMe({ home: { ...g.home, mode: 'walk' } });
   await api.addPlace({ ...g.friends[0], mode: 'walk' }); // Sam
   await api.addPlace({ ...g.friends[1], mode: 'drive' }); // Priya
@@ -69,7 +77,7 @@ await page.evaluate((g) => {
   const m = window.__meet.map;
   const pts = [g.home, ...g.friends].map((p) => [p.lat, p.lon]);
   // Close on Leo's corner of North Sydney, his spot a third of the way down: his address card then
-  // opens clear of the buttons at the top, and the view stays inside the built-in map.
+  // opens clear of the buttons at the top.
   const leo = g.friends[2];
   m.setView([leo.lat, leo.lon], 13.25, { animate: false });
   m.panBy([-30, 180], { animate: false });

@@ -1,4 +1,4 @@
-// Frame-exact capture of Meet's test build for the advert.
+// Frame-exact capture of Meet for the advert: the live site (pass `url`), or the offline test build.
 //
 // The page runs on a clock we hold: Playwright's fake clock drives JavaScript time (Date,
 // performance.now, timers, requestAnimationFrame) and DevTools freezes the document timeline,
@@ -17,19 +17,39 @@ const REPO = '/home/user/Claude-app';
 export const FPS = 30;
 const DT = 1000 / FPS;
 
-export async function openRig({ scale = 3, start = '2026-11-27T18:30:00+11:00', dark = false, out = path.join(REPO, 'promo/public/captures') } = {}) {
-  const html = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' + fs.readFileSync(path.join(REPO, 'dist/meet-test.html'), 'utf8');
-  const server = http.createServer((req, res) => { res.writeHead(200, { 'content-type': 'text/html' }); res.end(html); }).listen(0);
+export const LIVE = 'https://meet-hhdt.onrender.com/';
+
+export async function openRig({ scale = 3, start = '2026-11-27T18:30:00+11:00', dark = false, out = path.join(REPO, 'promo/public/captures'), url = null } = {}) {
+  let server = null;
+  if (!url) {
+    const html = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' + fs.readFileSync(path.join(REPO, 'dist/meet-test.html'), 'utf8');
+    server = http.createServer((req, res) => { res.writeHead(200, { 'content-type': 'text/html' }); res.end(html); }).listen(0);
+  }
   // (an Australian phone: dates as 27/11/2026 in the date fields; the browser takes it from the environment)
   const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'], env: { ...process.env, LANG: 'en_AU.UTF-8', LANGUAGE: 'en_AU:en', LC_ALL: 'en_AU.UTF-8' } });
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: scale, hasTouch: true, isMobile: true, colorScheme: dark ? 'dark' : 'light', timezoneId: 'Australia/Sydney', locale: 'en-AU' });
   await ctx.route('https://cdnjs.cloudflare.com/**', (r) => r.fulfill({ path: path.join(REPO, 'node_modules/leaflet/dist/leaflet.js'), contentType: 'text/javascript' }));
-  await ctx.route('https://fonts.googleapis.com/**', (r) => r.fulfill({ body: '', contentType: 'text/css' }));
+  // Inter, as the site asks Google Fonts for it (that host isn't reachable from here): the same font files, served locally
+  const INTER = path.join(REPO, 'promo/node_modules/@fontsource/inter/files');
+  const interCss = [400, 500, 600, 700].map((w) => `@font-face{font-family:'Inter';font-style:normal;font-weight:${w};font-display:block;src:url(https://fonts.gstatic.com/local/inter-${w}.woff2) format('woff2')}`).join('\n');
+  await ctx.route('https://fonts.googleapis.com/**', (r) => r.fulfill({ body: interCss, contentType: 'text/css' }));
+  await ctx.route('https://fonts.gstatic.com/local/**', (r) => {
+    const w = r.request().url().match(/inter-(\d+)/)[1];
+    r.fulfill({ path: path.join(INTER, `inter-latin-${w}-normal.woff2`), contentType: 'font/woff2' });
+  });
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
+  if (url) {
+    // the live site sleeps when idle (its host shows a "waking up" page meanwhile): wait for the app itself
+    for (let i = 0; i < 60; i++) {
+      const r = await ctx.request.get(url, { timeout: 30000 }).catch(() => null);
+      if (r && r.ok() && /id="panel"|id="map"/.test(await r.text())) break;
+      await new Promise((res) => setTimeout(res, 5000));
+    }
+  }
   await page.clock.install({ time: new Date(start) });
-  await page.goto(`http://localhost:${server.address().port}/`);
+  await page.goto(url || `http://localhost:${server.address().port}/`, { waitUntil: 'load', timeout: 120000 });
   // Playwright's fake requestAnimationFrame hands callbacks a timestamp on another time base than
   // its fake performance.now(); animations that compare the two (Meet's route race does) would jump
   // to their end. Each callback gets the page's own performance.now() instead.
@@ -110,7 +130,7 @@ export async function openRig({ scale = 3, start = '2026-11-27T18:30:00+11:00', 
   }
   async function close() {
     await browser.close();
-    server.close();
+    server?.close();
   }
   /** The number of frames recorded so far in the current clip (a tap made now shows from the next one). */
   const frame = () => (clip ? clip.n : 0);
