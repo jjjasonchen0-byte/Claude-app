@@ -3,30 +3,26 @@
     "home": {
       "address": "325 Eliza Street, Newtown",
       "lat": -33.89724,
-      "lon": 151.17893,
-      "mode": "walk"
+      "lon": 151.17893
     },
     "friends": [
       {
         "address": "9 Paternoster Row, Pyrmont",
         "lat": -33.86982,
         "lon": 151.19446,
-        "nickname": "Sam",
-        "mode": "walk"
+        "nickname": "Sam"
       },
       {
         "address": "246 Oxford Street, Paddington",
         "lat": -33.88488,
         "lon": 151.22638,
-        "nickname": "Priya",
-        "mode": "walk"
+        "nickname": "Priya"
       },
       {
         "address": "115 Brett Whiteley Place, North Sydney",
         "lat": -33.83911,
         "lon": 151.20746,
-        "nickname": "Leo",
-        "mode": "walk"
+        "nickname": "Leo"
       }
     ]
   },
@@ -37,19 +33,19 @@
       "frame": 15
     },
     "tapUse": {
-      "x": 224.5,
+      "x": 225,
       "y": 192,
-      "frame": 37
+      "frame": 39
     },
-    "typeFrom": 61,
+    "typeFrom": 63,
     "tapAdd": {
       "x": 300.7890625,
       "y": 201.9765625,
-      "frame": 90
+      "frame": 92
     }
   },
   "frames": {
-    "crew": 165,
+    "crew": 167,
     "modes": 78,
     "go": 369,
     "places": 300
