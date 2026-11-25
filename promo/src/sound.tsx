@@ -39,7 +39,7 @@ export const SFX: Sfx[] = [
   { at: S('opening') + O.crash + 6, src: 'impact-zoom-quick', volume: 0.42, dur: 36 }, // "But where?" crash zoom
   tap(S('opening') + O.fieldTap, 0.5),
   // every key (the keyboard: soft taps)
-  ...Array.from({ length: "I've got just the thing".length }, (_, i) => tap(S('opening') + O.typeFrom + i * TYPE_RATE, 0.26 + ((i * 7) % 5) * 0.02)),
+  ..."I've got just the thing".split('').flatMap((ch, i) => (ch === "'" ? [] : [tap(S('opening') + O.typeFrom + i * TYPE_RATE, 0.26 + ((i * 7) % 5) * 0.02)])), // (no key for the apostrophe)
   tap(S('opening') + O.sendTap, 0.55),
   { at: S('opening') + O.sent + 6, src: 'swoosh-quick', volume: 0.28, dur: 24 }, // your bubble flies up
   // ---- closing the app, the home screen, Meet
@@ -86,8 +86,8 @@ export const lateSfx = (beats: {
   tap(S('invite') + beats.invite.click, 0.6),
   { at: S('invite') + beats.invite.fly[0] + 6, src: 'wind-woosh-throw', volume: 0.38, dur: 30 },
   { at: S('invite') + beats.invite.fly[1] - 10, src: 'whoosh-fast', volume: 0.3, dur: 50 },
-  { at: S('invite') + beats.invite.land, src: 'pop', volume: 0.42, dur: 15 },
-  ...beats.invite.replies.map((r, i) => ({ at: S('invite') + r, src: 'pop', volume: 0.5 - i * 0.02, dur: 15 })),
+  { at: S('invite') + beats.invite.land, src: 'pop', volume: 0.7, dur: 15 },
+  ...beats.invite.replies.map((r, i) => ({ at: S('invite') + r, src: 'pop', volume: 0.78 - i * 0.03, dur: 15 })),
   // ---- real life: the beer garden, the cheer, the clink
   { at: S('live') - 2, src: 'beer-garden', volume: 0.55, dur: shot('live').dur + 12, fadeIn: 5, fadeOut: 14 },
   { at: S('live') + 18, src: 'cheer', volume: 0.32, dur: 60, fadeOut: 12 },

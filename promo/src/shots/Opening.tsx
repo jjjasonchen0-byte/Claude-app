@@ -36,12 +36,12 @@ export const TYPE_RATE = 4;
 /** The one hand that answers: the field, then every key, then send (app px, frame). */
 const TAPS = [
   { ...CHAT_FIELD, t: O.fieldTap },
-  ...DRAFT.split('').map((ch, i) => ({ ...keyPoint(ch)!, t: O.typeFrom + i * TYPE_RATE })),
+  ...DRAFT.split('').flatMap((ch, i) => { const k = keyPoint(ch); return k ? [{ ...k, t: O.typeFrom + i * TYPE_RATE }] : []; }),
   { ...SEND_UP, t: O.sendTap },
 ];
 
 /** The dive's target on Meet's start screen (app px): the end of the wordmark, its blue dot. */
-const WORD = { x: 242, y: 333 };
+const WORD = { x: 262, y: 336 };
 
 // "But where?": the 4th incoming bubble's centre (app px), and the field.
 const WHERE_AT = onScreen(98, 403);
@@ -108,11 +108,15 @@ export const Opening: React.FC = () => {
   const chats = iconBox(0, 0);
   const pClose = f < O.morphIn ? 0 : morphP(f, O.morphIn);
   const lift = interpolate(f, [O.swipeUp, O.morphIn], [0, 1], { ...clamp, easing: Easing.out(Easing.quad) }); // the app follows the finger up a little first
-  const cw = lerp(390, chats.w, pClose) * (1 - 0.06 * lift * (1 - pClose));
-  const ch = lerp(844, chats.h, pClose) * (1 - 0.06 * lift * (1 - pClose));
-  const cx = lerp(0, chats.x, pClose) + (390 - cw) / 2 * (1 - pClose);
-  const cy = lerp(0, chats.y, pClose) + (844 - ch) / 2 * (1 - pClose) - 30 * lift * (1 - pClose);
-  const cr = lerp(48, chats.w / 2, Math.min(1, pClose)); // (into a round icon)
+  // the shape travels to the slot (to p = 1); the overshoot past it is a uniform scale about the slot's
+  // centre, so the icon stays round instead of squashing
+  const pc = Math.min(1, pClose), over = pClose > 1 ? 1 - (pClose - 1) * 1.5 : 1;
+  const cw0 = lerp(390, chats.w, pc) * (1 - 0.06 * lift * (1 - pc));
+  const ch0 = lerp(844, chats.h, pc) * (1 - 0.06 * lift * (1 - pc));
+  const cw = cw0 * over, ch = ch0 * over;
+  const cx = lerp(0, chats.x, pc) + (390 - cw0) / 2 * (1 - pc) + (cw0 - cw) / 2;
+  const cy = lerp(0, chats.y, pc) + (844 - ch0) / 2 * (1 - pc) - 30 * lift * (1 - pc) + (ch0 - ch) / 2;
+  const cr = lerp(48, chats.w / 2, pc) * over; // (into a round icon)
   const appFade = interpolate(pClose, [0.55, 0.85], [1, 0], clamp);
   const homeIn = interpolate(f, [O.swipeUp, O.morphIn + 30], [0, 1], { ...clamp, easing: Easing.out(Easing.cubic) });
 

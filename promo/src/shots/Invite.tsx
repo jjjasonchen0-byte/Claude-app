@@ -68,9 +68,9 @@ const MSGS: Msg[] = [
 
 const Plane: React.FC<{ x: number; y: number; angle: number; scale: number; opacity: number }> = ({ x, y, angle, scale, opacity }) => (
   <svg width={240} height={150} viewBox="0 0 180 110" style={{ position: 'absolute', left: x - 120, top: y - 75, transform: `rotate(${angle}deg) scale(${scale})`, overflow: 'visible', opacity, filter: 'drop-shadow(0 6px 6px rgba(20,20,60,.35)) drop-shadow(0 22px 26px rgba(0,0,0,.45))' }}>
-    <polygon points="176,30 6,4 62,66" fill="#ffffff" stroke="#c9d8ec" strokeWidth={2.5} />
-    <polygon points="176,30 62,66 78,102" fill="#cfe2ff" stroke="#b6cbe6" strokeWidth={2.5} />
-    <polygon points="176,30 6,4 50,44" fill="#eef5ff" stroke="#c9d8ec" strokeWidth={2} />
+    <polygon points="176,30 6,4 62,66" fill="#f4f2ff" stroke="#8f84f0" strokeWidth={3} />
+    <polygon points="176,30 62,66 78,102" fill="#c9c1ff" stroke="#7b6ff0" strokeWidth={3} />
+    <polygon points="176,30 6,4 50,44" fill="#e3deff" stroke="#8f84f0" strokeWidth={2.5} />
   </svg>
 );
 

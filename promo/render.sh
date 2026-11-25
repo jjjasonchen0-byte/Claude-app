@@ -2,7 +2,7 @@
 # The final renders, in chunks (a failure costs one chunk, not the whole film): the picture once,
 # then the two soundtracks (with and without the music), muxed into the two deliverables.
 #   ./render.sh            all of it
-#   ./render.sh 2          redo only chunk 2 (then the mux)
+#   ./render.sh 0 3        redo only chunks 0 and 3 (then the soundtracks and the mux)
 set -e
 cd "$(dirname "$0")"
 mkdir -p out/chunks
@@ -10,7 +10,7 @@ TOTAL=$(npx remotion compositions src/index.ts 2>/dev/null | awk '$1 == "MeetAd"
 SIZE=420
 N=$(( (TOTAL + SIZE - 1) / SIZE ))
 for ((i = 0; i < N; i++)); do
-  if [ -n "$1" ] && [ "$1" != "$i" ]; then continue; fi
+  if [ $# -gt 0 ] && [[ " $* " != *" $i "* ]]; then continue; fi
   a=$((i * SIZE)); b=$((a + SIZE - 1)); [ $b -ge $TOTAL ] && b=$((TOTAL - 1))
   echo "chunk $i: frames $a-$b"
   npx remotion render src/index.ts MeetAd out/chunks/part$i.mp4 --frames=$a-$b --concurrency=2 --muted --log=error --timeout=120000

@@ -23,7 +23,7 @@ const ShotView: React.FC<{ shot: Shot }> = ({ shot }) => {
   return (
     <AbsoluteFill>
       <FastCtx.Provider value={lensK}>
-        {fast ? <CameraMotionBlur shutterAngle={200} samples={12}><C /></CameraMotionBlur> : <C />}
+        {fast ? <CameraMotionBlur shutterAngle={200} samples={20}><C /></CameraMotionBlur> : <C />}
       </FastCtx.Provider>
       {!shot.live && <Film />}
     </AbsoluteFill>

@@ -51,8 +51,8 @@ const ROWS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
 const KW = 33, KG = 6, KH = 44, ROW_H = 54, TOP = 42;
 /** Where a key sits (its centre, keyboard px). */
 const keyAt = (ch: string): { x: number; y: number; w: number } | null => {
-  if (ch === ' ') return { x: 195, y: TOP + 3 * ROW_H + KH / 2 + 2, w: 170 };
-  if (ch === "'") return { x: 390 - 3 - 18 - 36 - 6, y: TOP + 3 * ROW_H + KH / 2 + 2, w: 36 }; // (on the '.' key's long press)
+  if (ch === ' ') return { x: 195, y: TOP + 3 * ROW_H + KH / 2 + 2, w: 206 };
+  // (no apostrophe on the letters: the typist writes "Ive" and autocorrect makes it "I've")
   for (let r = 0; r < 3; r++) {
     const i = ROWS[r].indexOf(ch.toLowerCase());
     if (i < 0) continue;
@@ -84,14 +84,9 @@ export const Keyboard: React.FC<{ frame: number; text: string; from: number; rat
   );
   return (
     <div style={{ position: 'absolute', left: 0, bottom: 0, width: 390, height: KB_H, background: '#e7e9ef', fontFamily: FONT }}>
-      {/* suggestions: plain words, the likeliest in the middle */}
-      <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: TOP, display: 'flex', alignItems: 'center', justifyContent: 'space-around', fontSize: 16, color: '#2a2a33' }}>
-        {[0, 1, 2].map((i) => (
-          <React.Fragment key={i}>
-            <span style={{ width: 110, textAlign: 'center', fontWeight: i === 1 ? 600 : 400 }}>{words[i] ?? ''}</span>
-            {i < 2 && <span style={{ width: 1, height: 18, background: 'rgba(0,0,0,.12)' }} />}
-          </React.Fragment>
-        ))}
+      {/* suggestions: three words, side by side */}
+      <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: TOP, display: 'flex', alignItems: 'center', justifyContent: 'space-evenly', fontSize: 16, color: '#3a3a46' }}>
+        {[0, 1, 2].map((i) => <span key={i} style={{ width: 110, textAlign: 'center' }}>{words[i] ?? ''}</span>)}
       </div>
       {ROWS.map((row, r) => row.split('').map((c) => {
         const p = keyAt(c)!;
@@ -100,13 +95,11 @@ export const Keyboard: React.FC<{ frame: number; text: string; from: number; rat
       {/* shift and delete */}
       {key(<svg width="18" height="18" viewBox="0 0 24 24" fill={shiftOn ? '#1b1b22' : 'none'} stroke="#1b1b22" strokeWidth="1.8" strokeLinejoin="round"><path d="M12 4l8 8.5h-4.5V20h-7v-7.5H4z" /></svg>, 3 + 21, TOP + 2 * ROW_H + KH / 2 + 2, 42, !shiftOn, false, 'shift')}
       {key(<svg width="22" height="16" viewBox="0 0 26 18" fill="none" stroke="#1b1b22" strokeWidth="1.7" strokeLinejoin="round"><path d="M8 2h15a1.5 1.5 0 0 1 1.5 1.5v11A1.5 1.5 0 0 1 23 16H8l-6.5-7z" /><path d="M12 6l6 6M18 6l-6 6" strokeLinecap="round" /></svg>, 390 - 3 - 21, TOP + 2 * ROW_H + KH / 2 + 2, 42, true, false, 'del')}
-      {/* bottom row: ?123 · , · emoji · space · . · enter */}
-      {key(<span style={{ fontSize: 14, fontWeight: 500 }}>?123</span>, 3 + 24, TOP + 3 * ROW_H + KH / 2 + 2, 48, true, false, 'num')}
-      {key(',', 3 + 48 + 6 + 17, TOP + 3 * ROW_H + KH / 2 + 2, 34, true, false, 'comma')}
-      {key(<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1b1b22" strokeWidth="1.6"><circle cx="12" cy="12" r="9" /><circle cx="9" cy="10" r="1" fill="#1b1b22" /><circle cx="15" cy="10" r="1" fill="#1b1b22" /><path d="M8 14.5c1 1.5 2.4 2.2 4 2.2s3-.7 4-2.2" strokeLinecap="round" /></svg>, 3 + 48 + 6 + 34 + 6 + 17, TOP + 3 * ROW_H + KH / 2 + 2, 34, true, false, 'emoji')}
-      {key('', 3 + 48 + 6 + 34 + 6 + 34 + 6 + 66, TOP + 3 * ROW_H + KH / 2 + 2, 132, false, !!down && ch === ' ', 'space')}
-      {key('.', 390 - 3 - 44 - 6 - 18, TOP + 3 * ROW_H + KH / 2 + 2, 36, true, !!down && ch === "'", 'dot')}
-      {key(<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 5v7H6M10 8l-4 4 4 4" /></svg>, 390 - 3 - 22, TOP + 3 * ROW_H + KH / 2 + 2, 44, true, false, 'ret', true)}
+      {/* bottom row: 123 · space · . · return */}
+      {key(<span style={{ fontSize: 15, fontWeight: 500 }}>123</span>, 3 + 26, TOP + 3 * ROW_H + KH / 2 + 2, 52, true, false, 'num')}
+      {key('', 195, TOP + 3 * ROW_H + KH / 2 + 2, 206, false, !!down && ch === ' ', 'space')}
+      {key('.', 390 - 3 - 64 - 6 - 20, TOP + 3 * ROW_H + KH / 2 + 2, 40, true, false, 'dot')}
+      {key(<svg width="22" height="18" viewBox="0 0 24 20" fill="none" stroke="#1b1b22" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 3v6a3 3 0 0 1-3 3H4M8 7l-4 5 4 5" /></svg>, 390 - 3 - 32, TOP + 3 * ROW_H + KH / 2 + 2, 64, true, false, 'ret')}
       {/* the letter popping up over the key under the finger */}
       {down && ch !== ' ' && (
         <div style={{
@@ -173,7 +166,7 @@ export const ChatScreen: React.FC<{
   return (
     <div style={{ position: 'absolute', inset: 0, background: CH.bg, fontFamily: FONT, overflow: 'hidden' }}>
       <StatusBar time={time} />
-      {/* header: back, the group, its name, call buttons */}
+      {/* header: back, the group, its name, more */}
       <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 118, background: '#fff', boxShadow: '0 1px 0 rgba(20,20,40,.06), 0 4px 14px rgba(20,20,40,.04)', zIndex: 10 }}>
         <div style={{ position: 'absolute', left: 10, right: 14, top: 58, height: 52, display: 'flex', alignItems: 'center', gap: 10 }}>
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={CH.ink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M11 6l-6 6 6 6" /></svg>
@@ -187,8 +180,7 @@ export const ChatScreen: React.FC<{
             <div style={{ fontWeight: 700, fontSize: 17, color: CH.ink, letterSpacing: '-0.01em' }}>The Crew</div>
             <div style={{ fontSize: 12.5, color: CH.soft, marginTop: 1 }}>Sam, Priya, Leo</div>
           </div>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={CH.ink} strokeWidth="1.8" strokeLinejoin="round"><rect x="3" y="6.5" width="12.5" height="11" rx="2.5" /><path d="M15.5 10.5l5-3v9l-5-3z" /></svg>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={CH.ink} strokeWidth="1.8" strokeLinejoin="round" style={{ marginLeft: 8 }}><path d="M6.5 3.5l3 .4 1.2 4.3-2.1 1.5a12 12 0 0 0 5.7 5.7l1.5-2.1 4.3 1.2.4 3a1.8 1.8 0 0 1-1.8 1.9A16.8 16.8 0 0 1 4.6 5.3a1.8 1.8 0 0 1 1.9-1.8z" /></svg>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill={CH.ink}><circle cx="12" cy="5.5" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="12" cy="18.5" r="1.8" /></svg>
         </div>
       </div>
       {/* messages */}
@@ -236,21 +228,15 @@ export const ChatScreen: React.FC<{
       {extra}
       {/* the keyboard */}
       {kb > 0 && <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: KB_H, transform: `translateY(${(1 - kb) * KB_H}px)`, zIndex: 11 }}><Keyboard frame={frame} text={draft} from={draftFrom} rate={draftRate} sentAt={sentAt} suggestions={suggest} /></div>}
-      {/* compose: a pill field (emoji · text · attach, camera) and a round button: the mic, or send once there's text */}
-      <div style={{ position: 'absolute', left: 0, right: 0, bottom: kb * KB_H, padding: `8px 10px ${34 - 26 * kb}px`, display: 'flex', gap: 8, alignItems: 'center', background: '#fff', boxShadow: '0 -1px 0 rgba(20,20,40,.06)', zIndex: 10 }}>
-        <div style={{ flex: 1, height: 44, borderRadius: 22, background: CH.field, display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px', fontSize: 17, color: field ? CH.ink : 'rgba(30,30,45,.45)', letterSpacing: '-0.01em' }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8b8b99" strokeWidth="1.7"><circle cx="12" cy="12" r="9" /><circle cx="9" cy="10" r="1" fill="#8b8b99" /><circle cx="15" cy="10" r="1" fill="#8b8b99" /><path d="M8 14.5c1 1.5 2.4 2.2 4 2.2s3-.7 4-2.2" strokeLinecap="round" /></svg>
-          <span style={{ flex: 1, display: 'flex', alignItems: 'center', whiteSpace: 'nowrap', overflow: 'hidden' }}>
-            {field || 'Message'}
-            {focused && caretOn && <span style={{ width: 2, height: 21, background: CH.outFlat, marginLeft: 1, borderRadius: 1 }} />}
-          </span>
-          {!field && <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8b8b99" strokeWidth="1.7" strokeLinecap="round"><path d="M16.5 7.5l-7.8 7.8a2 2 0 0 0 2.8 2.8l8-8a4 4 0 0 0-5.7-5.7l-8 8a6 6 0 0 0 8.5 8.5l6-6" /></svg>}
-          {!field && <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8b8b99" strokeWidth="1.7" strokeLinejoin="round"><rect x="3" y="7" width="18" height="12" rx="3" /><circle cx="12" cy="13" r="3.2" /><path d="M8.5 7l1.4-2.2h4.2L15.5 7" /></svg>}
+      {/* compose: a plain + (attach), a bordered box to write in, a square send button */}
+      <div style={{ position: 'absolute', left: 0, right: 0, bottom: kb * KB_H, padding: `8px 12px ${34 - 26 * kb}px`, display: 'flex', gap: 10, alignItems: 'center', background: '#fff', boxShadow: '0 -1px 0 rgba(20,20,40,.06)', zIndex: 10 }}>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6b6b7b" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+        <div style={{ flex: 1, height: 42, borderRadius: 12, background: '#fff', border: '1.5px solid #dcdee8', display: 'flex', alignItems: 'center', padding: '0 12px', fontSize: 17, color: field ? CH.ink : 'rgba(30,30,45,.42)', letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden' }}>
+          {field || 'Write to The Crew…'}
+          {focused && caretOn && <span style={{ width: 2, height: 21, background: CH.outFlat, marginLeft: 1, borderRadius: 1 }} />}
         </div>
-        <div style={{ width: 44, height: 44, borderRadius: 22, background: CH.out, display: 'grid', placeItems: 'center', boxShadow: '0 2px 6px rgba(77,58,230,.3)', transform: `scale(${interpolate(frame, [sentAt - 2, sentAt, sentAt + 4], [1, 0.86, 1], clamp)})` }}>
-          {field
-            ? <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><path d="M3.4 20.4l17.4-7.5a1 1 0 0 0 0-1.8L3.4 3.6a.8.8 0 0 0-1.1.9L4 11l9 1-9 1-1.7 6.5a.8.8 0 0 0 1.1.9z" /></svg>
-            : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round"><rect x="9" y="3" width="6" height="11" rx="3" fill="#fff" stroke="none" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg>}
+        <div style={{ width: 42, height: 42, borderRadius: 12, background: CH.out, opacity: field ? 1 : 0.45, display: 'grid', placeItems: 'center', transform: `scale(${interpolate(frame, [sentAt - 2, sentAt, sentAt + 4], [1, 0.86, 1], clamp)})` }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M6 18L18 6M9 6h9v9" /></svg>
         </div>
       </div>
       {/* home indicator */}
