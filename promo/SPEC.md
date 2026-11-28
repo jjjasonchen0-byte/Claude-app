@@ -178,3 +178,11 @@ Where this differs from §7 (the phone, the capture's city and locale, the live 
 | N-6 the last chat framing cut the status bar in half | The whole screen is in |
 | Kept | N-4 (leave now at 6:32 for an 8 pm invite: true to the app), N-5 (beer at a Filipino restaurant: plausible), N-2 (one thumb, mirrored), N-8 (same gain in both mixes, by design), N-10 (length) |
 
+### The bar, and the phone's own apps (after: "make the fairest journey end in a bar", "make the iPhone apps genuine iPhone apps and icons")
+
+| Decision | What |
+|---|---|
+| The night ends in a bar | The places step goes Fun → Drinks (the highlight out and back), Bars, sorted by Fairest (the bar whose trips are most even comes first), and the invite is for that bar. The live-action ending was already a bar |
+| The phone's own apps | The home screen shows the iPhone's built-in apps by their names: Phone, Safari, Messages and Music in the dock; FaceTime, Calendar (Friday 4), Photos, Camera, Mail, Clock (at 6:31), Maps, Reminders, Notes, Stocks, Books, Health, Home, Wallet, Files and Settings on page one beside the weather widget; Calculator, Contacts, Voice Memos, Translate, Shortcuts, Compass, Measure, Tips, Podcasts, then Meet, on page two. Each icon is our own drawing of that app's usual symbol (a handset, a compass, a speech bubble, a note…), not a copy of Apple's icon artwork |
+| Messages | The group chat is laid out like the phone's messaging app (our drawing of its familiar layout): grey bubbles with tails from the others, each sender's name above and face beside, your blue bubble and "Delivered", the group's faces and name centred at the top, a round + and a rounded "Text Message" field whose microphone becomes a blue send arrow. Swiping up closes it into Messages in the dock. The invite arrives as a link preview |
+

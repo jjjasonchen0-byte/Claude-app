@@ -252,21 +252,28 @@ const tabs = await page.$$eval('.pills .pill', (els) => els.map((e) => { const r
 meta.places.tabs = tabs;
 // (each tab found again just before it's tapped: a shorter list under one tab can shift the sheet)
 const tabAt = async (re) => (await page.$$eval('.pills .pill', (els) => els.map((e) => { const r = e.getBoundingClientRect(); return { text: e.textContent.trim(), x: r.x + r.width / 2, y: r.y + r.height / 2 }; }))).find((t) => re.test(t.text));
+// Fun first (the highlight slides two tabs right), then Drinks (one back): the night ends in a bar
+const fun = await tabAt(/Fun/);
+if (!(fun && fun.y > 80 && fun.y < 800)) throw new Error('tabs not in sight ' + JSON.stringify(tabs));
+await page.touchscreen.tap(fun.x, fun.y);
+meta.places.tapTab1 = { ...fun, frame: rig.frame() };
+await rig.step(36);
 const drinks = await tabAt(/Drinks/);
-if (!(drinks && drinks.y > 80 && drinks.y < 800)) throw new Error('tabs not in sight ' + JSON.stringify(tabs));
 await page.touchscreen.tap(drinks.x, drinks.y);
-meta.places.tapDrinks = { ...drinks, frame: rig.frame() };
+meta.places.tapTab2 = { ...drinks, frame: rig.frame() };
 await rig.step(36);
-const food = await tabAt(/Food/);
-await page.touchscreen.tap(food.x, food.y);
-meta.places.tapFood = { ...food, frame: rig.frame() };
-await rig.step(36);
-const grp = await box('[data-action=group]');
-meta.places.tapGroup = { x: grp.x, y: grp.y, frame: rig.frame() };
-await page.touchscreen.tap(grp.x, grp.y);
+// the bars, then sorted by Fairest (the bar whose trips are most even for everyone comes first)
+const bars = await page.locator('[data-action=group]', { hasText: 'Bars' }).first().boundingBox();
+if (!bars) throw new Error('no Bars group: ' + (await page.textContent('#panel-body')).replace(/\s+/g, ' ').slice(0, 300));
+meta.places.tapGroup = { x: bars.x + bars.width / 2, y: bars.y + bars.height / 2, frame: rig.frame() };
+await page.touchscreen.tap(meta.places.tapGroup.x, meta.places.tapGroup.y);
 for (let i = 0; i < 60 && !(await page.$('[data-action=place]')); i++) await rig.step(1);
 if (!(await page.$('[data-action=place]'))) { console.log('panel:', (await page.textContent('#panel-body')).slice(0, 600)); }
-await rig.step(34);
+await rig.step(24);
+const fair = await box('[data-action=sort][data-sort=fair]');
+meta.places.tapSort = { x: fair.x, y: fair.y, frame: rig.frame() };
+await page.touchscreen.tap(fair.x, fair.y);
+await rig.step(30);
 const place = await box('[data-action=place]');
 meta.places.tapPlace = { x: place.x, y: place.y, frame: rig.frame() };
 await page.touchscreen.tap(place.x, place.y);

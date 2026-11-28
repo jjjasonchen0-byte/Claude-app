@@ -12,8 +12,8 @@ const fr = (p?: { frame?: number }, d = 0) => p?.frame ?? d;
 // ---------------------------------------------------------------- the tabs
 
 // The edit, as [output frame, clip frame] knots: the pull up in real time, a quick skip while the sheet
-// sits still, then the two taps in real time.
-const PULL = fr(P.pull, 16), DRINKS = fr(P.tapDrinks, 106), FOOD = fr(P.tapFood, 142);
+// sits still, then the two taps in real time (Fun, then Drinks: the highlight slides out and back).
+const PULL = fr(P.pull, 16), DRINKS = fr(P.tapTab1, 106), FOOD = fr(P.tapTab2, 142);
 const TK: [number, number][] = [
   [0, PULL - 4],
   [PULL + 34 - (PULL - 4), PULL + 34], // pulled up, settled: everyone's time
@@ -31,7 +31,7 @@ const outOf = (c: number) => {
   return TABS_DUR;
 };
 
-export const TABS_BEATS = { pull: outOf(PULL), drinks: outOf(DRINKS), food: outOf(FOOD) };
+export const TABS_BEATS = { pull: outOf(PULL), tab1: outOf(DRINKS), tab2: outOf(FOOD) };
 
 export const Tabs: React.FC = () => {
   const f = useCurrentFrame();
@@ -59,8 +59,8 @@ export const Tabs: React.FC = () => {
           <Footage clip="places" n={n} />
           <Finger x={P.pull?.x ?? 195} y={P.pull?.y ?? 700} at={oPull - 10} down={oPull} up={oPull + 18} leave={oPull + 30}
             path={(g) => ({ x: P.pull?.x ?? 195, y: interpolate(g, [oPull, oPull + 18], [P.pull?.y ?? 700, lift], { ...clamp, easing: Easing.bezier(0.3, 0.6, 0.4, 1) }) })} />
-          <Finger x={P.tapDrinks.x} y={P.tapDrinks.y} at={oDrinks - 10} down={oDrinks} up={oDrinks + 3} leave={oDrinks + 11} />
-          <Finger x={P.tapFood.x} y={P.tapFood.y} at={oFood - 10} down={oFood} up={oFood + 3} leave={oFood + 11} />
+          <Finger x={P.tapTab1.x} y={P.tapTab1.y} at={oDrinks - 10} down={oDrinks} up={oDrinks + 3} leave={oDrinks + 11} />
+          <Finger x={P.tapTab2.x} y={P.tapTab2.y} at={oFood - 10} down={oFood} up={oFood + 3} leave={oFood + 11} />
         </Phone>
       </Camera>
       <Lens zoom={cam.zoom} />
@@ -71,7 +71,7 @@ export const Tabs: React.FC = () => {
 // ---------------------------------------------------------------- the glide
 
 /** The place screens, in order (frames of the places clip, each once its page has settled). */
-const SCREENS = [fr(P.tapFood) + 30, fr(P.tapGroup) + 30, fr(P.tapSend) - 4, CAP.placesLast]; // (Food: the tab chosen last)
+const SCREENS = [fr(P.tapTab2) + 30, fr(P.tapSort, fr(P.tapGroup) + 24) + 26, fr(P.tapSend) - 4, CAP.placesLast]; // (Drinks, the bars by fairness, the bar, the invite)
 export const GLIDE_DUR = 118;
 const GAP = 110;
 const STRIP_W = SCREENS.length * SCREEN_W + (SCREENS.length - 1) * GAP;

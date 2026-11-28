@@ -1,6 +1,6 @@
-// The home screen of an iPhone: two pages of our own invented apps (rounded-square icons, simple
-// glyphs) and a weather widget, page dots over a frosted dock, on a wallpaper in Meet's colours. Meet,
-// just installed, sits at the end of page two.
+// The home screen of an iPhone: the phone's own apps by name (each icon our own drawing of the app's
+// usual symbol) and a weather widget, page dots over a frosted dock, on a wallpaper in Meet's colours.
+// Meet, just installed, sits at the end of page two.
 import React from 'react';
 import { DARK, FONT, WALLPAPER } from '../theme';
 import { StatusBar } from './Chat';
@@ -20,39 +20,39 @@ export const MEET_SLOT = { col: 1, row: 2 };
 const g = (a: string, b: string) => `linear-gradient(160deg, ${a}, ${b})`;
 const S = { fill: 'none', stroke: '#fff', strokeWidth: 2.4, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
 
-type App = { name: string; bg: string; glyph: React.ReactNode };
-// Our own apps (names and colours of no phone maker's stock set).
+type App = { name: string; bg: string; glyph: React.ReactNode; full?: boolean };
+const W24 = (size: number, children: React.ReactNode, extra: React.SVGProps<SVGSVGElement> = {}) => <svg width={size} height={size} viewBox="0 0 24 24" {...S} {...extra}>{children}</svg>;
+/** The phone's own apps, by their names, each drawn as its usual symbol (our own drawings). */
 const APPS: Record<string, App> = {
-  chats: { name: 'Chats', bg: g('#7d6bff', '#4d3ae6'), glyph: <svg width="32" height="32" viewBox="0 0 24 24"><path d="M12 4c-4.8 0-8.5 3.1-8.5 7 0 2.1 1.1 4 2.9 5.3L5.8 20l3.9-2c.7.2 1.5.3 2.3.3 4.8 0 8.5-3.1 8.5-7s-3.7-7.3-8.5-7.3z" fill="#fff" /></svg> },
-  lens: { name: 'Lens', bg: g('#2b2d36', '#111218'), glyph: <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7.5" stroke="#ff9f43" strokeWidth="2.4" /><circle cx="12" cy="12" r="3" fill="#fff" /></svg> },
-  gallery: { name: 'Gallery', bg: g('#ff8fb1', '#e8456f'), glyph: <svg width="30" height="30" viewBox="0 0 24 24" {...S}><path d="M4 17l5-6 4 4 2.5-3L20 17" /><circle cx="16" cy="7.5" r="1.8" fill="#fff" /></svg> },
-  alarms: { name: 'Alarms', bg: g('#ffcf5c', '#f59e0b'), glyph: <svg width="32" height="32" viewBox="0 0 24 24" {...S}><circle cx="12" cy="13" r="7" /><path d="M12 9.5V13l2.5 1.5M4.5 5.5l2.5-2M19.5 5.5l-2.5-2" /></svg> },
-  skies: { name: 'Skies', bg: g('#4fd1c5', '#0e9f8e'), glyph: <svg width="32" height="32" viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .4-8 6 6 0 0 0-11.5 1.5A3.3 3.3 0 0 0 7 18z" fill="#fff" /></svg> },
-  jot: { name: 'Jot', bg: g('#34d399', '#059669'), glyph: <svg width="30" height="30" viewBox="0 0 24 24" {...S}><path d="M5 19l1-4L16 5l3 3L9 18zM14 7l3 3" /></svg> },
-  planner: { name: 'Planner', bg: g('#818cf8', '#4f46e5'), glyph: <svg width="30" height="30" viewBox="0 0 24 24" {...S}><rect x="4" y="5.5" width="16" height="14" rx="3" /><path d="M8 10h8M8 14h5" /></svg> },
-  stash: { name: 'Stash', bg: g('#fb923c', '#ea580c'), glyph: <svg width="32" height="32" viewBox="0 0 24 24" {...S}><path d="M4 8l8-4 8 4-8 4zM4 12l8 4 8-4M4 16l8 4 8-4" /></svg> },
-  stride: { name: 'Stride', bg: g('#f472b6', '#be185d'), glyph: <svg width="32" height="32" viewBox="0 0 24 24" {...S}><circle cx="14" cy="5" r="1.6" fill="#fff" /><path d="M9 21l2.5-6 3 2.5V21M8 11l3-3.5 3.5 2 2.5 2.5M11.5 15L9 10.5" /></svg> },
-  tweaks: { name: 'Tweaks', bg: g('#64748b', '#334155'), glyph: <svg width="30" height="30" viewBox="0 0 24 24" {...S}><path d="M5 7h9M18 7h1M5 17h3M12 17h7" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></svg> },
-  arcade: { name: 'Arcade', bg: g('#a78bfa', '#7c3aed'), glyph: <svg width="32" height="32" viewBox="0 0 24 24" {...S}><rect x="3" y="8" width="18" height="9" rx="4.5" /><path d="M7.5 11v3M6 12.5h3" /><circle cx="15.5" cy="11.5" r=".9" fill="#fff" /><circle cx="17.5" cy="13.5" r=".9" fill="#fff" /></svg> },
-  radio: { name: 'Radio', bg: g('#22d3ee', '#0891b2'), glyph: <svg width="30" height="30" viewBox="0 0 24 24" {...S}><circle cx="12" cy="12" r="2" fill="#fff" /><path d="M7.5 7.5a6.4 6.4 0 0 0 0 9M16.5 7.5a6.4 6.4 0 0 1 0 9M4.7 4.7a10.3 10.3 0 0 0 0 14.6M19.3 4.7a10.3 10.3 0 0 1 0 14.6" /></svg> },
-  roam: { name: 'Roam', bg: g('#2dd4bf', '#0f766e'), glyph: <svg width="30" height="30" viewBox="0 0 24 24"><path d="M21 4l-9 9M21 4l-6 17-3-8-8-3z" fill="#fff" /></svg> },
-  recipes: { name: 'Recipes', bg: g('#fbbf24', '#d97706'), glyph: <svg width="30" height="30" viewBox="0 0 24 24" {...S}><path d="M7 3v8M5 3v4a2 2 0 0 0 4 0V3M7 11v10M16 3c-2 1.5-2.5 4-2.5 7H16v11" /></svg> },
-  reads: { name: 'Reads', bg: g('#f87171', '#b91c1c'), glyph: <svg width="30" height="30" viewBox="0 0 24 24" {...S}><path d="M4 5.5C6.5 4.5 9.5 4.5 12 6c2.5-1.5 5.5-1.5 8-.5V19c-2.5-1-5.5-1-8 .5-2.5-1.5-5.5-1.5-8-.5zM12 6v13.5" /></svg> },
-  call: { name: 'Call', bg: g('#38bdf8', '#0284c7'), glyph: <svg width="28" height="28" viewBox="0 0 24 24"><path d="M7 3.5l3 .5 1 4.2-2 1.3a12 12 0 0 0 5.5 5.5l1.3-2 4.2 1 .5 3a2 2 0 0 1-2 2A16.5 16.5 0 0 1 5 5.5a2 2 0 0 1 2-2z" fill="#fff" /></svg> },
-  web: { name: 'Web', bg: g('#fdba74', '#f97316'), glyph: <svg width="30" height="30" viewBox="0 0 24 24" {...S}><circle cx="12" cy="12" r="8.5" /><path d="M3.5 12h17M12 3.5c2.6 2.4 2.6 14.6 0 17M12 3.5c-2.6 2.4-2.6 14.6 0 17" /></svg> },
-  inbox: { name: 'Inbox', bg: g('#c084fc', '#9333ea'), glyph: <svg width="30" height="30" viewBox="0 0 24 24" {...S}><path d="M4 13l2.5-7.5h11L20 13v5.5H4zM4 13h4.5l1 2h5l1-2H20" /></svg> },
-  pulse: { name: 'Pulse', bg: g('#fb7185', '#e11d48'), glyph: <svg width="30" height="30" viewBox="0 0 24 24" {...S}><path d="M3 12h4l2-5 4 10 2-5h6" /></svg> },
-  casts: { name: 'Casts', bg: g('#c084fc', '#7e22ce'), glyph: <svg width="30" height="30" viewBox="0 0 24 24" {...S}><circle cx="12" cy="10" r="2.6" /><path d="M7.5 15a6.5 6.5 0 1 1 9 0M12 13v8" /></svg> },
-  docs: { name: 'Docs', bg: g('#60a5fa', '#2563eb'), glyph: <svg width="30" height="30" viewBox="0 0 24 24" {...S}><path d="M6 3.5h8l4 4V20.5H6zM14 3.5v4h4M9 12h6M9 16h6" /></svg> },
-  cards: { name: 'Cards', bg: g('#1f2937', '#030712'), glyph: <svg width="30" height="30" viewBox="0 0 24 24" fill="none" strokeWidth="2.2" strokeLinejoin="round"><rect x="3.5" y="6" width="17" height="12" rx="2.5" stroke="#fff" /><path d="M3.5 10h17" stroke="#fbbf24" /></svg> },
-  shop: { name: 'Shop', bg: g('#4ade80', '#16a34a'), glyph: <svg width="30" height="30" viewBox="0 0 24 24" {...S}><path d="M5 8h14l-1.2 12H6.2zM9 8V6.5a3 3 0 0 1 6 0V8" /></svg> },
-  news: { name: 'Headlines', bg: g('#f43f5e', '#9f1239'), glyph: <svg width="30" height="30" viewBox="0 0 24 24" {...S}><rect x="4" y="5" width="16" height="14" rx="2" /><path d="M8 9h8M8 12.5h8M8 16h5" /></svg> },
-  screen: { name: 'Screen', bg: g('#334155', '#0f172a'), glyph: <svg width="30" height="30" viewBox="0 0 24 24" {...S}><rect x="3.5" y="5" width="17" height="11.5" rx="2" /><path d="M9 20h6" /></svg> },
-  tunes: { name: 'Tunes', bg: g('#fb7185', '#f43f5e'), glyph: <svg width="30" height="30" viewBox="0 0 24 24" {...S}><path d="M9 18V6l10-2v12" /><circle cx="7" cy="18" r="2.2" fill="#fff" /><circle cx="17" cy="16" r="2.2" fill="#fff" /></svg> },
-  tasks: { name: 'Tasks', bg: g('#f8fafc', '#e2e8f0'), glyph: <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 7l1.5 1.5L9 6M5 13l1.5 1.5L9 12M12 7.5h7M12 13.5h7M12 19h7" /></svg> },
-
-  lingo: { name: 'Lingo', bg: g('#60a5fa', '#1d4ed8'), glyph: <svg width="30" height="30" viewBox="0 0 24 24" {...S}><path d="M4 6h9M8.5 4v2M6 6c.5 3 2.5 5.5 5 7M11 6c-.7 3.5-3 6.5-6 8M13 20l3.5-8 3.5 8M14.2 17.5h4.6" /></svg> },
-  sums: { name: 'Sums', bg: g('#3f3f46', '#18181b'), glyph: <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fb923c" strokeWidth="2.4" strokeLinecap="round"><path d="M6 8h5M8.5 5.5v5M14 8h5M6 16.5h5M14 15h5M14 18h5" /></svg> },
+  phone: { name: 'Phone', bg: g('#6be27a', '#1fb54a'), glyph: <svg width="30" height="30" viewBox="0 0 24 24"><path d="M7 3.5l3 .5 1 4.2-2 1.3a12 12 0 0 0 5.5 5.5l1.3-2 4.2 1 .5 3a2 2 0 0 1-2 2A16.5 16.5 0 0 1 5 5.5a2 2 0 0 1 2-2z" fill="#fff" /></svg> },
+  safari: { name: 'Safari', bg: g('#5ab8ff', '#1e6fe2'), glyph: <svg width="38" height="38" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="#fff" strokeWidth="1.6" /><path d="M15.8 8.2L13.2 13.2 8.2 15.8 10.8 10.8z" fill="#fff" /><path d="M15.8 8.2L10.8 10.8 13.2 13.2z" fill="#ff4d4d" /></svg> },
+  messages: { name: 'Messages', bg: g('#6be27a', '#16b844'), glyph: <svg width="36" height="36" viewBox="0 0 24 24"><path d="M12 4.5c-4.7 0-8.3 3-8.3 6.8 0 2.1 1.1 3.9 2.9 5.2-.2 1.2-.8 2.3-1.7 3.1 1.7 0 3.2-.6 4.3-1.5.9.2 1.8.3 2.8.3 4.7 0 8.3-3 8.3-6.8S16.7 4.5 12 4.5z" fill="#fff" /></svg> },
+  music: { name: 'Music', bg: g('#ff6b7d', '#f2304b'), glyph: W24(30, <><path d="M9 18V6.5l10-2V16" /><circle cx="7" cy="18" r="2.2" fill="#fff" /><circle cx="17" cy="16" r="2.2" fill="#fff" /></>) },
+  facetime: { name: 'FaceTime', bg: g('#6be27a', '#1fb54a'), glyph: <svg width="34" height="34" viewBox="0 0 24 24"><rect x="3" y="7" width="12" height="10" rx="2.5" fill="#fff" /><path d="M15.5 11l5-3v8l-5-3z" fill="#fff" /></svg> },
+  calendar: { name: 'Calendar', bg: '#ffffff', full: true, glyph: <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', fontFamily: FONT }}><div style={{ marginTop: 6, fontSize: 10, fontWeight: 600, color: '#f2304b', letterSpacing: 0 }}>Friday</div><div style={{ marginTop: -3, fontSize: 34, fontWeight: 300, color: '#111', letterSpacing: '-0.03em', lineHeight: 1.05 }}>4</div></div> },
+  photos: { name: 'Photos', bg: g('#ffd36b', '#ff7a59'), glyph: W24(32, <><rect x="3.5" y="5.5" width="17" height="13" rx="2.5" /><path d="M5 16.5l4.5-5 3.5 3.5 2.2-2.2L19 16.5" /><circle cx="15.5" cy="9.5" r="1.4" fill="#fff" /></>) },
+  camera: { name: 'Camera', bg: g('#d9dbe0', '#8e929b'), glyph: <svg width="36" height="36" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="12" rx="2.5" fill="#2a2c31" /><path d="M8.5 7l1.3-2h4.4l1.3 2z" fill="#2a2c31" /><circle cx="12" cy="13" r="3.6" fill="#5d6170" stroke="#d9dbe0" strokeWidth="1" /><circle cx="12" cy="13" r="1.4" fill="#1b1c20" /></svg> },
+  mail: { name: 'Mail', bg: g('#4fb3ff', '#1a6ef0'), glyph: <svg width="34" height="34" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12.5" rx="2" fill="#fff" /><path d="M3.8 7l8.2 6.3L20.2 7" fill="none" stroke="#2a7df4" strokeWidth="1.4" strokeLinejoin="round" /></svg> },
+  clock: { name: 'Clock', bg: '#0b0b0c', full: true, glyph: <svg width="100%" height="100%" viewBox="0 0 60 60"><circle cx="30" cy="30" r="24" fill="#fff" />{Array.from({ length: 12 }, (_, i) => { const a = (i * Math.PI) / 6; return <line key={i} x1={30 + Math.sin(a) * 20.5} y1={30 - Math.cos(a) * 20.5} x2={30 + Math.sin(a) * 22.5} y2={30 - Math.cos(a) * 22.5} stroke="#111" strokeWidth="1.4" strokeLinecap="round" />; })}<line x1="30" y1="30" x2={30 + Math.sin((6.52 / 12) * 2 * Math.PI) * 12} y2={30 - Math.cos((6.52 / 12) * 2 * Math.PI) * 12} stroke="#111" strokeWidth="2.4" strokeLinecap="round" /><line x1="30" y1="30" x2={30 + Math.sin((31 / 60) * 2 * Math.PI) * 18} y2={30 - Math.cos((31 / 60) * 2 * Math.PI) * 18} stroke="#111" strokeWidth="1.8" strokeLinecap="round" /><circle cx="30" cy="30" r="1.8" fill="#ff8a00" /></svg> },
+  maps: { name: 'Maps', bg: 'linear-gradient(160deg, #e8f3dc, #cfe7f7)', full: true, glyph: <svg width="100%" height="100%" viewBox="0 0 60 60"><path d="M-2 40 C 18 34, 30 46, 62 28" stroke="#ffffff" strokeWidth="7" fill="none" /><path d="M18 -2 C 22 20, 34 30, 40 62" stroke="#f7d47a" strokeWidth="6" fill="none" /><path d="M-2 40 C 18 34, 30 46, 62 28" stroke="#3b8cff" strokeWidth="2.2" fill="none" strokeDasharray="0" /><path d="M41 14c-4 0-7 3-7 7 0 5 7 12 7 12s7-7 7-12c0-4-3-7-7-7z" fill="#f2304b" /><circle cx="41" cy="21" r="2.6" fill="#fff" /></svg> },
+  reminders: { name: 'Reminders', bg: '#ffffff', full: true, glyph: <svg width="100%" height="100%" viewBox="0 0 60 60">{[['#1e7cf2', 18], ['#f2304b', 30], ['#ff9f0a', 42]].map(([c, y]) => <g key={String(y)}><circle cx="16" cy={Number(y)} r="4.2" fill={String(c)} /><rect x="25" y={Number(y) - 1.3} width="22" height="2.6" rx="1.3" fill="#d7d8dc" /></g>)}</svg> },
+  notes: { name: 'Notes', bg: g('#ffe27a', '#ffc92e'), glyph: W24(30, <><rect x="5" y="4" width="14" height="16" rx="2" fill="#fff" stroke="none" /><path d="M8 9h8M8 12.5h8M8 16h5" stroke="#d9a400" /></>) },
+  stocks: { name: 'Stocks', bg: '#0b0b0c', glyph: W24(32, <path d="M4 17l4.5-4.5 3.5 3 7.5-8" stroke="#34c759" strokeWidth="2.2" />) },
+  books: { name: 'Books', bg: g('#ffb44a', '#ff7f1a'), glyph: W24(32, <path d="M4 6.5C6.5 5.5 9.5 5.5 12 7c2.5-1.5 5.5-1.5 8-.5V18c-2.5-1-5.5-1-8 .5-2.5-1.5-5.5-1.5-8-.5zM12 7v11.5" />) },
+  health: { name: 'Health', bg: '#ffffff', glyph: <svg width="34" height="34" viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.3 4.3 4.3 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10z" fill="#ff375f" /></svg> },
+  home: { name: 'Home', bg: g('#ffc94a', '#ff9500'), glyph: <svg width="32" height="32" viewBox="0 0 24 24"><path d="M4 11.2L12 4.5l8 6.7V19a1 1 0 0 1-1 1h-4.5v-5h-5v5H5a1 1 0 0 1-1-1z" fill="#fff" /></svg> },
+  wallet: { name: 'Wallet', bg: '#121214', glyph: <svg width="36" height="36" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="5" rx="1.4" fill="#3b8cff" /><rect x="4" y="8" width="16" height="5" rx="1.4" fill="#ffb02e" /><rect x="4" y="11" width="16" height="5" rx="1.4" fill="#34c759" /><rect x="4" y="13.5" width="16" height="6" rx="1.6" fill="#e8e8ea" /></svg> },
+  files: { name: 'Files', bg: '#ffffff', glyph: <svg width="36" height="36" viewBox="0 0 24 24"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" fill="#3b9bff" /><path d="M3.5 10h17v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" fill="#5fb3ff" /></svg> },
+  settings: { name: 'Settings', bg: g('#c7c9cf', '#8a8d96'), glyph: <svg width="38" height="38" viewBox="0 0 24 24"><g fill="#4a4d55">{Array.from({ length: 8 }, (_, i) => <rect key={i} x="11" y="3.2" width="2" height="4" rx=".8" transform={`rotate(${i * 45} 12 12)`} />)}</g><circle cx="12" cy="12" r="6.2" fill="#4a4d55" /><circle cx="12" cy="12" r="3.4" fill="#d0d2d8" /><circle cx="12" cy="12" r="1.6" fill="#4a4d55" /></svg> },
+  calculator: { name: 'Calculator', bg: '#1c1c1e', glyph: <svg width="34" height="34" viewBox="0 0 24 24" strokeLinecap="round" strokeWidth="2"><path d="M6 7.5h4M8 5.5v4" stroke="#fff" /><path d="M14 7.5h4" stroke="#fff" /><path d="M6.6 14.6l2.8 2.8M9.4 14.6l-2.8 2.8" stroke="#fff" /><path d="M14 15h4M14 18h4" stroke="#ff9f0a" /></svg> },
+  contacts: { name: 'Contacts', bg: g('#e9e9ee', '#c9cad1'), glyph: <svg width="34" height="34" viewBox="0 0 24 24"><circle cx="12" cy="9" r="3.6" fill="#8d9099" /><path d="M5 19.5c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5z" fill="#8d9099" /></svg> },
+  voicememos: { name: 'Voice Memos', bg: '#121214', glyph: <svg width="34" height="34" viewBox="0 0 24 24">{[3, 6, 10, 14, 9, 5, 8, 12, 7, 4].map((h, i) => <rect key={i} x={2.6 + i * 1.95} y={12 - h / 2} width="1.2" height={h} rx=".6" fill="#ff453a" />)}</svg> },
+  translate: { name: 'Translate', bg: g('#4fb3ff', '#1a6ef0'), glyph: <svg width="34" height="34" viewBox="0 0 24 24" fontFamily={FONT}><rect x="2.5" y="4" width="11" height="10" rx="2" fill="#fff" /><text x="8" y="12" textAnchor="middle" fontSize="7.5" fontWeight="700" fill="#1a6ef0">A</text><rect x="10.5" y="10" width="11" height="10" rx="2" fill="#0d3f9e" /><text x="16" y="18" textAnchor="middle" fontSize="7" fontWeight="700" fill="#fff">文</text></svg> },
+  shortcuts: { name: 'Shortcuts', bg: 'linear-gradient(160deg, #6b8bff, #e1559d)', glyph: <svg width="34" height="34" viewBox="0 0 24 24"><rect x="4" y="4" width="11" height="11" rx="3" fill="#fff" opacity=".55" /><rect x="9" y="9" width="11" height="11" rx="3" fill="#fff" /></svg> },
+  compass: { name: 'Compass', bg: '#121214', glyph: <svg width="36" height="36" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="#fff" strokeWidth="1.2" /><path d="M12 5l2 7h-4z" fill="#ff453a" /><path d="M12 19l2-7h-4z" fill="#fff" /></svg> },
+  measure: { name: 'Measure', bg: '#121214', glyph: <svg width="36" height="36" viewBox="0 0 24 24"><rect x="3" y="9" width="18" height="6" rx="1.2" fill="#ffd60a" />{[5, 8, 11, 14, 17].map((x, i) => <rect key={x} x={x} y="9" width=".9" height={i % 2 ? 2 : 3.2} fill="#121214" />)}</svg> },
+  tips: { name: 'Tips', bg: g('#ffe27a', '#ffc92e'), glyph: <svg width="32" height="32" viewBox="0 0 24 24"><path d="M12 3.5a6 6 0 0 0-3.4 10.9c.6.4.9 1 .9 1.7V17h5v-.9c0-.7.3-1.3.9-1.7A6 6 0 0 0 12 3.5z" fill="#fff" /><rect x="9.5" y="18" width="5" height="1.6" rx=".8" fill="#fff" /><rect x="10.3" y="20.2" width="3.4" height="1.4" rx=".7" fill="#fff" /></svg> },
+  podcasts: { name: 'Podcasts', bg: g('#c56cf0', '#8e2de2'), glyph: <svg width="32" height="32" viewBox="0 0 24 24"><rect x="9.5" y="4" width="5" height="9" rx="2.5" fill="#fff" /><path d="M7 11a5 5 0 0 0 10 0M12 16v4" stroke="#fff" strokeWidth="1.8" fill="none" strokeLinecap="round" /></svg> },
 };
 
 /** Meet's icon: its wordmark's own letter and blue dot, on white (on black, the phone in dark mode). */
@@ -70,7 +70,7 @@ export const AppIcon: React.FC<{ id: string; size?: number }> = ({ id, size = IC
   const a = APPS[id];
   return (
     <div style={{ ...box, background: a.bg, display: 'grid', placeItems: 'center', boxShadow: `inset 0 .5px 0 rgba(255,255,255,.3), ${box.boxShadow}` }}>
-      <div style={{ transform: `scale(${size / ICON})` }}>{a.glyph}</div>
+      {a.full ? <div style={{ width: ICON, height: ICON, transform: `scale(${size / ICON})` }}>{a.glyph}</div> : <div style={{ transform: `scale(${size / ICON})` }}>{a.glyph}</div>}
     </div>
   );
 };
@@ -78,7 +78,7 @@ export const AppIcon: React.FC<{ id: string; size?: number }> = ({ id, size = IC
 /** The weather widget (two by two, top right of page one): New York tonight. */
 const Weather: React.FC = () => (
   <div style={{
-    position: 'absolute', left: COLS[2] - ICON / 2, top: ROW0, width: COLS[3] - COLS[2] + ICON, height: ROW + ICON + 18, borderRadius: 22,
+    position: 'absolute', left: COLS[0] - ICON / 2, top: ROW0, width: COLS[1] - COLS[0] + ICON, height: ROW + ICON + 18, borderRadius: 22,
     background: 'linear-gradient(180deg, #1c2a4a, #2f4a7d)', color: '#fff', padding: '14px 15px', boxSizing: 'border-box', fontFamily: FONT,
     boxShadow: '0 2px 10px rgba(0,0,0,.18)',
   }}>
@@ -92,10 +92,13 @@ const Weather: React.FC = () => (
   </div>
 );
 
-// page one: the widget top right; page two ends with Meet
-const PAGE1: (string | null)[][] = [['chats', 'lens', null, null], ['gallery', 'alarms', null, null], ['skies', 'jot', 'planner', 'stash'], ['stride', 'tweaks', 'arcade', 'radio'], ['recipes', 'reads', 'pulse', 'docs']];
-const PAGE2: (string | null)[][] = [['roam', 'casts', 'cards', 'shop'], ['news', 'screen', 'tasks', 'lingo'], ['sums', 'meet']];
-const DOCK = ['call', 'web', 'inbox', 'tunes'];
+// page one: the weather widget top left; page two ends with Meet; Messages in the dock
+const PAGE1: (string | null)[][] = [[null, null, 'facetime', 'calendar'], [null, null, 'photos', 'camera'], ['mail', 'clock', 'maps', 'reminders'], ['notes', 'stocks', 'books', 'health'], ['home', 'wallet', 'files', 'settings']];
+const PAGE2: (string | null)[][] = [['calculator', 'contacts', 'voicememos', 'translate'], ['shortcuts', 'compass', 'measure', 'tips'], ['podcasts', 'meet']];
+const DOCK = ['phone', 'safari', 'messages', 'music'];
+/** Where a dock icon sits (its top-left, app px). */
+export const dockBox = (i: number) => ({ x: COLS[i] - ICON / 2, y: 736 + (90 - ICON) / 2, w: ICON, h: ICON });
+export const MESSAGES_DOCK = 2;
 export const NAMES: Record<string, string> = { meet: 'Meet', ...Object.fromEntries(Object.entries(APPS).map(([k, v]) => [k, v.name])) };
 
 const Grid: React.FC<{ rows: (string | null)[][]; hide?: string; press?: { id: string; s: number } }> = ({ rows, hide, press }) => (
@@ -130,7 +133,7 @@ export const HomeScreen: React.FC<{ page: number; hide?: string; press?: { id: s
     </div>
     {/* the dock */}
     <div style={{ position: 'absolute', left: 12, right: 12, top: 736, height: 90, borderRadius: 32, background: 'rgba(255,255,255,.2)', backdropFilter: 'blur(24px) saturate(1.4)', boxShadow: 'inset 0 .5px 0 rgba(255,255,255,.3)' }} />
-    {DOCK.map((id, i) => <div key={id} style={{ position: 'absolute', left: COLS[i] - ICON / 2, top: 736 + (90 - ICON) / 2 }}><AppIcon id={id} /></div>)}
+    {DOCK.map((id, i) => <div key={id} style={{ position: 'absolute', left: COLS[i] - ICON / 2, top: 736 + (90 - ICON) / 2, opacity: hide === id ? 0 : 1 }}><AppIcon id={id} /></div>)}
     {dim > 0 && <div style={{ position: 'absolute', inset: 0, background: '#000', opacity: dim }} />}
   </div>
 );

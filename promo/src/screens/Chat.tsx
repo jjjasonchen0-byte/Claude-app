@@ -1,6 +1,5 @@
-// The group chat: an original chat app ("Chats"): a left-aligned header, white incoming and violet
-// outgoing bubbles with each sender's name in their colour, a composer with a send button, on an
-// iPhone (its status bar and keyboard). Drawn at app size (390×844 app px);
+// The group chat in the phone's own messaging app (our drawing of its familiar layout: grey and blue
+// bubbles, the group centred at the top), with the iPhone's status bar and keyboard. Drawn at app size (390×844 app px);
 // everything is a pure function of the frame.
 import React from 'react';
 import { interpolate, Easing } from 'remotion';
@@ -11,20 +10,21 @@ export type Msg = { who: 'sam' | 'priya' | 'leo' | 'you'; text: string; at: numb
 const STATUS_TIME = '6:31';
 /** The chat app's own colours. */
 export const CH = {
-  bg: DARK ? '#000000' : '#f4f5f9',
-  out: 'linear-gradient(160deg, #6a5cff, #4d3ae6)', // your bubbles
-  outFlat: '#5644ef',
-  inBubble: DARK ? '#1e1e23' : '#ffffff',
-  ink: DARK ? '#f2f2f7' : '#15151c',
-  soft: DARK ? 'rgba(235,235,245,.6)' : 'rgba(30,30,45,.55)',
-  field: DARK ? '#1c1c1f' : '#eef0f5',
-  /** the header and the composer */
-  bar: DARK ? '#111114' : '#ffffff',
-  barLine: DARK ? 'rgba(255,255,255,.08)' : 'rgba(20,20,40,.06)',
-  placeholder: DARK ? 'rgba(235,235,245,.36)' : 'rgba(30,30,45,.42)',
-  boxLine: DARK ? '#2e2e34' : '#dcdee8',
-  icon: DARK ? '#9a9aa6' : '#6b6b7b',
-  dots: DARK ? '#8e8e96' : '#9a9aa8',
+  bg: DARK ? '#000000' : '#ffffff',
+  out: 'linear-gradient(180deg, #2b96ff, #0a7cff)', // your bubbles
+  outFlat: '#0a7cff',
+  accent: '#0a7cff',
+  inBubble: DARK ? '#26262a' : '#e9e9eb',
+  ink: DARK ? '#f2f2f7' : '#000000',
+  soft: DARK ? 'rgba(235,235,245,.6)' : 'rgba(60,60,67,.6)',
+  field: DARK ? '#2c2c2e' : '#e9e9eb',
+  /** the header */
+  bar: DARK ? 'rgba(22,22,24,.94)' : 'rgba(247,247,247,.94)',
+  barLine: DARK ? 'rgba(255,255,255,.12)' : 'rgba(0,0,0,.14)',
+  placeholder: DARK ? 'rgba(235,235,245,.3)' : 'rgba(60,60,67,.3)',
+  boxLine: DARK ? '#3a3a3c' : '#c7c7cc',
+  icon: DARK ? '#8e8e93' : '#8e8e93',
+  dots: DARK ? '#8e8e96' : '#9a9aa0',
 };
 
 /**
@@ -185,8 +185,26 @@ const suggest = (raw: string): string[] => {
 
 // ---------------------------------------------------------------- the chat
 
-/** A bubble arriving: grows from its tail corner on the app's own spring, ~14f. */
+/** A bubble arriving: grows from its tail corner, ~14f. */
 const pop = (frame: number, at: number) => interpolate(frame, [at, at + 14], [0, 1], { ...clamp, easing: EASE.spring });
+
+/** A bubble's tail, curling out from its lower corner (a disc of the bubble's colour, trimmed by one of the page's). */
+const Tail: React.FC<{ side: 'left' | 'right'; color: string }> = ({ side, color }) => (
+  <>
+    <div style={{ position: 'absolute', bottom: 0, [side]: -6, width: 18, height: 18, background: color, [side === 'left' ? 'borderBottomRightRadius' : 'borderBottomLeftRadius']: 14 }} />
+    <div style={{ position: 'absolute', bottom: 0, [side]: -14, width: 14, height: 20, background: CH.bg, [side === 'left' ? 'borderBottomRightRadius' : 'borderBottomLeftRadius']: 10 }} />
+  </>
+);
+
+const Bubble: React.FC<{ mine?: boolean; children: React.ReactNode; style?: React.CSSProperties }> = ({ mine, children, style }) => (
+  <div style={{
+    position: 'relative', background: mine ? CH.out : CH.inBubble, color: mine ? '#fff' : CH.ink, padding: '8px 13px', borderRadius: 19,
+    fontSize: 17, lineHeight: 1.27, letterSpacing: '-0.01em', maxWidth: 262, whiteSpace: 'nowrap', ...style,
+  }}>
+    <Tail side={mine ? 'right' : 'left'} color={mine ? CH.outFlat : CH.inBubble} />
+    <span style={{ position: 'relative' }}>{children}</span>
+  </div>
+);
 
 const TypingDots: React.FC<{ frame: number; from: number; to: number }> = ({ frame, from, to }) => {
   // (stays a couple of frames into the bubble's arrival, so the two overlap: no blank frame)
@@ -194,22 +212,30 @@ const TypingDots: React.FC<{ frame: number; from: number; to: number }> = ({ fra
   const t = interpolate(frame, [from, Math.min(from + 8, from + (to - from) * 0.6), to, to + 3], [0, 1, 1, 0], clamp);
   if (t <= 0) return null;
   return (
-    <div style={{ display: 'inline-flex', gap: 5, padding: '13px 15px', borderRadius: 20, borderTopLeftRadius: 6, background: CH.inBubble, boxShadow: '0 1px 2px rgba(20,20,40,.08)', opacity: t, transform: `scale(${0.7 + 0.3 * t})`, transformOrigin: 'left top' }}>
+    <div style={{ position: 'relative', display: 'inline-flex', gap: 5, padding: '13px 15px', borderRadius: 19, background: CH.inBubble, opacity: t, transform: `scale(${0.7 + 0.3 * t})`, transformOrigin: 'left bottom' }}>
+      {/* the two little bubbles under it */}
+      <i style={{ position: 'absolute', left: -2, bottom: -2, width: 11, height: 11, borderRadius: '50%', background: CH.inBubble }} />
+      <i style={{ position: 'absolute', left: -7, bottom: -7, width: 5, height: 5, borderRadius: '50%', background: CH.inBubble }} />
       {[0, 1, 2].map((i) => (
-        <i key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: CH.dots, opacity: 0.45 + 0.55 * Math.max(0, Math.sin((frame - from) * 0.32 - i * 0.9)) }} />
+        <i key={i} style={{ position: 'relative', width: 8, height: 8, borderRadius: '50%', background: CH.dots, opacity: 0.45 + 0.55 * Math.max(0, Math.sin((frame - from) * 0.32 - i * 0.9)) }} />
       ))}
     </div>
   );
 };
 
+/** The composer's size (app px): the field's height, and the space under it with the keyboard down. */
+const FIELD_H = 36;
 /** Where the message field and the send button are (app px), with the keyboard down / up. */
-export const FIELD_AT = { x: 160, y: 787 };
-export const SEND_UP = { x: 356, y: 844 - KB_H - 31 };
+export const FIELD_AT = { x: 160, y: 844 - 34 - FIELD_H / 2 };
+export const SEND_UP = { x: 362, y: 844 - KB_H - 8 - FIELD_H / 2 };
 
 /**
- * The chat. `msgs` arrive at their frames (incoming ones after typing dots from `typing`); `draft`
- * is what's being typed in the field (at `draftFrom`, `draftRate` frames a letter) until `sentAt`,
- * when it flies up as your bubble. The keyboard slides up from `fieldTapAt`.
+ * The group chat, laid out the way the phone's own messaging app does it: the group's faces and name
+ * centred at the top, grey bubbles from the others (each sender's name over their message, their
+ * face beside it), your blue ones on the right, a round + and a rounded field to write in. `msgs`
+ * arrive at their frames (incoming ones after typing dots from `typing`); `draft` is what's being
+ * typed (at `draftFrom`, `draftRate` frames a key) until `sentAt`, when it flies up as your bubble.
+ * The keyboard slides up from `fieldTapAt`.
  */
 export const ChatScreen: React.FC<{
   frame: number; msgs: Msg[]; draft?: string; draftFrom?: number; draftRate?: number; sentAt?: number; fieldTapAt?: number; extra?: React.ReactNode; time?: string;
@@ -222,32 +248,25 @@ export const ChatScreen: React.FC<{
   const caretOn = Math.floor(frame / 8) % 2 === 0 || (frame >= draftFrom && frame < draftFrom + draft.length * draftRate);
   // the keyboard slides up when the field is tapped (and stays), ~8 frames
   const kb = interpolate(frame, [fieldTapAt, fieldTapAt + 8], [0, 1], { ...clamp, easing: Easing.bezier(0.2, 0.8, 0.2, 1) });
-  let prev: Msg['who'] | null = null;
+  const lastMine = msgs.map((m) => m.who === 'you' && frame >= m.at).lastIndexOf(true);
   return (
     <div style={{ position: 'absolute', inset: 0, background: CH.bg, fontFamily: FONT, overflow: 'hidden' }}>
       <StatusBar time={time} />
-      {/* header: back, the group, its name, more */}
-      <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 118, background: CH.bar, boxShadow: `0 1px 0 ${CH.barLine}, 0 4px 14px rgba(20,20,40,.04)`, zIndex: 10 }}>
-        <div style={{ position: 'absolute', left: 10, right: 14, top: 58, height: 52, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={CH.ink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M11 6l-6 6 6 6" /></svg>
-          {/* the group's picture: its three members, overlapping */}
-          <div style={{ position: 'relative', width: 44, height: 44 }}>
-            <div style={{ position: 'absolute', left: 0, top: 0 }}><Avatar who="sam" size={26} ring /></div>
-            <div style={{ position: 'absolute', left: 18, top: 4 }}><Avatar who="priya" size={26} ring /></div>
-            <div style={{ position: 'absolute', left: 8, top: 18 }}><Avatar who="leo" size={26} ring /></div>
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 700, fontSize: 17, color: CH.ink, letterSpacing: '-0.01em' }}>The Crew</div>
-            <div style={{ fontSize: 12.5, color: CH.soft, marginTop: 1 }}>Sam, Priya, Leo</div>
-          </div>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill={CH.ink}><circle cx="12" cy="5.5" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="12" cy="18.5" r="1.8" /></svg>
+      {/* the header: back, the group (its faces and name, centred), a video call */}
+      <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 120, background: CH.bar, boxShadow: `0 .5px 0 ${CH.barLine}`, backdropFilter: 'blur(20px)', zIndex: 10 }}>
+        <svg width="14" height="24" viewBox="0 0 14 24" fill="none" stroke={CH.accent} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: 14, top: 70 }}><path d="M11 3L3 12l8 9" /></svg>
+        <div style={{ position: 'absolute', left: 32, top: 70, fontSize: 17, color: CH.accent }}>3</div>
+        <div style={{ position: 'absolute', left: 195 - 37, top: 56, width: 74, height: 40 }}>
+          <div style={{ position: 'absolute', left: 0, top: 6 }}><Avatar who="sam" size={30} ring /></div>
+          <div style={{ position: 'absolute', left: 22, top: 0 }}><Avatar who="priya" size={32} ring /></div>
+          <div style={{ position: 'absolute', left: 44, top: 6 }}><Avatar who="leo" size={30} ring /></div>
         </div>
+        <div style={{ position: 'absolute', left: 0, right: 0, top: 98, textAlign: 'center', fontSize: 12, color: CH.ink, letterSpacing: '-0.005em' }}>The Crew <span style={{ color: CH.soft }}>›</span></div>
+        <svg width="30" height="20" viewBox="0 0 30 20" style={{ position: 'absolute', right: 16, top: 71 }}><rect x="1" y="2" width="19" height="16" rx="4" fill={CH.accent} /><path d="M21.5 8l7-4.5v13l-7-4.5z" fill={CH.accent} /></svg>
       </div>
       {/* messages */}
-      <div style={{ position: 'absolute', left: 0, right: 0, top: 130, padding: '0 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ position: 'absolute', left: 0, right: 0, top: 132, padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 4 }}>
         {msgs.map((m, i) => {
-          const showName = m.who !== 'you' && prev !== m.who;
-          prev = m.who;
           const shown = frame >= m.at;
           const p = pop(frame, m.at);
           if (m.who === 'you') {
@@ -255,28 +274,26 @@ export const ChatScreen: React.FC<{
             // your bubble: flies up from the field
             const fly = interpolate(frame, [m.at, m.at + 12], [1, 0], { ...clamp, easing: Easing.out(Easing.cubic) });
             return (
-              <div key={i} style={{ display: 'flex', justifyContent: 'flex-end', transform: `translateY(${fly * (300 - 220 * kb)}px)`, opacity: interpolate(frame, [m.at, m.at + 3], [0, 1], clamp) }}>
-                {m.card ? m.card : null}
-                {!m.card && <div style={{ background: CH.out, color: '#fff', padding: '10px 15px', borderRadius: 20, borderTopRightRadius: 6, fontSize: 17, lineHeight: 1.25, letterSpacing: '-0.01em', maxWidth: 270, boxShadow: '0 2px 6px rgba(77,58,230,.25)' }}>{m.text}</div>}
+              <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', marginTop: 6, transform: `translateY(${fly * (300 - 220 * kb)}px)`, opacity: interpolate(frame, [m.at, m.at + 3], [0, 1], clamp) }}>
+                {m.card ? m.card : <Bubble mine>{m.text}</Bubble>}
+                {i === lastMine && <div style={{ fontSize: 11, color: CH.soft, margin: '3px 4px 0 0', opacity: interpolate(frame, [m.at + 10, m.at + 16], [0, 1], clamp) }}>Delivered</div>}
               </div>
             );
           }
           const typingFrom = m.typing ?? m.at - 14;
           if (frame < typingFrom) return null;
+          const fadeIn = interpolate(frame, [typingFrom, typingFrom + 6], [0, 1], clamp);
           return (
-            <div key={i}>
-              {showName && <div style={{ fontSize: 12, fontWeight: 700, color: PEOPLE[m.who].color, margin: '0 0 3px 46px', opacity: interpolate(frame, [typingFrom, typingFrom + 6], [0, 1], clamp) }}>{PEOPLE[m.who].name}</div>}
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                <div style={{ opacity: interpolate(frame, [typingFrom, typingFrom + 6], [0, 1], clamp) }}><Avatar who={m.who} size={30} /></div>
+            <div key={i} style={{ marginTop: 6 }}>
+              <div style={{ fontSize: 11, color: CH.soft, margin: '0 0 2px 48px', opacity: fadeIn }}>{PEOPLE[m.who].name}</div>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
+                <div style={{ opacity: fadeIn }}><Avatar who={m.who} size={28} /></div>
                 <div style={{ position: 'relative' }}>
                   <TypingDots frame={frame} from={typingFrom} to={m.at} />
                   {shown && (
-                    <div style={{ position: frame < m.at + 3 ? 'absolute' : 'relative', left: 0, top: 0 }}>
-                      {m.card ? <div style={{ transform: `scale(${0.4 + 0.6 * p})`, transformOrigin: 'left top', opacity: Math.min(1, 0.5 + p * 3) }}>{m.card}</div> :
-                      <div style={{
-                        background: CH.inBubble, color: CH.ink, padding: '10px 15px', borderRadius: 20, borderTopLeftRadius: 6, fontSize: 17, lineHeight: 1.25, letterSpacing: '-0.01em',
-                        boxShadow: '0 1px 2px rgba(20,20,40,.08)', transform: `scale(${0.4 + 0.6 * p})`, transformOrigin: 'left top', opacity: Math.min(1, 0.5 + p * 3), maxWidth: 260, whiteSpace: 'nowrap',
-                      }}>{m.text}</div>}
+                    <div style={{ position: frame < m.at + 3 ? 'absolute' : 'relative', left: 0, bottom: 0 }}>
+                      {m.card ? <div style={{ transform: `scale(${0.4 + 0.6 * p})`, transformOrigin: 'left bottom', opacity: Math.min(1, 0.5 + p * 3) }}>{m.card}</div> :
+                        <Bubble style={{ transform: `scale(${0.4 + 0.6 * p})`, transformOrigin: 'left bottom', opacity: Math.min(1, 0.5 + p * 3) }}>{m.text}</Bubble>}
                     </div>
                   )}
                 </div>
@@ -288,15 +305,23 @@ export const ChatScreen: React.FC<{
       {extra}
       {/* the keyboard */}
       {kb > 0 && <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: KB_H, transform: `translateY(${(1 - kb) * KB_H}px)`, zIndex: 11 }}><Keyboard frame={frame} text={draft} from={draftFrom} rate={draftRate} sentAt={sentAt} suggestions={suggest} /></div>}
-      {/* compose: a plain + (attach), a bordered box to write in, a square send button */}
-      <div style={{ position: 'absolute', left: 0, right: 0, bottom: kb * KB_H, padding: `8px 12px ${34 - 26 * kb}px`, display: 'flex', gap: 10, alignItems: 'center', background: CH.bar, boxShadow: `0 -1px 0 ${CH.barLine}`, zIndex: 10 }}>
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={CH.icon} strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-        <div style={{ flex: 1, height: 42, borderRadius: 12, background: CH.bar, border: `1.5px solid ${CH.boxLine}`, display: 'flex', alignItems: 'center', padding: '0 12px', fontSize: 17, color: field ? CH.ink : CH.placeholder, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden' }}>
-          {field || 'Write to The Crew…'}
-          {focused && caretOn && <span style={{ width: 2, height: 21, background: CH.outFlat, marginLeft: 1, borderRadius: 1 }} />}
+      {/* writing: a round +, then a rounded field (a microphone in it; once there's text, the send arrow) */}
+      <div style={{ position: 'absolute', left: 0, right: 0, bottom: kb * KB_H, padding: `8px 10px ${8 + 26 * (1 - kb)}px`, display: 'flex', gap: 8, alignItems: 'center', background: CH.bg, zIndex: 10 }}>
+        <div style={{ width: FIELD_H, height: FIELD_H, borderRadius: '50%', background: CH.field, display: 'grid', placeItems: 'center', flex: 'none' }}>
+          <svg width="18" height="18" viewBox="0 0 18 18" stroke={CH.icon} strokeWidth="2" strokeLinecap="round"><path d="M9 3v12M3 9h12" /></svg>
         </div>
-        <div style={{ width: 42, height: 42, borderRadius: 12, background: CH.out, opacity: field ? 1 : 0.45, display: 'grid', placeItems: 'center', transform: `scale(${interpolate(frame, [sentAt - 2, sentAt, sentAt + 4], [1, 0.86, 1], clamp)})` }}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M6 18L18 6M9 6h9v9" /></svg>
+        <div style={{ flex: 1, height: FIELD_H, borderRadius: FIELD_H / 2, border: `1px solid ${CH.boxLine}`, display: 'flex', alignItems: 'center', padding: '0 4px 0 13px', fontSize: 17, color: field ? CH.ink : CH.placeholder, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', boxSizing: 'border-box' }}>
+          <span style={{ flex: 1, display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+            {field || 'Text Message'}
+            {focused && caretOn && <span style={{ width: 2, height: 21, background: CH.accent, marginLeft: 1, borderRadius: 1 }} />}
+          </span>
+          {field ? (
+            <div style={{ width: 28, height: 28, borderRadius: '50%', background: CH.accent, display: 'grid', placeItems: 'center', flex: 'none', transform: `scale(${interpolate(frame, [sentAt - 2, sentAt, sentAt + 4], [1, 0.86, 1], clamp)})` }}>
+              <svg width="14" height="16" viewBox="0 0 14 16" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M7 14V2.5M2 7l5-5 5 5" /></svg>
+            </div>
+          ) : (
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={CH.icon} strokeWidth="1.8" strokeLinecap="round" style={{ flex: 'none' }}><rect x="9" y="4" width="6" height="10" rx="3" fill={CH.icon} stroke="none" /><path d="M6.5 11.5a5.5 5.5 0 0 0 11 0M12 17v3" /></svg>
+          )}
         </div>
       </div>
       {/* home indicator */}

@@ -43,15 +43,16 @@ const PROPS = (() => {
   return out;
 })();
 
-/** The invite as it lands in the chat: a small map of the spot and the plan. */
+/** The invite as it lands in the chat: a link preview (a small map of the spot, then the plan). */
 const InviteCard: React.FC = () => (
-  <div style={{ width: 250, borderRadius: 20, borderTopRightRadius: 6, overflow: 'hidden', background: CH.out, color: '#fff', boxShadow: '0 2px 8px rgba(77,58,230,.25)' }}>
-    <div style={{ height: 118, position: 'relative', overflow: 'hidden', background: '#eef2f5' }}>
+  <div style={{ width: 250, borderRadius: 18, overflow: 'hidden', background: CH.inBubble, color: CH.ink }}>
+    <div style={{ height: 124, position: 'relative', overflow: 'hidden', background: '#eef2f5' }}>
       <Img src={staticFile(`${CAPDIR}/spot-card.png`)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
     </div>
-    <div style={{ padding: '9px 12px 11px', fontFamily: FONT }}>
-      <div style={{ fontWeight: 700, fontSize: 15, letterSpacing: '-0.01em', lineHeight: 1.2 }}>Let’s meet at {CAP.placeName}</div>
-      <div style={{ fontSize: 12.5, opacity: 0.85, marginTop: 2 }}>{CAP.placeAddress} · {CAP.when}</div>
+    <div style={{ padding: '8px 12px 10px', fontFamily: FONT }}>
+      <div style={{ fontWeight: 600, fontSize: 15, letterSpacing: '-0.01em', lineHeight: 1.22 }}>Let’s meet at {CAP.placeName}</div>
+      <div style={{ fontSize: 12.5, color: CH.soft, marginTop: 2 }}>{CAP.when} · {CAP.placeAddress}</div>
+      <div style={{ fontSize: 12.5, color: CH.soft, marginTop: 1 }}>meet-hhdt.onrender.com</div>
     </div>
   </div>
 );

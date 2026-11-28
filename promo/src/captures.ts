@@ -13,7 +13,7 @@ const m = meta as unknown as {
   spot: { x: number; y: number } | null;
   /** Where the spot is in the race clip as everyone gathers there (app px; measured on the clip). */
   raceSpot?: { x: number; y: number };
-  places: { tabs: { text: string; x: number; y: number }[]; tapDrinks: P; tapFood: P; tapGroup: P; tapPlace: P; tapSend: P; shareBtn?: P };
+  places: { tabs: { text: string; x: number; y: number }[]; tapTab1: P; tapTab2: P; tapGroup: P; tapSort?: P; tapPlace: P; tapSend: P; shareBtn?: P };
   shareText?: string;
   frames?: Record<string, number>;
 };
@@ -23,7 +23,7 @@ const pt = (x: number, y: number, frame = 0) => ({ x, y, frame });
 m.crew ||= { tapMap: pt(212, 260, 15), tapUse: pt(212, 220, 37), typeFrom: 61, tapAdd: pt(300, 202, 90) };
 m.modes ||= { tapPill: pt(150, 455, 12), tapBike: pt(170, 520, 38) };
 m.go ||= { drag: { ...pt(195, 443, 10), to: 963 }, tapPlay: pt(344, 658, 60), resultsAt: 360 };
-m.places ||= { tabs: [], tapDrinks: pt(150, 470, 60), tapFood: pt(60, 470, 96), tapGroup: pt(195, 560, 132), tapPlace: pt(195, 520, 172), tapSend: pt(120, 400, 222) };
+m.places ||= { tabs: [], tapTab1: pt(317, 579, 106), tapTab2: pt(197, 579, 142), tapGroup: pt(195, 660, 178), tapPlace: pt(195, 320, 240), tapSend: pt(120, 400, 290) };
 
 // "Let's meet at <place>\n<address>\n<when>\n<link>" (Meet's share text)
 const lines = (m.shareText || '').split('\n').map((s) => s.trim()).filter(Boolean);

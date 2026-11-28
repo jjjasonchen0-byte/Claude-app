@@ -6,7 +6,7 @@ import { AbsoluteFill, Easing, Img, interpolate, staticFile, useCurrentFrame } f
 import { Camera, Finger, Lens, Phone, Stage, camAt, type Cam } from '../kit';
 import { CAPDIR, DARK, EASE, H, K, SCREEN_H, SCREEN_W, W, clamp, onScreen } from '../theme';
 import { ChatScreen, FIELD_AT as CHAT_FIELD, SEND_UP, StatusBar, keyPoint, type Msg } from '../screens/Chat';
-import { AppIcon, HomeScreen, MEET_SLOT, iconBox, iconRadius } from '../screens/Home';
+import { AppIcon, HomeScreen, MEET_SLOT, MESSAGES_DOCK, dockBox, iconBox, iconRadius } from '../screens/Home';
 
 // ---- the beats (local frames) ----
 export const O = {
@@ -55,7 +55,7 @@ const REST_L = { x: 66, y: 700 }, REST_R = { x: 322, y: 700 };
 const WORD = { x: 262, y: 336 };
 
 // "But where?": the 4th incoming bubble's centre (app px), and the field.
-const WHERE_AT = onScreen(98, 403);
+const WHERE_AT = onScreen(106, 366);
 const FIELD_AT = onScreen(190, 803);
 const WORD_AT = onScreen(WORD.x, WORD.y); // Meet's wordmark on its start screen
 const MEET_BOX = iconBox(MEET_SLOT.col, MEET_SLOT.row);
@@ -120,7 +120,7 @@ export const Opening: React.FC = () => {
   const cam = openingCam(f);
 
   // ---- close the chat into its icon ----
-  const chats = iconBox(0, 0);
+  const chats = dockBox(MESSAGES_DOCK); // (Messages, in the dock)
   const pClose = f < O.morphIn ? 0 : morphP(f, O.morphIn);
   const lift = interpolate(f, [O.swipeUp, O.morphIn], [0, 1], { ...clamp, easing: Easing.out(Easing.quad) }); // the app follows the finger up a little first
   // the shape travels to the slot (to p = 1); the overshoot past it is a uniform scale about the slot's
@@ -159,7 +159,7 @@ export const Opening: React.FC = () => {
             {f >= O.swipeUp - 2 && (
               <div style={{ position: 'absolute', inset: 0, zoom: K, width: 390, height: 844 }}>
                 <div style={{ position: 'absolute', inset: 0, transform: `scale(${lerp(0.9, 1, homeIn)})`, filter: homeIn < 1 ? `blur(${(1 - homeIn) * 8}px)` : undefined }}>
-                  <HomeScreen page={page} hide={chatOn ? 'chats' : f >= O.launch ? 'meet' : undefined} press={{ id: 'meet', s: press }} dim={(1 - homeIn) * 0.5} />
+                  <HomeScreen page={page} hide={chatOn ? 'messages' : f >= O.launch ? 'meet' : undefined} press={{ id: 'meet', s: press }} dim={(1 - homeIn) * 0.5} />
                 </div>
               </div>
             )}
@@ -169,7 +169,7 @@ export const Opening: React.FC = () => {
                 <div style={{ position: 'absolute', left: 0, top: 0, width: 390, height: 844, transform: `scale(${cw / 390})`, transformOrigin: '0 0', opacity: appFade }}>
                   <ChatScreen frame={f} msgs={MSGS} draft={TYPED} correct={autocorrect} draftFrom={O.typeFrom} draftRate={TYPE_RATE} sentAt={O.sendTap + 2} fieldTapAt={O.fieldTap + 3} />
                 </div>
-                {pClose > 0.5 && <div style={{ position: 'absolute', inset: 0, opacity: 1 - appFade }}><AppIcon id="chats" size={cw} /></div>}
+                {pClose > 0.5 && <div style={{ position: 'absolute', inset: 0, opacity: 1 - appFade }}><AppIcon id="messages" size={cw} /></div>}
               </div>
             )}
             {/* Meet, opening out of its icon */}

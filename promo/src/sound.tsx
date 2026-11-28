@@ -63,7 +63,7 @@ export const SFX: Sfx[] = [
 /** Race and later shots read their own beats; they register here once the module graph is ready. */
 export const lateSfx = (beats: {
   race: { drag: number; press: number; crash: number; dur: number };
-  tabs: { pull: number; drinks: number; food: number };
+  tabs: { pull: number; tab1: number; tab2: number };
   glide: { peak: number };
   invite: { click: number; fly: [number, number]; land: number; replies: number[] };
   live: { clink: number };
@@ -77,10 +77,10 @@ export const lateSfx = (beats: {
   { at: S('race') + beats.race.crash + 6, src: 'impact-deep-whoosh', volume: 0.55, dur: 80, fadeOut: 24 },
   // ---- the tabs
   { at: S('tabs') + beats.tabs.pull + 10, src: 'swoosh-quick', volume: 0.2, dur: 24 },
-  tap(S('tabs') + beats.tabs.drinks, 0.5),
-  { at: S('tabs') + beats.tabs.drinks + 1, src: 'switch-tap', volume: 0.2, dur: 20 },
-  tap(S('tabs') + beats.tabs.food, 0.5),
-  { at: S('tabs') + beats.tabs.food + 1, src: 'switch-tap', volume: 0.2, dur: 20 },
+  tap(S('tabs') + beats.tabs.tab1, 0.5),
+  { at: S('tabs') + beats.tabs.tab1 + 1, src: 'switch-tap', volume: 0.2, dur: 20 },
+  tap(S('tabs') + beats.tabs.tab2, 0.5),
+  { at: S('tabs') + beats.tabs.tab2 + 1, src: 'switch-tap', volume: 0.2, dur: 20 },
   // ---- the glide
   { at: S('glide') + beats.glide.peak, src: 'whoosh-swirl', volume: 0.34, dur: 80, fadeOut: 16 },
   // ---- the invite: the tap, the plane's flight, it lands, the answers
