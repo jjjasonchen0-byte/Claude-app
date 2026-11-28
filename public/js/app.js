@@ -11,6 +11,7 @@ import { KIND_GLYPHS, groupIcon, placeIcon } from './kinds.js';
 import { getConfig, ratingsSource, rateAll, thumbFor, detailsFor } from './rated.js';
 import { openStatus, weekTable } from './hours.js';
 import { haversine } from './geo.js';
+import { usesMiles, fmtDist as fmtDistIn, fmtRadius as fmtRadiusIn } from './units.js';
 import { pickAnchor } from './anchor.js';
 import { loadPlacesKit, placeIdFor, rowPhoto, placeCard, samePlace } from './placeskit.js';
 import { mapLinks, shareText, messagingLinks, nativeShare, copyText, calendarInvite, download } from './share.js';
@@ -94,10 +95,9 @@ const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const isMobile = () => window.matchMedia('(max-width: 759px)').matches;
 
-function fmtDist(m) {
-  if (m < 950) return `${Math.max(10, Math.round(m / 10) * 10)} m`;
-  return `${(m / 1000).toFixed(m < 9500 ? 1 : 0)} km`;
-}
+/** Miles and feet where the phone is set to a country that uses them. */
+const IMPERIAL = usesMiles((navigator.languages && navigator.languages[0]) || navigator.language || '');
+const fmtDist = (m) => fmtDistIn(m, IMPERIAL);
 function travelMinutes(m, mode = state.settings.travel) {
   return Math.round(estimateSeconds(mode, m / 1.3) / 60);
 }
@@ -2486,8 +2486,8 @@ function renderResults() {
 // ------------------------------------------------ how far to look: the slider
 
 const radiusShare = (r) => ((r - RADIUS.min) / (RADIUS.max - RADIUS.min)) * 100;
-/** "800 m", "1 km". */
-const fmtRadius = (r) => (r >= 1000 ? `${+(r / 1000).toFixed(1)} km` : `${Math.round(r / 10) * 10} m`);
+/** "800 m", "1 km" (or "500 ft", "0.6 mi"). */
+const fmtRadius = (r) => fmtRadiusIn(r, IMPERIAL);
 
 /** "23 places within 800 m" (a spinner in place of the number while they load), and the slider. */
 function radiusRow(s, total) {

@@ -70,7 +70,7 @@ const TILE = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAQAAAAEAAQMAAABmvDolAAAAA1BMVE
 
 // ---- run ---------------------------------------------------------------------
 const browser = await chromium.launch();
-const ctx = await browser.newContext({ viewport: { width: 1280, height: 820 }, deviceScaleFactor: 1 });
+const ctx = await browser.newContext({ viewport: { width: 1280, height: 820 }, deviceScaleFactor: 1, locale: 'en-AU' });
 // The base map: a plain stand-in style for the vector map (and tiles for the no-WebGL fallback).
 // The same tiles give the search animation its streets.
 let streetTiles = 0;

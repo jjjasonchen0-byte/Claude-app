@@ -86,6 +86,7 @@ const css = `${read('node_modules/leaflet/dist/leaflet.css')}\n${read('public/cs
 // ---- scripts
 const modules = [
   ['geo', 'public/js/geo.js'],
+  ['units', 'public/js/units.js'],
   ['graph', 'public/js/graph.js'],
   ['meetpoint', 'public/js/meetpoint.js'],
   ['flood', 'public/js/flood.js'],
