@@ -1,13 +1,15 @@
 // The advert's app footage, captured in one session of the live site (meet-hhdt.onrender.com: its real
-// map, routing and places), with a fictional group in New York on a US phone (miles, Eastern time). Usage: node scenes.mjs [--until <clip>]
+// map, routing and places), with a fictional group in New York on a US phone (miles, Eastern time).
+// Usage: node scenes.mjs [--dark] [--until <clip>]   (--dark: the phone in dark mode, into captures-dark/)
 import fs from 'node:fs';
 import path from 'node:path';
 import { openRig, LIVE } from './rig.mjs';
 
 const until = process.argv.includes('--until') ? process.argv[process.argv.indexOf('--until') + 1] : null;
-const OUT = path.resolve('/home/user/Claude-app/promo/public/captures');
+const DARK = process.argv.includes('--dark');
+const OUT = path.resolve(`/home/user/Claude-app/promo/public/captures${DARK ? '-dark' : ''}`);
 fs.mkdirSync(OUT, { recursive: true });
-const rig = await openRig({ out: OUT, url: LIVE });
+const rig = await openRig({ out: OUT, url: LIVE, dark: DARK });
 const { page } = rig;
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 const meta = {};

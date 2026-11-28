@@ -13,3 +13,5 @@ public/audio/screen-taps.mp3
 public/audio/tap*.mp3
 # the live-action clip (Higgsfield / Kling): kept out of the repo for size
 public/live/
+public/captures-dark/raw/
+public/captures-dark/*.mp4
