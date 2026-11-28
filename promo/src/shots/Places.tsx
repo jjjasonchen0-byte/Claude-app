@@ -36,9 +36,8 @@ export const TABS_BEATS = { pull: outOf(PULL), tab1: outOf(DRINKS), tab2: outOf(
 export const Tabs: React.FC = () => {
   const f = useCurrentFrame();
   const n = tabClip(f);
-  const tabs = P.tabs || [];
-  const tabY = tabs[0]?.y ?? 470;
-  const row = onScreen(150, tabY);
+  const midX = (P.tapTab1.x + P.tapTab2.x) / 2;
+  const t1 = onScreen(midX, P.tapTab1.y), t2 = onScreen(midX, P.tapTab2.y);
   const pull = onScreen(P.pull?.x ?? 195, P.pull?.y ?? 700);
   const oPull = outOf(PULL), oDrinks = outOf(DRINKS), oFood = outOf(FOOD);
   const keys: Key[] = [
@@ -46,9 +45,11 @@ export const Tabs: React.FC = () => {
     // following the sheet up: everyone's time
     { f: oPull + 26, cam: { x: 540, y: 820, zoom: 1.02, rz: 0, ry: 0 }, ease: Easing.inOut(Easing.sin) },
     { f: oDrinks - 14, cam: { x: 560, y: 900, zoom: 1.1 }, ease: Easing.inOut(Easing.sin) },
-    // into a macro on the tabs: the sliding highlight is the hero
-    { f: oDrinks - 2, cam: { x: row.x + 40, y: row.y + 10, zoom: 2.4 }, ease: Easing.inOut(Easing.cubic) },
-    { f: TABS_DUR - 1, cam: { x: row.x + 10, y: row.y + 10, zoom: 2.55 }, ease: Easing.inOut(Easing.sin) },
+    // into a macro on the tabs, between the two that are tapped: the sliding highlight is the hero (the
+    // row drops a little as the shorter list under the first tab settles: the camera goes with it)
+    { f: oDrinks - 2, cam: { x: t1.x, y: t1.y + 10, zoom: 2.2 }, ease: Easing.inOut(Easing.cubic) },
+    { f: oFood - 4, cam: { x: t1.x - 6, y: t2.y + 10, zoom: 2.28 }, ease: Easing.inOut(Easing.sin) },
+    { f: TABS_DUR - 1, cam: { x: t1.x - 12, y: t2.y + 10, zoom: 2.36 }, ease: Easing.inOut(Easing.sin) },
   ];
   const lift = P.pull?.to ?? 110;
   const cam = camAt(f, keys);

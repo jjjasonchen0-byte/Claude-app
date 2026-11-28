@@ -48,7 +48,7 @@
     "crew": 166,
     "modes": 78,
     "go": 369,
-    "places": 302
+    "places": 322
   },
   "modes": {
     "tapPill": {
@@ -88,72 +88,77 @@
       "to": 110
     },
     "scroll": {
-      "by": 39.71875,
+      "by": 16.75,
       "frame": 74
     },
     "tabs": [
       {
-        "text": "Food50",
-        "x": 72.1875,
-        "y": 578.71875
+        "text": "Food0",
+        "x": 67.9296875,
+        "y": 578.75
       },
       {
         "text": "Drinks50",
-        "x": 197.4765625,
-        "y": 578.71875
+        "x": 188.9609375,
+        "y": 578.75
       },
       {
         "text": "Fun16",
-        "x": 316.9765625,
-        "y": 578.71875
+        "x": 308.4609375,
+        "y": 578.75
       },
       {
         "text": "Culture33",
-        "x": 439.3828125,
-        "y": 578.71875
+        "x": 430.8671875,
+        "y": 578.75
       },
       {
         "text": "Outdoors21",
-        "x": 580.453125,
-        "y": 578.71875
+        "x": 571.9375,
+        "y": 578.75
       },
       {
         "text": "Shopping29",
-        "x": 728.828125,
-        "y": 578.71875
+        "x": 720.3125,
+        "y": 578.75
       }
     ],
-    "tapDrinks": {
-      "text": "Drinks50",
-      "x": 197.4765625,
-      "y": 578.71875,
+    "tapTab1": {
+      "text": "Fun16",
+      "x": 308.4609375,
+      "y": 578.75,
       "frame": 106
     },
-    "tapFood": {
-      "text": "Food50",
-      "x": 72.1875,
-      "y": 618.71875,
+    "tapTab2": {
+      "text": "Drinks50",
+      "x": 188.9609375,
+      "y": 595.75,
       "frame": 142
     },
     "tapGroup": {
       "x": 195,
-      "y": 687.71875,
+      "y": 664.75,
       "frame": 178
+    },
+    "tapSort": {
+      "x": 283,
+      "y": 228.0625,
+      "frame": 202
     },
     "tapPlace": {
       "x": 195,
       "y": 313.15625,
-      "frame": 212
+      "frame": 232
     },
     "tapSend": {
       "x": 103.5,
-      "y": 409.8515625,
-      "frame": 258
+      "y": 258.6640625,
+      "frame": 278
     },
     "shareBtn": {
       "x": 195,
-      "y": 556.9375
+      "y": 556.546875
     }
   },
-  "shareText": "Let's meet at Mama Fina's House of Filipino Sisig\n167 Avenue A, Manhattan\nFri, Dec 4, 8:00 PM\nhttps://www.google.com/maps/search/?api=1&query=40.7282376,-73.9821344\nSent with Meet"
+  "shareText": "Let's meet at The Spotted Owl\n211 Avenue A, Manhattan\nFri, Dec 4, 8:00 PM\nhttps://www.google.com/maps/search/?api=1&query=40.7298793,-73.9809353\nSent with Meet"
 }
