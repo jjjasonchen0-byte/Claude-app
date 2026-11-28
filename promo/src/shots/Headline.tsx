@@ -7,7 +7,7 @@ import { AbsoluteFill, continueRender, delayRender, Easing, interpolate, useCurr
 import { Stage } from '../kit';
 import { C, FONT, clamp } from '../theme';
 
-export const HEADLINE_DUR = 92;
+export const HEADLINE_DUR = 97; // (to the beat at frame 540: the crash-out runs right up to the cut)
 const TEXT = 'Meet in the middle.';
 const HIGHLIGHT = 'middle.';
 const FONT_SIZE = 96;

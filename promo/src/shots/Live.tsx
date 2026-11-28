@@ -10,8 +10,8 @@ export const LIVE_FROM = 1.05; // seconds into the clip: the hug ending, laughin
 const RATE = 1.25;
 /** Cut as the glasses meet (4.85 s into the clip). */
 export const LIVE_DUR = 92;
-/** The clink (frames into this shot): on the cut, as the glasses meet. */
-export const LIVE_CLINK = 92;
+/** The clink (frames into this shot): as the glasses touch (4.6 s into the clip), just before the cut. */
+export const LIVE_CLINK = 88;
 
 export const Live: React.FC = () => {
   const f = useCurrentFrame();
@@ -25,7 +25,7 @@ export const Live: React.FC = () => {
         <OffthreadVideo src={staticFile('live/bar.mp4')} startFrom={Math.round(LIVE_FROM * 30)} playbackRate={RATE} muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
       </AbsoluteFill>
       {/* out to black on the last frames, for the brand */}
-      <AbsoluteFill style={{ background: '#000', opacity: interpolate(f, [LIVE_DUR - 3, LIVE_DUR], [0, 1], clamp) }} />
+      <AbsoluteFill style={{ background: '#000', opacity: interpolate(f, [LIVE_DUR - 2, LIVE_DUR], [0, 1], clamp) }} />
     </AbsoluteFill>
   );
 };

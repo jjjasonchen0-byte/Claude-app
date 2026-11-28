@@ -54,6 +54,39 @@ await page.evaluate(() => {
   document.head.appendChild(Object.assign(document.createElement('style'), { textContent: 'gmp-place-details { display: none !important; }' }));
 });
 
+// The date and time fields as an iPhone shows them ("Dec 4, 2026 at 8:00 PM"), not as the desktop
+// field the capture browser draws ("12/04/2026, 08:00 PM" and a calendar button): the field's own text
+// hidden, the phone's wording drawn in its place in the field's own font, kept in step every frame.
+await page.evaluate(() => {
+  document.head.appendChild(Object.assign(document.createElement('style'), { textContent:
+    'input[type=datetime-local]::-webkit-datetime-edit{opacity:0}input[type=datetime-local]::-webkit-calendar-picker-indicator{opacity:0}' +
+    '.ios-when{position:absolute;display:flex;align-items:center;pointer-events:none;white-space:nowrap;overflow:hidden}' }));
+  const say = (v) => {
+    const d = new Date(v);
+    if (!v || Number.isNaN(d.getTime())) return '';
+    return `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+  };
+  const tick = () => {
+    for (const el of document.querySelectorAll('input[type=datetime-local]')) {
+      const host = el.parentElement;
+      if (!host) continue;
+      if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+      let lab = el.nextElementSibling?.classList?.contains('ios-when') ? el.nextElementSibling : null;
+      if (!lab) { lab = Object.assign(document.createElement('span'), { className: 'ios-when' }); el.after(lab); }
+      const cs = getComputedStyle(el);
+      Object.assign(lab.style, {
+        left: `${el.offsetLeft}px`, top: `${el.offsetTop}px`, width: `${el.offsetWidth}px`, height: `${el.offsetHeight}px`,
+        font: cs.font, color: cs.color, paddingLeft: cs.paddingLeft, paddingRight: cs.paddingRight, boxSizing: 'border-box',
+        justifyContent: cs.textAlign === 'right' || cs.textAlign === 'end' ? 'flex-end' : cs.textAlign === 'center' ? 'center' : 'flex-start',
+      });
+      const text = say(el.value);
+      if (lab.textContent !== text) lab.textContent = text;
+    }
+    requestAnimationFrame(tick);
+  };
+  tick();
+});
+
 // ---------------------------------------------------------------- the start screen (still)
 await rig.idle(1500);
 await page.evaluate(() => document.fonts.ready);

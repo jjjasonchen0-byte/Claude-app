@@ -162,3 +162,19 @@ Where this differs from §7 (the phone, the capture's city and locale, the live 
 | Licensed sounds, fetched again | The Epidemic Sound tracks (screen taps, the clink, the cheer, now an indoor bar crowd in place of the beer garden) were downloaded afresh for this version, as their licence asks for each new version of a video; `assets-src/taps.py` cuts the eight taps from the taps track | Licence terms |
 | A dark-mode version | The same cut with the phone in dark mode: a second capture of the same session (`node capture/scenes.mjs --dark` → `public/captures-dark/`: the app's dark theme and Google's dark map; the same taps, timings and result), and the drawn screens in their dark colours (`DARK` in `src/theme.ts`, from the `dark` input prop: the chat app, an iPhone dark keyboard, white status bar and home indicator, Meet's icon white on black). `./render.sh dark` → `out/meet-ad-dark.mp4` and `out/meet-ad-dark-nobgm.mp4` | The user asked for one |
 | One clean render | `render.sh` bundles once, then renders every chunk afresh; `render-patch.sh` is gone (it re-encoded a middle chunk with another time base, and the join froze the picture from 0:15 to 0:27) | The user saw the freeze |
+
+### The review of the New York cut, and what was done
+
+| Finding | Done |
+|---|---|
+| S-1 the thumbs crossed in the middle of the keyboard | A thumb waits through a longer gap at its own resting place (raised, on its own half), on a smooth curve; each thumb hits the space bar towards its own end |
+| S-2 the race close-up cut off Leo's time and the place's name | The crash lands wider (1.54×, then 1.58×) and centred on all four times and the name |
+| S-3 the date fields looked like a desktop browser's | The capture draws them as an iPhone does: "Dec 4, 2026 at 8:00 PM" |
+| S-4 the clink came after the glasses met, on black | Pinned to the touch (frame 88 of the shot); the fade to black is 2 frames |
+| S-5 the headline and crew shots stopped a few frames before their cuts | Their moves now run to the cut |
+| S-6 the invite's tap and the answers were lost under the music | The music dips 3.5 dB under each |
+| N-1 the apostrophe appeared with no key pressed | "Ive" is typed; the space autocorrects it to "I've" (the predictive bar offers it) |
+| N-3 the launch looked like a double exposure | The icon hands over to the app's screen within its first frames, centred in the growing window |
+| N-6 the last chat framing cut the status bar in half | The whole screen is in |
+| Kept | N-4 (leave now at 6:32 for an 8 pm invite: true to the app), N-5 (beer at a Filipino restaurant: plausible), N-2 (one thumb, mirrored), N-8 (same gain in both mixes, by design), N-10 (length) |
+

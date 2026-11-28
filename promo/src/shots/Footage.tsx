@@ -37,7 +37,7 @@ export const Crew: React.FC = () => {
   const tap = at(CAP.crew.tapMap);
   const keys: Key[] = inA
     ? [{ f: 0, cam: { x: tap.x + 40, y: tap.y + 80, zoom: 1.5, ry: -6 } }, { f: crewA, cam: { x: tap.x + 20, y: tap.y + 60, zoom: 1.68, ry: 2 }, ease: Easing.inOut(Easing.sin) }]
-    : [{ f: crewA, cam: { x: 540, y: 930, zoom: 0.72, ry: -14, rx: 4 } }, { f: CREW_DUR, cam: { x: 540, y: 910, zoom: 0.76, ry: 8, rx: 2 }, ease: Easing.inOut(Easing.sin) }];
+    : [{ f: crewA, cam: { x: 540, y: 930, zoom: 0.72, ry: -14, rx: 4 } }, { f: CREW_DUR + 10, cam: { x: 540, y: 910, zoom: 0.76, ry: 8, rx: 2 }, ease: Easing.inOut(Easing.sin) }]; // (still turning at the cut, which the beat puts a few frames after CREW_DUR)
   return (
     <PhoneShot keys={keys} over={<Caption text="Add your *crew.*" at={crewA + 4} out={CREW_DUR - 12} top={170} />}>
       <Footage clip="crew" n={n} />

@@ -172,7 +172,10 @@ export const Keyboard: React.FC<{ frame: number; text: string; from: number; rat
  */
 const NEXT: Record<string, string[]> = { '': ['I', 'The', 'I’m'], "I've": ['got', 'been', 'never'], got: ['a', 'just', 'it'], just: ['the', 'a', 'like'], the: ['thing', 'place', 'best'] };
 const WORDS = ['I', 'I’m', "I've", 'got', 'gotta', 'going', 'good', 'just', 'jump', 'justice', 'the', 'they', 'then', 'to', 'that', 'thing', 'things', 'think', 'this'];
-const suggest = (t: string): string[] => {
+const suggest = (raw: string): string[] => {
+  const t = raw.replace(/^Ive(?= )/, "I've"); // (autocorrect, as the space is typed)
+  if (t === 'I') return ['I', 'I’m', 'I’ve'];
+  if (t === 'Iv' || t === 'Ive') return [`“${t}”`, 'I’ve', 'I’m'];
   if (!t || t.endsWith(' ')) return NEXT[t.trim().split(' ').pop() || ''] ?? ['the', 'a', 'it'];
   const last = t.split(' ').pop() || '';
   const done = WORDS.filter((w) => w.toLowerCase().startsWith(last.toLowerCase()) && w !== last);
@@ -210,9 +213,11 @@ export const SEND_UP = { x: 356, y: 844 - KB_H - 31 };
  */
 export const ChatScreen: React.FC<{
   frame: number; msgs: Msg[]; draft?: string; draftFrom?: number; draftRate?: number; sentAt?: number; fieldTapAt?: number; extra?: React.ReactNode; time?: string;
-}> = ({ frame, msgs, draft = '', draftFrom = 1e9, draftRate = 1.8, sentAt = 1e9, fieldTapAt = 1e9, extra, time }) => {
+  /** What the phone makes of what's typed (autocorrect). */
+  correct?: (typed: string) => string;
+}> = ({ frame, msgs, draft = '', draftFrom = 1e9, draftRate = 1.8, sentAt = 1e9, fieldTapAt = 1e9, extra, time, correct = (t) => t }) => {
   const typed = frame < draftFrom ? 0 : Math.min(draft.length, Math.floor((frame - draftFrom) / draftRate) + 1);
-  const field = frame >= sentAt ? '' : draft.slice(0, typed);
+  const field = frame >= sentAt ? '' : correct(draft.slice(0, typed));
   const focused = frame >= fieldTapAt;
   const caretOn = Math.floor(frame / 8) % 2 === 0 || (frame >= draftFrom && frame < draftFrom + draft.length * draftRate);
   // the keyboard slides up when the field is tapped (and stays), ~8 frames

@@ -5,7 +5,8 @@
 import React from 'react';
 import { Audio, interpolate, Sequence, staticFile } from 'remotion';
 import { shot, TOTAL } from './timeline';
-import { O, TYPE_RATE } from './shots/Opening';
+import { O, TYPE_RATE, TYPED } from './shots/Opening';
+import { INVITE_BEATS } from './shots/Invite';
 import { CAP } from './captures';
 import { clamp } from './theme';
 
@@ -39,7 +40,7 @@ export const SFX: Sfx[] = [
   { at: S('opening') + O.crash + 6, src: 'impact-zoom-quick', volume: 0.42, dur: 36 }, // "But where?" crash zoom
   tap(S('opening') + O.fieldTap, 0.5),
   // every key (the keyboard: soft taps)
-  ..."I've got just the thing".split('').flatMap((ch, i) => (ch === "'" ? [] : [tap(S('opening') + O.typeFrom + i * TYPE_RATE, 0.26 + ((i * 7) % 5) * 0.02)])), // (no key for the apostrophe)
+  ...TYPED.split('').map((_, i) => tap(S('opening') + O.typeFrom + i * TYPE_RATE, 0.26 + ((i * 7) % 5) * 0.02)),
   tap(S('opening') + O.sendTap, 0.55),
   { at: S('opening') + O.sent + 6, src: 'swoosh-quick', volume: 0.28, dur: 24 }, // your bubble flies up
   // ---- closing the app, the home screen, Meet
@@ -109,11 +110,18 @@ const SOFT: Record<string, number> = {
 };
 const soften = (src: string) => SOFT[src] ?? 0.55;
 
+/**
+ * The small sounds that sit in the music's louder second half (the invite's tap, its landing and the
+ * three answers): the music dips 3.5 dB under each (in 3 frames, back over 10) so they're heard.
+ */
+const DIPS = [INVITE_BEATS.click, INVITE_BEATS.land, ...INVITE_BEATS.replies].map((x) => shot('invite').from + x);
+const dip = (f: number) => DIPS.reduce((v, d) => v * (1 - 0.33 * interpolate(f - d, [-3, 0, 4, 14], [0, 1, 1, 0], clamp)), 1);
+
 /** Cat Walk: in over a second, a little lower under real life (the bar), out over the last 1.7 s. */
 const bgmVolume = (f: number) => {
   const live = shot('live');
   const duck = interpolate(f, [live.from - 6, live.from + 4, live.from + live.dur - 4, live.from + live.dur + 8], [1, 0.62, 0.62, 1], clamp);
-  return interpolate(f, [0, 30, TOTAL - 50, TOTAL], [0, 0.34, 0.34, 0], clamp) * duck;
+  return interpolate(f, [0, 30, TOTAL - 50, TOTAL], [0, 0.34, 0.34, 0], clamp) * duck * dip(f);
 };
 
 export const Sound: React.FC<{ bgm: boolean; extra: Sfx[] }> = ({ bgm, extra }) => (

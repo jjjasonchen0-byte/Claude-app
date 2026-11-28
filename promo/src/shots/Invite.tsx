@@ -84,13 +84,13 @@ export const Invite: React.FC = () => {
   const follow = interpolate(frame, ZOOM_OUT, [0, 1], clamp);
   // camera: A's button → the plane → B's chat (centre and zoom continuous at the hand-over)
   const startC = { x: btnA.x, y: btnA.y - 200 };
-  const bC = { x: BX + BEZEL + 195 * K, y: BY + BEZEL + 430 * K };
+  const bC = { x: BX + BEZEL + 195 * K, y: BY + BEZEL + 422 * K }; // (the whole screen in: its status bar and island too)
   let cx = startC.x + (pos.x - startC.x) * follow;
   let cy = startC.y + (pos.y - startC.y) * follow;
   cx = cx * (1 - takeP) + bC.x * takeP;
   cy = cy * (1 - takeP) + bC.y * takeP;
   const zBase = 1.3 + (0.42 - 1.3) * zoomOutP;
-  const zTake = 0.42 + (1.22 - 0.42) * takeP;
+  const zTake = 0.42 + (1.14 - 0.42) * takeP;
   const z = frame < TAKEOVER[0] ? zBase : zTake;
   const camX = (wx: number, d: number) => W / 2 + (wx - cx) * z * d;
   const camY = (wy: number, d: number) => H / 2 + (wy - cy) * z * d;

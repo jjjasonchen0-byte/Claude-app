@@ -73,10 +73,11 @@ export const Race: React.FC = () => {
     // the floods: the whole phone turning slowly, its line above it (held until the line has gone)
     { f: FLOODS + 22, cam: { ...whole, zoom: 0.74, rx: 3, ry: -4 }, ease: Easing.inOut(Easing.sin) },
     // in towards the spot through the stare
-    { f: CRASH - 4, cam: { x: spot.x + 40, y: spot.y + 30, zoom: 1.22, rx: 0, ry: 0 }, ease: Easing.inOut(Easing.sin) },
-    // the crash (6f, ease-in), stopping dead (impact), held while everyone gathers
-    { f: CRASH + 6, cam: { x: spot.x + 90, y: spot.y - 50, zoom: 1.92 }, ease: Easing.bezier(0.55, 0, 0.7, 1) },
-    { f: HOLD, cam: { x: spot.x + 90, y: spot.y - 56, zoom: 2.0 } },
+    { f: CRASH - 4, cam: { x: spot.x + 4, y: spot.y - 150, zoom: 1.04, rx: 0, ry: 0 }, ease: Easing.inOut(Easing.sin) },
+    // the crash (6f, ease-in), stopping dead (impact), held while everyone gathers: framed so all four
+    // times and the place's name are in (the map from Leo's label on the left to Priya's on the right)
+    { f: CRASH + 6, cam: { x: spot.x + 4, y: spot.y - 185, zoom: 1.54 }, ease: Easing.bezier(0.55, 0, 0.7, 1) },
+    { f: HOLD, cam: { x: spot.x + 4, y: spot.y - 190, zoom: 1.58 } },
     // back out to the whole phone as the app zooms out to its result: the place, and the line above
     { f: HOLD + 22, cam: { ...whole, zoom: 0.74 }, ease: Easing.inOut(Easing.cubic) },
     { f: GO_DUR, cam: { ...whole, zoom: 0.77 }, ease: Easing.inOut(Easing.sin) },

@@ -218,6 +218,8 @@ type FingerProps = {
   taps?: Tap[];
   /** The index finger of a hand reaching in (the default), or the left or right thumb of hands holding the phone. */
   digit?: Digit;
+  /** Typing: where this hand waits (raised) through a longer gap between its keys, out of the other's way. */
+  rest?: { x: number; y: number };
   part?: 'hand' | 'shadow';
 };
 type HandState = { px: number; py: number; lift: number; s: number; rot: number };
@@ -235,7 +237,7 @@ type HandState = { px: number; py: number; lift: number; s: number; rot: number 
  * the way a typing thumb does.
  */
 export const Finger: React.FC<FingerProps> = (props) => {
-  const { x, y, at, path, taps, part = 'hand', digit = 'index' } = props;
+  const { x, y, at, path, taps, rest, part = 'hand', digit = 'index' } = props;
   const thumb = digit !== 'index';
   const left = digit === 'thumbL';
   const down = taps ? taps[0].t : props.down ?? at + 7;
@@ -254,7 +256,14 @@ export const Finger: React.FC<FingerProps> = (props) => {
     const s = Math.min(1, (g - a.t - hold) / Math.max(0.5, b.t - a.t - hold));
     const e = Easing.inOut(Easing.sin)(s);
     const hover = Math.min(thumb ? 0.24 : 0.32, (b.t - a.t) / 40 + 0.05);
-    return { x: a.x + (b.x - a.x) * e, y: a.y + (b.y - a.y) * e, lift: hover * Math.sin(Math.PI * s) };
+    // a longer wait: by way of its resting place (the further, the longer the wait), on a smooth curve
+    // through it (a quadratic whose middle is that point)
+    const k = rest ? Math.min(1, Math.max(0, (b.t - a.t - 9) / 9)) : 0;
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    const r = { x: mx + ((rest?.x ?? mx) - mx) * k, y: my + ((rest?.y ?? my) - my) * k };
+    const c = { x: 2 * r.x - mx, y: 2 * r.y - my };
+    const q = (p0: number, p1: number, p2: number) => (1 - e) * (1 - e) * p0 + 2 * (1 - e) * e * p1 + e * e * p2;
+    return { x: q(a.x, c.x, b.x), y: q(a.y, c.y, b.y), lift: Math.max(hover, 0.24 * k) * Math.sin(Math.PI * s) };
   };
   const state = (g: number): HandState => {
     // the reach: 0 on (or over) the glass … 1 out of frame along the arm

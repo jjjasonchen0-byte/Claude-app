@@ -30,6 +30,9 @@ export const MSGS: Msg[] = [
   { who: 'you', text: "I've got just the thing", at: O.sent },
 ];
 const DRAFT = "I've got just the thing";
+/** What's typed: no apostrophe on the letters, so "Ive", and the space after it autocorrects to "I've". */
+export const TYPED = 'Ive got just the thing';
+const autocorrect = (t: string) => t.replace(/^Ive(?= )/, "I've");
 /** Frames a letter: a quick two-thumb typist (~7.5 keys a second), done just before the send. */
 export const TYPE_RATE = 4;
 
@@ -39,13 +42,14 @@ export const TYPE_RATE = 4;
  * thumb didn't type the letter before it, and the right thumb sends (app px, frame).
  */
 const LEFT_KEYS = 'qwertasdfgzxcv';
-const KEYS = DRAFT.split('').flatMap((ch, i) => {
-  const k = keyPoint(ch);
-  return k ? [{ ...k, t: O.typeFrom + i * TYPE_RATE, ch }] : [];
-});
+const KEYS = TYPED.split('').map((ch, i) => ({ ...keyPoint(ch)!, t: O.typeFrom + i * TYPE_RATE, ch }));
 const SIDE = KEYS.map((k, i, all) => (k.ch === ' ' ? !LEFT_KEYS.includes(all[i - 1].ch.toLowerCase()) : LEFT_KEYS.includes(k.ch.toLowerCase())));
-const TAPS_L = KEYS.filter((_, i) => SIDE[i]);
-const TAPS_R = [{ ...CHAT_FIELD, t: O.fieldTap }, ...KEYS.filter((_, i) => !SIDE[i]), { ...SEND_UP, t: O.sendTap }];
+// (a thumb hits the space bar towards its own end of it)
+const keyFor = (k: (typeof KEYS)[number], left: boolean) => (k.ch === ' ' ? { ...k, x: left ? 140 : 250 } : k);
+const TAPS_L = KEYS.filter((_, i) => SIDE[i]).map((k) => keyFor(k, true));
+const TAPS_R = [{ ...CHAT_FIELD, t: O.fieldTap }, ...KEYS.filter((_, i) => !SIDE[i]).map((k) => keyFor(k, false)), { ...SEND_UP, t: O.sendTap }];
+/** Where a thumb waits, raised, on its own half while the other one types (so they never cross). */
+const REST_L = { x: 66, y: 700 }, REST_R = { x: 322, y: 700 };
 
 /** The dive's target on Meet's start screen (app px): the end of the wordmark, its blue dot. */
 const WORD = { x: 262, y: 336 };
@@ -143,7 +147,7 @@ export const Opening: React.FC = () => {
   const ow = lerp(meet.w, 390, pOpen), oh = lerp(meet.h, 844, pOpen);
   const ox = lerp(meet.x, 0, pOpen), oy = lerp(meet.y, 0, pOpen);
   const or = lerp(iconRadius(meet.w), SCREEN_R, Math.min(1, pOpen));
-  const iconFade = interpolate(pOpen, [0, 0.3], [1, 0], clamp);
+  const iconFade = interpolate(pOpen, [0, 0.1], [1, 0], clamp); // (the icon hands over to the app's screen at once)
 
   const chatOn = f < O.morphIn + 36;
   return (
@@ -163,7 +167,7 @@ export const Opening: React.FC = () => {
             {chatOn && (
               <div style={{ position: 'absolute', zoom: K, left: cx, top: cy, width: cw, height: ch, borderRadius: cr, overflow: 'hidden', boxShadow: pClose > 0 ? `0 ${lerp(30, 2, Math.min(1, pClose))}px ${lerp(80, 8, Math.min(1, pClose))}px rgba(0,0,0,${lerp(0.4, 0.15, Math.min(1, pClose))})` : undefined }}>
                 <div style={{ position: 'absolute', left: 0, top: 0, width: 390, height: 844, transform: `scale(${cw / 390})`, transformOrigin: '0 0', opacity: appFade }}>
-                  <ChatScreen frame={f} msgs={MSGS} draft={DRAFT} draftFrom={O.typeFrom} draftRate={TYPE_RATE} sentAt={O.sendTap + 2} fieldTapAt={O.fieldTap + 3} />
+                  <ChatScreen frame={f} msgs={MSGS} draft={TYPED} correct={autocorrect} draftFrom={O.typeFrom} draftRate={TYPE_RATE} sentAt={O.sendTap + 2} fieldTapAt={O.fieldTap + 3} />
                 </div>
                 {pClose > 0.5 && <div style={{ position: 'absolute', inset: 0, opacity: 1 - appFade }}><AppIcon id="chats" size={cw} /></div>}
               </div>
@@ -173,12 +177,12 @@ export const Opening: React.FC = () => {
               <div style={{ position: 'absolute', zoom: K, left: ox, top: oy, width: ow, height: oh, borderRadius: or, overflow: 'hidden', background: DARK ? '#000' : '#fff', boxShadow: `0 ${lerp(2, 30, Math.min(1, pOpen))}px ${lerp(8, 80, Math.min(1, pOpen))}px rgba(0,0,0,.3)` }}>
                 <Img src={staticFile(`${CAPDIR}/start.png`)} style={{ position: 'absolute', left: 0, top: 0, width: ow, height: (ow / 390) * 844, opacity: 1 - iconFade }} />
                 <div style={{ position: 'absolute', left: 0, top: 0, width: 390, height: 844, transform: `scale(${ow / 390})`, transformOrigin: '0 0', opacity: 1 - iconFade }}><StatusBar time="6:31" /></div>
-                {iconFade > 0 && <div style={{ position: 'absolute', inset: 0, opacity: iconFade }}><AppIcon id="meet" size={ow} /></div>}
+                {iconFade > 0 && <div style={{ position: 'absolute', left: 0, top: (oh - ow) / 2, opacity: iconFade }}><AppIcon id="meet" size={ow} /></div>}
               </div>
             )}
             {/* both thumbs type; then the right hand lets go and its finger swipes and taps */}
-            <Finger digit="thumbR" x={CHAT_FIELD.x} y={CHAT_FIELD.y} at={O.fieldTap - 9} taps={TAPS_R} leave={O.sendTap + 13} />
-            <Finger digit="thumbL" x={TAPS_L[0].x} y={TAPS_L[0].y} at={O.fieldTap + 2} taps={TAPS_L} leave={O.sendTap + 10} />
+            <Finger digit="thumbR" x={CHAT_FIELD.x} y={CHAT_FIELD.y} at={O.fieldTap - 9} taps={TAPS_R} rest={REST_R} leave={O.sendTap + 13} />
+            <Finger digit="thumbL" x={TAPS_L[0].x} y={TAPS_L[0].y} at={O.fieldTap + 2} taps={TAPS_L} rest={REST_L} leave={O.sendTap + 10} />
             <Finger x={195} y={830} at={O.swipeUp - 6} down={O.swipeUp} up={O.morphIn + 2} leave={O.morphIn + 11}
               path={(fr) => (fr < O.swipeUp ? null : { x: 195, y: interpolate(fr, [O.swipeUp, O.morphIn + 2], [830, 560], { ...clamp, easing: Easing.in(Easing.quad) }) })} />
             <Finger x={320} y={420} at={O.swipeLeft - 6} down={O.swipeLeft} up={O.release} leave={O.release + 10}
