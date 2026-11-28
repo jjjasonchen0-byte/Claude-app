@@ -124,20 +124,20 @@
       }
     ],
     "tapTab1": {
-      "text": "Drinks50",
-      "x": 197.7890625,
+      "text": "Fun8",
+      "x": 314.453125,
       "y": 578.75,
       "frame": 106
     },
     "tapTab2": {
-      "text": "Food49",
-      "x": 72.34375,
+      "text": "Drinks50",
+      "x": 197.7890625,
       "y": 595.75,
       "frame": 142
     },
     "tapGroup": {
       "x": 195,
-      "y": 664.75,
+      "y": 720.75,
       "frame": 178
     },
     "tapPlace": {
@@ -147,7 +147,7 @@
     },
     "tapSend": {
       "x": 103.5,
-      "y": 289.8515625,
+      "y": 258.6640625,
       "frame": 258
     },
     "shareBtn": {
@@ -155,5 +155,5 @@
       "y": 556.546875
     }
   },
-  "shareText": "Let's meet at Coletta Italian Vegan Restaurant\n365 3rd Avenue, Manhattan\nFri, Dec 4, 8:00 PM\nhttps://www.google.com/maps/search/?api=1&query=40.7409361,-73.981374\nSent with Meet"
+  "shareText": "Let's meet at Handcraft\n367 3rd Avenue, Manhattan\nFri, Dec 4, 8:00 PM\nhttps://www.google.com/maps/search/?api=1&query=40.7410246,-73.9813006\nSent with Meet"
 }

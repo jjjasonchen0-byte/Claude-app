@@ -5,5 +5,5 @@ from PIL import Image
 # (python3 spot-card.py --dark: the same, from the dark-mode capture)
 D = '/home/user/Claude-app/promo/public/captures' + ('-dark' if '--dark' in sys.argv else '')
 im = Image.open(f'{D}/raw/go/00262.jpg').convert('RGB')
-im.crop((250, 1068, 1000, 1422)).save(f'{D}/spot-card.png')  # (New York: everyone's routes into Mama Fina's, its label just below)
+im.crop((279, 1051, 1029, 1405)).save(f'{D}/spot-card.png')  # (New York: everyone's routes into Handcraft, its label just below)
 print('spot-card', im.size)
