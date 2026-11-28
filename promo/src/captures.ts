@@ -1,6 +1,9 @@
-// What the capture session recorded (public/captures/meta.json): tap positions (app px), frame
-// numbers within each clip, and what the share page said.
-import meta from '../public/captures/meta.json';
+// What the capture session recorded (public/captures/meta.json, or captures-dark/ for the dark
+// version): tap positions (app px), frame numbers within each clip, and what the share page said.
+import lightMeta from '../public/captures/meta.json';
+import darkMeta from '../public/captures-dark/meta.json';
+import { DARK } from './theme';
+const meta = DARK ? darkMeta : lightMeta;
 
 type P = { x: number; y: number; frame?: number };
 const m = meta as unknown as {
@@ -8,6 +11,8 @@ const m = meta as unknown as {
   modes: { tapPill: P; tapBike: P };
   go: { drag: P & { to: number }; tapPlay: P; resultsAt: number };
   spot: { x: number; y: number } | null;
+  /** Where the spot is in the race clip as everyone gathers there (app px; measured on the clip). */
+  raceSpot?: { x: number; y: number };
   places: { tabs: { text: string; x: number; y: number }[]; tapDrinks: P; tapFood: P; tapGroup: P; tapPlace: P; tapSend: P; shareBtn?: P };
   shareText?: string;
   frames?: Record<string, number>;

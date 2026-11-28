@@ -2,7 +2,7 @@
 // glyphs) and a weather widget, page dots over a frosted dock, on a wallpaper in Meet's colours. Meet,
 // just installed, sits at the end of page two.
 import React from 'react';
-import { FONT, WALLPAPER } from '../theme';
+import { DARK, FONT, WALLPAPER } from '../theme';
 import { StatusBar } from './Chat';
 
 const ICON = 61; // app px
@@ -55,11 +55,11 @@ const APPS: Record<string, App> = {
   sums: { name: 'Sums', bg: g('#3f3f46', '#18181b'), glyph: <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fb923c" strokeWidth="2.4" strokeLinecap="round"><path d="M6 8h5M8.5 5.5v5M14 8h5M6 16.5h5M14 15h5M14 18h5" /></svg> },
 };
 
-/** Meet's icon: its wordmark's own letter and blue dot, on white. */
+/** Meet's icon: its wordmark's own letter and blue dot, on white (on black, the phone in dark mode). */
 export const MeetIcon: React.FC<{ size: number }> = ({ size }) => (
   <svg width={size} height={size} viewBox="0 0 100 100" style={{ display: 'block' }}>
-    <rect width="100" height="100" fill="#ffffff" />
-    <text x="44" y="67" textAnchor="middle" fontFamily="Inter" fontWeight={800} fontSize={62} letterSpacing={-3} fill="#0b0b10">m</text>
+    <rect width="100" height="100" fill={DARK ? '#0b0b0e' : '#ffffff'} />
+    <text x="44" y="67" textAnchor="middle" fontFamily="Inter" fontWeight={800} fontSize={62} letterSpacing={-3} fill={DARK ? '#ffffff' : '#0b0b10'}>m</text>
     <circle cx="80" cy="63" r="7.5" fill="#0a84ff" />
   </svg>
 );

@@ -6,7 +6,7 @@
 import React from 'react';
 import { AbsoluteFill, Easing, Img, interpolate, staticFile, useCurrentFrame } from 'remotion';
 import { Finger, Footage, Phone, Stage } from '../kit';
-import { C, FONT, H, K, PHONE_X, PHONE_Y, BEZEL, W, clamp } from '../theme';
+import { C, CAPDIR, FONT, H, K, PHONE_X, PHONE_Y, BEZEL, W, clamp } from '../theme';
 import { CH, ChatScreen, type Msg } from '../screens/Chat';
 import { CAP } from '../captures';
 
@@ -47,7 +47,7 @@ const PROPS = (() => {
 const InviteCard: React.FC = () => (
   <div style={{ width: 250, borderRadius: 20, borderTopRightRadius: 6, overflow: 'hidden', background: CH.out, color: '#fff', boxShadow: '0 2px 8px rgba(77,58,230,.25)' }}>
     <div style={{ height: 118, position: 'relative', overflow: 'hidden', background: '#eef2f5' }}>
-      <Img src={staticFile('captures/spot-card.png')} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+      <Img src={staticFile(`${CAPDIR}/spot-card.png`)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
     </div>
     <div style={{ padding: '9px 12px 11px', fontFamily: FONT }}>
       <div style={{ fontWeight: 700, fontSize: 15, letterSpacing: '-0.01em', lineHeight: 1.2 }}>Let’s meet at {CAP.placeName}</div>

@@ -4,27 +4,34 @@
 // everything is a pure function of the frame.
 import React from 'react';
 import { interpolate, Easing } from 'remotion';
-import { EASE, FONT, PEOPLE, clamp } from '../theme';
+import { DARK, EASE, FONT, PEOPLE, clamp } from '../theme';
 
 export type Msg = { who: 'sam' | 'priya' | 'leo' | 'you'; text: string; at: number; typing?: number; card?: React.ReactNode };
 
 const STATUS_TIME = '6:31';
 /** The chat app's own colours. */
 export const CH = {
-  bg: '#f4f5f9',
+  bg: DARK ? '#000000' : '#f4f5f9',
   out: 'linear-gradient(160deg, #6a5cff, #4d3ae6)', // your bubbles
   outFlat: '#5644ef',
-  inBubble: '#ffffff',
-  ink: '#15151c',
-  soft: 'rgba(30,30,45,.55)',
-  field: '#eef0f5',
+  inBubble: DARK ? '#1e1e23' : '#ffffff',
+  ink: DARK ? '#f2f2f7' : '#15151c',
+  soft: DARK ? 'rgba(235,235,245,.6)' : 'rgba(30,30,45,.55)',
+  field: DARK ? '#1c1c1f' : '#eef0f5',
+  /** the header and the composer */
+  bar: DARK ? '#111114' : '#ffffff',
+  barLine: DARK ? 'rgba(255,255,255,.08)' : 'rgba(20,20,40,.06)',
+  placeholder: DARK ? 'rgba(235,235,245,.36)' : 'rgba(30,30,45,.42)',
+  boxLine: DARK ? '#2e2e34' : '#dcdee8',
+  icon: DARK ? '#9a9aa6' : '#6b6b7b',
+  dots: DARK ? '#8e8e96' : '#9a9aa8',
 };
 
 /**
  * The phone's status bar, as on an iPhone with a Dynamic Island: the time in the left ear; signal,
  * wifi and the battery in the right one.
  */
-export const StatusBar: React.FC<{ color?: string; time?: string }> = ({ color = '#000', time = STATUS_TIME }) => (
+export const StatusBar: React.FC<{ color?: string; time?: string }> = ({ color = DARK ? '#fff' : '#000', time = STATUS_TIME }) => (
   <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 54, fontFamily: FONT, color, zIndex: 20, pointerEvents: 'none' }}>
     <span style={{ position: 'absolute', left: 0, width: 128, top: 17, textAlign: 'center', fontWeight: 600, fontSize: 16.5, letterSpacing: '-0.02em', lineHeight: '22px' }}>{time}</span>
     <span style={{ position: 'absolute', left: 262, width: 128, top: 22, display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center' }}>
@@ -53,7 +60,7 @@ const Avatar: React.FC<{ who: keyof typeof PEOPLE; size: number; ring?: boolean 
   <div style={{
     width: size, height: size, borderRadius: '50%', background: `linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,0) 60%), ${PEOPLE[who].color}`,
     color: '#fff', fontWeight: 700, fontSize: size * 0.44, display: 'grid', placeItems: 'center', flex: 'none',
-    boxShadow: ring ? '0 0 0 2px #fff' : undefined,
+    boxShadow: ring ? `0 0 0 2px ${CH.bar}` : undefined,
   }}>{PEOPLE[who].initial}</div>
 );
 
@@ -63,7 +70,10 @@ const Avatar: React.FC<{ who: keyof typeof PEOPLE; size: number; ring?: boolean 
 export const KB_H = 336;
 const ROWS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
 const KW = 33, KG = 6, KH = 42, ROW_H = 54, TOP = 52;
-const KB = { bg: '#d2d4da', key: '#ffffff', special: '#abb0ba', pressedSpecial: '#ffffff', ink: '#000' };
+/** The keyboard's colours, light or dark as the phone is. */
+const KB = DARK
+  ? { bg: '#2a2a2d', key: '#5d5d62', special: '#3b3b3f', ink: '#fff', icon: '#c7c7cc', line: 'rgba(255,255,255,.16)', shadow: '0 1px 0 rgba(0,0,0,.6)', bar: '#fff' }
+  : { bg: '#d2d4da', key: '#ffffff', special: '#abb0ba', ink: '#000', icon: '#50555e', line: 'rgba(0,0,0,.14)', shadow: '0 1px 0 rgba(0,0,0,.3)', bar: '#000' };
 /** Where a key sits (its centre, keyboard px). */
 const keyAt = (ch: string): { x: number; y: number; w: number } | null => {
   if (ch === ' ') return { x: 195, y: TOP + 3 * ROW_H + KH / 2, w: 198 };
@@ -93,7 +103,7 @@ const Callout: React.FC<{ x: number; y: number; ch: string; o: number }> = ({ x,
   return (
     <div style={{ position: 'absolute', inset: 0, opacity: o, zIndex: 3 }}>
       <svg width="390" height={KB_H} style={{ position: 'absolute', left: 0, top: 0, overflow: 'visible', filter: 'drop-shadow(0 1px 1.5px rgba(0,0,0,.28)) drop-shadow(0 4px 10px rgba(0,0,0,.12))' }}>
-        <path d={d} fill="#fff" />
+        <path d={d} fill={KB.key} />
       </svg>
       <div style={{ position: 'absolute', left: bx, top: by, width: bw, height: bh - 12, display: 'grid', placeItems: 'center', fontSize: 34, fontWeight: 400, color: KB.ink }}>{ch}</div>
     </div>
@@ -115,7 +125,7 @@ export const Keyboard: React.FC<{ frame: number; text: string; from: number; rat
     <div key={k ?? String(label) + x} style={{
       position: 'absolute', left: x - w / 2, top: y - KH / 2, width: w, height: KH, borderRadius: 5.5,
       background: special ? (pressed ? KB.key : KB.special) : pressed ? KB.special : KB.key,
-      boxShadow: '0 1px 0 rgba(0,0,0,.3)', display: 'grid', placeItems: 'center',
+      boxShadow: KB.shadow, display: 'grid', placeItems: 'center',
       fontSize: size, fontWeight: 400, color: KB.ink, letterSpacing: 0,
     }}>{label}</div>
   );
@@ -125,7 +135,7 @@ export const Keyboard: React.FC<{ frame: number; text: string; from: number; rat
       <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 45, display: 'flex', alignItems: 'center', fontSize: 16.5, color: KB.ink, letterSpacing: '-0.01em' }}>
         {[0, 1, 2].map((i) => (
           <React.Fragment key={i}>
-            {i > 0 && <span style={{ width: 1, height: 24, background: 'rgba(0,0,0,.14)' }} />}
+            {i > 0 && <span style={{ width: 1, height: 24, background: KB.line }} />}
             <span style={{ flex: 1, textAlign: 'center' }}>{words[i] ?? ''}</span>
           </React.Fragment>
         ))}
@@ -142,16 +152,16 @@ export const Keyboard: React.FC<{ frame: number; text: string; from: number; rat
       {key('space', 195, TOP + 3 * ROW_H + KH / 2, 198, false, !!down && ch === ' ', 'space', 16.5)}
       {key('return', 390 - 3 - 43.5, TOP + 3 * ROW_H + KH / 2, 87, true, false, 'ret', 16.5)}
       {/* under the keys: emoji and dictation */}
-      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="#50555e" strokeWidth="1.7" style={{ position: 'absolute', left: 28 - 14, top: 286 - 14 }}>
-        <circle cx="14" cy="14" r="11" /><circle cx="10.2" cy="11.5" r="1.2" fill="#50555e" stroke="none" /><circle cx="17.8" cy="11.5" r="1.2" fill="#50555e" stroke="none" /><path d="M8.8 16.2a6 6 0 0 0 10.4 0" strokeLinecap="round" />
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke={KB.icon} strokeWidth="1.7" style={{ position: 'absolute', left: 28 - 14, top: 286 - 14 }}>
+        <circle cx="14" cy="14" r="11" /><circle cx="10.2" cy="11.5" r="1.2" fill={KB.icon} stroke="none" /><circle cx="17.8" cy="11.5" r="1.2" fill={KB.icon} stroke="none" /><path d="M8.8 16.2a6 6 0 0 0 10.4 0" strokeLinecap="round" />
       </svg>
-      <svg width="26" height="28" viewBox="0 0 26 28" fill="none" stroke="#50555e" strokeWidth="1.7" strokeLinecap="round" style={{ position: 'absolute', left: 362 - 13, top: 286 - 14 }}>
-        <rect x="9" y="3" width="8" height="14" rx="4" fill="#50555e" stroke="none" /><path d="M5.5 13a7.5 7.5 0 0 0 15 0M13 20.5V25" />
+      <svg width="26" height="28" viewBox="0 0 26 28" fill="none" stroke={KB.icon} strokeWidth="1.7" strokeLinecap="round" style={{ position: 'absolute', left: 362 - 13, top: 286 - 14 }}>
+        <rect x="9" y="3" width="8" height="14" rx="4" fill={KB.icon} stroke="none" /><path d="M5.5 13a7.5 7.5 0 0 0 15 0M13 20.5V25" />
       </svg>
       {/* the letter in its balloon over the key under the thumb */}
       {down && ch !== null && ch !== ' ' && <Callout x={down.x} y={down.y} ch={idx === 0 ? ch.toUpperCase() : ch} o={interpolate(since, [2.1, 2.6], [1, 0], clamp)} />}
       {/* the home indicator */}
-      <div style={{ position: 'absolute', bottom: 8, left: 195 - 67, width: 134, height: 5, borderRadius: 3, background: '#000' }} />
+      <div style={{ position: 'absolute', bottom: 8, left: 195 - 67, width: 134, height: 5, borderRadius: 3, background: KB.bar }} />
     </div>
   );
 };
@@ -183,7 +193,7 @@ const TypingDots: React.FC<{ frame: number; from: number; to: number }> = ({ fra
   return (
     <div style={{ display: 'inline-flex', gap: 5, padding: '13px 15px', borderRadius: 20, borderTopLeftRadius: 6, background: CH.inBubble, boxShadow: '0 1px 2px rgba(20,20,40,.08)', opacity: t, transform: `scale(${0.7 + 0.3 * t})`, transformOrigin: 'left top' }}>
       {[0, 1, 2].map((i) => (
-        <i key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: '#9a9aa8', opacity: 0.45 + 0.55 * Math.max(0, Math.sin((frame - from) * 0.32 - i * 0.9)) }} />
+        <i key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: CH.dots, opacity: 0.45 + 0.55 * Math.max(0, Math.sin((frame - from) * 0.32 - i * 0.9)) }} />
       ))}
     </div>
   );
@@ -212,7 +222,7 @@ export const ChatScreen: React.FC<{
     <div style={{ position: 'absolute', inset: 0, background: CH.bg, fontFamily: FONT, overflow: 'hidden' }}>
       <StatusBar time={time} />
       {/* header: back, the group, its name, more */}
-      <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 118, background: '#fff', boxShadow: '0 1px 0 rgba(20,20,40,.06), 0 4px 14px rgba(20,20,40,.04)', zIndex: 10 }}>
+      <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 118, background: CH.bar, boxShadow: `0 1px 0 ${CH.barLine}, 0 4px 14px rgba(20,20,40,.04)`, zIndex: 10 }}>
         <div style={{ position: 'absolute', left: 10, right: 14, top: 58, height: 52, display: 'flex', alignItems: 'center', gap: 10 }}>
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={CH.ink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M11 6l-6 6 6 6" /></svg>
           {/* the group's picture: its three members, overlapping */}
@@ -274,9 +284,9 @@ export const ChatScreen: React.FC<{
       {/* the keyboard */}
       {kb > 0 && <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: KB_H, transform: `translateY(${(1 - kb) * KB_H}px)`, zIndex: 11 }}><Keyboard frame={frame} text={draft} from={draftFrom} rate={draftRate} sentAt={sentAt} suggestions={suggest} /></div>}
       {/* compose: a plain + (attach), a bordered box to write in, a square send button */}
-      <div style={{ position: 'absolute', left: 0, right: 0, bottom: kb * KB_H, padding: `8px 12px ${34 - 26 * kb}px`, display: 'flex', gap: 10, alignItems: 'center', background: '#fff', boxShadow: '0 -1px 0 rgba(20,20,40,.06)', zIndex: 10 }}>
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6b6b7b" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-        <div style={{ flex: 1, height: 42, borderRadius: 12, background: '#fff', border: '1.5px solid #dcdee8', display: 'flex', alignItems: 'center', padding: '0 12px', fontSize: 17, color: field ? CH.ink : 'rgba(30,30,45,.42)', letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden' }}>
+      <div style={{ position: 'absolute', left: 0, right: 0, bottom: kb * KB_H, padding: `8px 12px ${34 - 26 * kb}px`, display: 'flex', gap: 10, alignItems: 'center', background: CH.bar, boxShadow: `0 -1px 0 ${CH.barLine}`, zIndex: 10 }}>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={CH.icon} strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+        <div style={{ flex: 1, height: 42, borderRadius: 12, background: CH.bar, border: `1.5px solid ${CH.boxLine}`, display: 'flex', alignItems: 'center', padding: '0 12px', fontSize: 17, color: field ? CH.ink : CH.placeholder, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden' }}>
           {field || 'Write to The Crew…'}
           {focused && caretOn && <span style={{ width: 2, height: 21, background: CH.outFlat, marginLeft: 1, borderRadius: 1 }} />}
         </div>
@@ -285,7 +295,7 @@ export const ChatScreen: React.FC<{
         </div>
       </div>
       {/* home indicator */}
-      {kb === 0 && <div style={{ position: 'absolute', bottom: 8, left: 195 - 60, width: 120, height: 4.5, borderRadius: 3, background: '#1b1b22', zIndex: 12 }} />}
+      {kb === 0 && <div style={{ position: 'absolute', bottom: 8, left: 195 - 67, width: 134, height: 5, borderRadius: 3, background: DARK ? '#fff' : '#000', zIndex: 12 }} />}
     </div>
   );
 };

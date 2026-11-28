@@ -1,5 +1,5 @@
 // Meet's own tokens (public/css/styles.css) and the advert's motion tokens (SPEC.md §1).
-import { Easing } from 'remotion';
+import { Easing, getInputProps } from 'remotion';
 import '@fontsource/inter/400.css';
 import '@fontsource/inter/500.css';
 import '@fontsource/inter/600.css';
@@ -7,6 +7,11 @@ import '@fontsource/inter/700.css';
 import '@fontsource/inter/800.css';
 
 export const FONT = 'Inter, system-ui, sans-serif';
+
+/** The dark version (rendered with --props='{"dark":true}'): the phone in dark mode, with its own footage. */
+export const DARK = !!(getInputProps() as { dark?: boolean }).dark;
+/** Where that version's captured footage is (public/…). */
+export const CAPDIR = DARK ? 'captures-dark' : 'captures';
 
 export const C = {
   black: '#000000',

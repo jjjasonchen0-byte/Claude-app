@@ -4,7 +4,7 @@
 import React from 'react';
 import { AbsoluteFill, Easing, Img, interpolate, staticFile, useCurrentFrame } from 'remotion';
 import { Camera, Finger, Lens, Phone, Stage, camAt, type Cam } from '../kit';
-import { EASE, H, K, SCREEN_H, SCREEN_W, W, clamp, onScreen } from '../theme';
+import { CAPDIR, DARK, EASE, H, K, SCREEN_H, SCREEN_W, W, clamp, onScreen } from '../theme';
 import { ChatScreen, FIELD_AT as CHAT_FIELD, SEND_UP, StatusBar, keyPoint, type Msg } from '../screens/Chat';
 import { AppIcon, HomeScreen, MEET_SLOT, iconBox, iconRadius } from '../screens/Home';
 
@@ -170,8 +170,8 @@ export const Opening: React.FC = () => {
             )}
             {/* Meet, opening out of its icon */}
             {f >= O.launch && (
-              <div style={{ position: 'absolute', zoom: K, left: ox, top: oy, width: ow, height: oh, borderRadius: or, overflow: 'hidden', background: '#fff', boxShadow: `0 ${lerp(2, 30, Math.min(1, pOpen))}px ${lerp(8, 80, Math.min(1, pOpen))}px rgba(0,0,0,.3)` }}>
-                <Img src={staticFile('captures/start.png')} style={{ position: 'absolute', left: 0, top: 0, width: ow, height: (ow / 390) * 844, opacity: 1 - iconFade }} />
+              <div style={{ position: 'absolute', zoom: K, left: ox, top: oy, width: ow, height: oh, borderRadius: or, overflow: 'hidden', background: DARK ? '#000' : '#fff', boxShadow: `0 ${lerp(2, 30, Math.min(1, pOpen))}px ${lerp(8, 80, Math.min(1, pOpen))}px rgba(0,0,0,.3)` }}>
+                <Img src={staticFile(`${CAPDIR}/start.png`)} style={{ position: 'absolute', left: 0, top: 0, width: ow, height: (ow / 390) * 844, opacity: 1 - iconFade }} />
                 <div style={{ position: 'absolute', left: 0, top: 0, width: 390, height: 844, transform: `scale(${ow / 390})`, transformOrigin: '0 0', opacity: 1 - iconFade }}><StatusBar time="6:31" /></div>
                 {iconFade > 0 && <div style={{ position: 'absolute', inset: 0, opacity: iconFade }}><AppIcon id="meet" size={ow} /></div>}
               </div>

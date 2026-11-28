@@ -1,7 +1,7 @@
 // Shared pieces: the stage, the phone, the camera, captured footage, a finger, captions.
 import React from 'react';
 import { AbsoluteFill, Img, interpolate, staticFile, useCurrentFrame, Easing } from 'remotion';
-import { BEZEL, C, EASE, FONT, GLOWS, H, K, PHONE_H, PHONE_W, PHONE_X, PHONE_Y, SCREEN_H, SCREEN_W, W, clamp } from './theme';
+import { BEZEL, C, CAPDIR, DARK, EASE, FONT, GLOWS, H, K, PHONE_H, PHONE_W, PHONE_X, PHONE_Y, SCREEN_H, SCREEN_W, W, clamp } from './theme';
 import { CAP } from './captures';
 import frameGeo from '../public/phone/frame.json';
 import { StatusBar } from './screens/Chat';
@@ -106,7 +106,7 @@ const splitFingers = (children: React.ReactNode) => {
  * glass, and the fingers and thumbs that touch it drawn on top (their shadows fall on the screen).
  */
 export const Phone: React.FC<{ x?: number; y?: number; screenBg?: string; glow?: number; children?: React.ReactNode; style?: React.CSSProperties }> = ({
-  x = PHONE_X, y = PHONE_Y, screenBg = '#fff', glow = 1, children, style,
+  x = PHONE_X, y = PHONE_Y, screenBg = DARK ? '#000' : '#fff', glow = 1, children, style,
 }) => {
   const f = useCurrentFrame();
   const cam = React.useContext(CamCtx);
@@ -184,11 +184,11 @@ export const Footage: React.FC<{ clip: string; n: number; style?: React.CSSPrope
   const i = Math.max(1, Math.min(CLIP_FRAMES[clip] ?? 1, Math.round(n)));
   return (
     <>
-      <Img src={staticFile(`captures/raw/${clip}/${String(i).padStart(5, '0')}.jpg`)} style={{ position: 'absolute', left: 0, top: 0, width: SCREEN_W, height: SCREEN_H, ...style }} />
+      <Img src={staticFile(`${CAPDIR}/raw/${clip}/${String(i).padStart(5, '0')}.jpg`)} style={{ position: 'absolute', left: 0, top: 0, width: SCREEN_W, height: SCREEN_H, ...style }} />
       {/* the phone's own status bar and home indicator over the app (it was filmed leaving room for them) */}
       <AppPx style={{ pointerEvents: 'none' }}>
         <StatusBar time={time} />
-        <div style={{ position: 'absolute', bottom: 8, left: 195 - 60, width: 120, height: 4.5, borderRadius: 3, background: '#1b1b22', zIndex: 20 }} />
+        <div style={{ position: 'absolute', bottom: 8, left: 195 - 67, width: 134, height: 5, borderRadius: 3, background: DARK ? '#fff' : '#000', zIndex: 20 }} />
       </AppPx>
     </>
   );
