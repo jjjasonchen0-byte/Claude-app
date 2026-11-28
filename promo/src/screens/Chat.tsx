@@ -19,7 +19,7 @@ export const CH = {
   soft: DARK ? 'rgba(235,235,245,.6)' : 'rgba(60,60,67,.6)',
   field: DARK ? '#2c2c2e' : '#e9e9eb',
   /** the header */
-  bar: DARK ? 'rgba(22,22,24,.94)' : 'rgba(247,247,247,.94)',
+  bar: DARK ? '#161618' : '#f7f7f7',
   barLine: DARK ? 'rgba(255,255,255,.12)' : 'rgba(0,0,0,.14)',
   placeholder: DARK ? 'rgba(235,235,245,.3)' : 'rgba(60,60,67,.3)',
   boxLine: DARK ? '#3a3a3c' : '#c7c7cc',
@@ -253,7 +253,7 @@ export const ChatScreen: React.FC<{
     <div style={{ position: 'absolute', inset: 0, background: CH.bg, fontFamily: FONT, overflow: 'hidden' }}>
       <StatusBar time={time} />
       {/* the header: back, the group (its faces and name, centred), a video call */}
-      <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 120, background: CH.bar, boxShadow: `0 .5px 0 ${CH.barLine}`, backdropFilter: 'blur(20px)', zIndex: 10 }}>
+      <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 120, background: CH.bar, boxShadow: `0 .5px 0 ${CH.barLine}`, zIndex: 10 }}>
         <svg width="14" height="24" viewBox="0 0 14 24" fill="none" stroke={CH.accent} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: 14, top: 70 }}><path d="M11 3L3 12l8 9" /></svg>
         <div style={{ position: 'absolute', left: 32, top: 70, fontSize: 17, color: CH.accent }}>3</div>
         <div style={{ position: 'absolute', left: 195 - 37, top: 56, width: 74, height: 40 }}>
