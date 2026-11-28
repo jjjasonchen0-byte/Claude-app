@@ -21,15 +21,18 @@ export const LIVE = 'https://meet-hhdt.onrender.com/';
 /** The phone's safe areas, app px (the punch-hole status bar; the home indicator). */
 export const SAFE = { top: 50, bottom: 34 };
 
-export async function openRig({ scale = 3, start = '2026-11-27T18:30:00+11:00', dark = false, out = path.join(REPO, 'promo/public/captures'), url = null } = {}) {
+/** A phone in New York: US English (dates as 12/4/2026, distances in miles), Eastern time. */
+export const PHONE = { locale: 'en-US', lang: 'en_US', timezoneId: 'America/New_York' };
+
+export async function openRig({ scale = 3, start = '2026-12-04T18:30:00-05:00', dark = false, out = path.join(REPO, 'promo/public/captures'), url = null, phone = PHONE } = {}) {
   let server = null;
   if (!url) {
     const html = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' + fs.readFileSync(path.join(REPO, 'dist/meet-test.html'), 'utf8');
     server = http.createServer((req, res) => { res.writeHead(200, { 'content-type': 'text/html' }); res.end(html); }).listen(0);
   }
-  // (an Australian phone: dates as 27/11/2026 in the date fields; the browser takes it from the environment)
-  const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'], env: { ...process.env, LANG: 'en_AU.UTF-8', LANGUAGE: 'en_AU:en', LC_ALL: 'en_AU.UTF-8' } });
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: scale, hasTouch: true, isMobile: true, colorScheme: dark ? 'dark' : 'light', timezoneId: 'Australia/Sydney', locale: 'en-AU' });
+  // (the date fields take their format from the environment's language, the rest from the locale)
+  const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'], env: { ...process.env, LANG: `${phone.lang}.UTF-8`, LANGUAGE: `${phone.lang}:en`, LC_ALL: `${phone.lang}.UTF-8` } });
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: scale, hasTouch: true, isMobile: true, colorScheme: dark ? 'dark' : 'light', timezoneId: phone.timezoneId, locale: phone.locale });
   await ctx.route('https://cdnjs.cloudflare.com/**', (r) => r.fulfill({ path: path.join(REPO, 'node_modules/leaflet/dist/leaflet.js'), contentType: 'text/javascript' }));
   // Inter, as the site asks Google Fonts for it (that host isn't reachable from here): the same font files, served locally
   const INTER = path.join(REPO, 'promo/node_modules/@fontsource/inter/files');
@@ -39,6 +42,16 @@ export async function openRig({ scale = 3, start = '2026-11-27T18:30:00+11:00', 
     const w = r.request().url().match(/inter-(\d+)/)[1];
     r.fulfill({ path: path.join(INTER, `inter-latin-${w}-normal.woff2`), contentType: 'font/woff2' });
   });
+  if (url) {
+    // "Leave now" is the filmed evening, not whatever time it is where the capture runs: the routing
+    // requests that would otherwise take the server's own clock carry the page's time (2 min in)
+    const filmed = new Date(new Date(start).getTime() + 2 * 60000).toISOString();
+    await ctx.route(/\/api\/(directions|transit\/reach|checktimes)\?/, (r) => {
+      const u = new URL(r.request().url());
+      if (!u.searchParams.has('time')) u.searchParams.set('time', filmed);
+      r.continue({ url: u.toString() });
+    });
+  }
   const page = await ctx.newPage();
   // A phone's safe areas (the status bar above, the home indicator below): the app lays itself out
   // around them as it does on a real phone (the advert draws the status bar and indicator on top)

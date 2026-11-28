@@ -1,11 +1,11 @@
-# The photographed phone (Higgsfield, green screen) → public/phone/frame.png: the body and bezel with
+# The photographed phone (Higgsfield, green screen; its background removed) → public/phone/frame.png: the body and bezel with
 # the display cut out, scaled so the display is exactly SCREEN_W × SCREEN_H, plus frame.json with the
 # geometry (where the display sits inside the picture and its corner radius).
 import json, math, sys
 import numpy as np
 from PIL import Image, ImageFilter
 
-SRC = sys.argv[1] if len(sys.argv) > 1 else 'assets-src/hf/phone-b.png'
+SRC = sys.argv[1] if len(sys.argv) > 1 else 'assets-src/hf/iphone-a.png'
 SCREEN_W = 760
 SCREEN_H = round(844 * 760 / 390)
 im = Image.open(SRC).convert('RGBA')
@@ -37,7 +37,8 @@ def scan(row=None, col=None, step=1):
 
 L = int(np.median([scan(row=y, step=-1) for y in range(cy - 300, cy + 300, 20)]))
 R = int(np.median([scan(row=y, step=1) for y in range(cy - 300, cy + 300, 20)]))
-T = int(np.median([scan(col=x, step=-1) for x in list(range(cx - 400, cx - 150, 25)) + list(range(cx + 150, cx + 400, 25))]))
+# (well clear of the camera at the top: a punch hole, or the wider island)
+T = int(np.median([scan(col=x, step=-1) for x in list(range(cx - 620, cx - 340, 20)) + list(range(cx + 340, cx + 620, 20))]))
 B = int(np.median([scan(col=x, step=1) for x in range(cx - 300, cx + 300, 25)]))
 # the corner radius: the inner edge along rows near the top-left corner
 pts = []

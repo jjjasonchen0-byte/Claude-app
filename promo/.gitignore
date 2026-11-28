@@ -6,7 +6,7 @@ public/captures/*.mp4
 # generated sources (Higgsfield originals; the processed frame and hand are in public/phone)
 assets-src/hf/
 # licensed from Epidemic Sound via Higgsfield for this video: not redistributed (see SPEC §7)
-public/audio/beer-garden.mp3
+public/audio/bar-crowd.mp3
 public/audio/clink.mp3
 public/audio/cheer.mp3
 public/audio/screen-taps.mp3

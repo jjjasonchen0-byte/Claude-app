@@ -1,27 +1,27 @@
 {
   "group": {
     "home": {
-      "address": "325 Eliza Street, Newtown",
-      "lat": -33.89724,
-      "lon": 151.17893
+      "address": "Domino Park, 15 River St, Brooklyn",
+      "lat": 40.7145,
+      "lon": -73.968
     },
     "friends": [
       {
-        "address": "9 Paternoster Row, Pyrmont",
-        "lat": -33.86982,
-        "lon": 151.19446,
+        "address": "Lincoln Center, 10 Lincoln Center Plaza, New York",
+        "lat": 40.7725,
+        "lon": -73.9835,
         "nickname": "Sam"
       },
       {
-        "address": "246 Oxford Street, Paddington",
-        "lat": -33.88488,
-        "lon": 151.22638,
+        "address": "MoMA PS1, 22-25 Jackson Ave, Queens",
+        "lat": 40.7454,
+        "lon": -73.9471,
         "nickname": "Priya"
       },
       {
-        "address": "115 Brett Whiteley Place, North Sydney",
-        "lat": -33.83911,
-        "lon": 151.20746,
+        "address": "Hoboken Terminal, 1 Hudson Pl, Hoboken",
+        "lat": 40.7349,
+        "lon": -74.0279,
         "nickname": "Leo"
       }
     ]
@@ -33,7 +33,7 @@
       "frame": 15
     },
     "tapUse": {
-      "x": 225,
+      "x": 224.5,
       "y": 250,
       "frame": 38
     },
@@ -88,56 +88,56 @@
       "to": 110
     },
     "scroll": {
-      "by": 16.75,
+      "by": 39.71875,
       "frame": 74
     },
     "tabs": [
       {
-        "text": "Food49",
-        "x": 72.34375,
-        "y": 578.75
+        "text": "Food50",
+        "x": 72.1875,
+        "y": 578.71875
       },
       {
-        "text": "Drinks33",
-        "x": 197.71875,
-        "y": 578.75
+        "text": "Drinks50",
+        "x": 197.4765625,
+        "y": 578.71875
       },
       {
-        "text": "Fun4",
-        "x": 314.5,
-        "y": 578.75
+        "text": "Fun16",
+        "x": 316.9765625,
+        "y": 578.71875
       },
       {
-        "text": "Culture8",
-        "x": 429.9609375,
-        "y": 578.75
+        "text": "Culture33",
+        "x": 439.3828125,
+        "y": 578.71875
       },
       {
-        "text": "Outdoors14",
-        "x": 567.015625,
-        "y": 578.75
+        "text": "Outdoors21",
+        "x": 580.453125,
+        "y": 578.71875
       },
       {
-        "text": "Shopping11",
-        "x": 712.7578125,
-        "y": 578.75
+        "text": "Shopping29",
+        "x": 728.828125,
+        "y": 578.71875
       }
     ],
     "tapDrinks": {
-      "text": "Drinks33",
-      "x": 197.71875,
-      "y": 578.75,
+      "text": "Drinks50",
+      "x": 197.4765625,
+      "y": 578.71875,
       "frame": 106
     },
     "tapFood": {
-      "text": "Food49",
-      "x": 72.34375,
-      "y": 578.75,
+      "text": "Food50",
+      "x": 72.1875,
+      "y": 618.71875,
       "frame": 142
     },
     "tapGroup": {
       "x": 195,
-      "y": 664.75,
+      "y": 687.71875,
       "frame": 178
     },
     "tapPlace": {
@@ -147,13 +147,13 @@
     },
     "tapSend": {
       "x": 103.5,
-      "y": 258.6640625,
+      "y": 409.8515625,
       "frame": 258
     },
     "shareBtn": {
       "x": 195,
-      "y": 556.546875
+      "y": 556.9375
     }
   },
-  "shareText": "Let's meet at Charles Thai\n45 King Street, Newtown\nFri, 27 Nov, 6:30 pm\nhttps://www.google.com/maps/search/?api=1&query=-33.8924268,151.186457\nSent with Meet"
+  "shareText": "Let's meet at Mama Fina's House of Filipino Sisig\n167 Avenue A, Manhattan\nFri, Dec 4, 8:00 PM\nhttps://www.google.com/maps/search/?api=1&query=40.7282376,-73.9821344\nSent with Meet"
 }

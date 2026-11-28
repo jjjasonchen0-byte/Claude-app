@@ -88,8 +88,8 @@ export const lateSfx = (beats: {
   { at: S('invite') + beats.invite.fly[1] - 10, src: 'whoosh-fast', volume: 0.3, dur: 50 },
   { at: S('invite') + beats.invite.land, src: 'pop', volume: 0.7, dur: 15 },
   ...beats.invite.replies.map((r, i) => ({ at: S('invite') + r, src: 'pop', volume: 0.78 - i * 0.03, dur: 15 })),
-  // ---- real life: the beer garden, the cheer, the clink
-  { at: S('live') - 2, src: 'beer-garden', volume: 0.55, dur: shot('live').dur + 12, fadeIn: 5, fadeOut: 14 },
+  // ---- real life: the bar, the cheer, the clink
+  { at: S('live') - 2, src: 'bar-crowd', volume: 0.55, dur: shot('live').dur + 12, fadeIn: 5, fadeOut: 14 },
   { at: S('live') + 18, src: 'cheer', volume: 0.32, dur: 60, fadeOut: 12 },
   { at: S('live') + beats.live.clink, src: 'clink', volume: 0.8, dur: 52, fadeOut: 12 }, // (on the cut, as the glasses meet)
   // ---- the brand
@@ -97,7 +97,19 @@ export const lateSfx = (beats: {
   { at: S('brand') + beats.brand.word, src: 'impact-deep-whoosh', volume: 0.32, dur: 90, fadeOut: 30 },
 ];
 
-/** Cat Walk: in over a second, a little lower under real life (the beer garden), out over the last 1.7 s. */
+/**
+ * Softer than the first cut (the effects were jarring): everything at a little over half its level,
+ * the hits, whooshes and the riser (the big transients) at about a third to two fifths, so the music
+ * carries the film and the effects sit inside it.
+ */
+const SOFT: Record<string, number> = {
+  'impact-cine-big': 0.32, 'impact-deep-whoosh': 0.36, 'impact-zoom-quick': 0.36, 'hit-weak': 0.4, 'riser-cine': 0.42,
+  'air-zoom-vacuum': 0.4, 'whoosh-fast': 0.45, 'whoosh-swirl': 0.45, 'wind-woosh-throw': 0.45, 'air-woosh-quick': 0.5,
+  pop: 0.5, clink: 0.62, cheer: 0.7, 'bar-crowd': 0.8,
+};
+const soften = (src: string) => SOFT[src] ?? 0.55;
+
+/** Cat Walk: in over a second, a little lower under real life (the bar), out over the last 1.7 s. */
 const bgmVolume = (f: number) => {
   const live = shot('live');
   const duck = interpolate(f, [live.from - 6, live.from + 4, live.from + live.dur - 4, live.from + live.dur + 8], [1, 0.62, 0.62, 1], clamp);
@@ -108,11 +120,11 @@ export const Sound: React.FC<{ bgm: boolean; extra: Sfx[] }> = ({ bgm, extra }) 
   <>
     {bgm && <Audio src={staticFile('audio/cat-walk.mp3')} volume={bgmVolume} />}
     {[...SFX, ...extra].map((s, i) => {
-      const from = s.src === 'beer-garden' ? s.at : sfxFrom(s.at, s.src);
+      const from = s.src === 'bar-crowd' ? s.at : sfxFrom(s.at, s.src);
       const dur = s.dur ?? 90;
       return (
         <Sequence key={i} from={from} durationInFrames={dur} layout="none" name={`sfx ${s.src}`}>
-          <Audio src={staticFile(`audio/${s.src}.mp3`)} volume={(f) => s.volume
+          <Audio src={staticFile(`audio/${s.src}.mp3`)} volume={(f) => s.volume * soften(s.src)
             * (s.fadeIn ? interpolate(f, [0, s.fadeIn], [0, 1], clamp) : 1)
             * (s.fadeOut ? interpolate(f, [dur - s.fadeOut, dur], [1, 0], clamp) : 1)} />
         </Sequence>

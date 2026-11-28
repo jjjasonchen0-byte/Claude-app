@@ -6,7 +6,7 @@ import { AbsoluteFill, Easing, Img, interpolate, staticFile, useCurrentFrame } f
 import { Camera, Finger, Lens, Phone, Stage, camAt, type Cam } from '../kit';
 import { EASE, H, K, SCREEN_H, SCREEN_W, W, clamp, onScreen } from '../theme';
 import { ChatScreen, FIELD_AT as CHAT_FIELD, SEND_UP, StatusBar, keyPoint, type Msg } from '../screens/Chat';
-import { AppIcon, HomeScreen, iconBox } from '../screens/Home';
+import { AppIcon, HomeScreen, MEET_SLOT, iconBox, iconRadius } from '../screens/Home';
 
 // ---- the beats (local frames) ----
 export const O = {
@@ -30,15 +30,22 @@ export const MSGS: Msg[] = [
   { who: 'you', text: "I've got just the thing", at: O.sent },
 ];
 const DRAFT = "I've got just the thing";
-/** Frames a letter: a quick one-finger typist (~7.5 keys a second), done just before the send. */
+/** Frames a letter: a quick two-thumb typist (~7.5 keys a second), done just before the send. */
 export const TYPE_RATE = 4;
 
-/** The one hand that answers: the field, then every key, then send (app px, frame). */
-const TAPS = [
-  { ...CHAT_FIELD, t: O.fieldTap },
-  ...DRAFT.split('').flatMap((ch, i) => { const k = keyPoint(ch); return k ? [{ ...k, t: O.typeFrom + i * TYPE_RATE }] : []; }),
-  { ...SEND_UP, t: O.sendTap },
-];
+/**
+ * The answer, typed with both thumbs (the phone held in both hands): the right thumb taps the field,
+ * the keys on each half of the keyboard are that side's thumb's, the space bar goes to whichever
+ * thumb didn't type the letter before it, and the right thumb sends (app px, frame).
+ */
+const LEFT_KEYS = 'qwertasdfgzxcv';
+const KEYS = DRAFT.split('').flatMap((ch, i) => {
+  const k = keyPoint(ch);
+  return k ? [{ ...k, t: O.typeFrom + i * TYPE_RATE, ch }] : [];
+});
+const SIDE = KEYS.map((k, i, all) => (k.ch === ' ' ? !LEFT_KEYS.includes(all[i - 1].ch.toLowerCase()) : LEFT_KEYS.includes(k.ch.toLowerCase())));
+const TAPS_L = KEYS.filter((_, i) => SIDE[i]);
+const TAPS_R = [{ ...CHAT_FIELD, t: O.fieldTap }, ...KEYS.filter((_, i) => !SIDE[i]), { ...SEND_UP, t: O.sendTap }];
 
 /** The dive's target on Meet's start screen (app px): the end of the wordmark, its blue dot. */
 const WORD = { x: 262, y: 336 };
@@ -47,7 +54,10 @@ const WORD = { x: 262, y: 336 };
 const WHERE_AT = onScreen(98, 403);
 const FIELD_AT = onScreen(190, 803);
 const WORD_AT = onScreen(WORD.x, WORD.y); // Meet's wordmark on its start screen
-const MEET_AT = onScreen(66.75, 149); // Meet's icon on page 2
+const MEET_BOX = iconBox(MEET_SLOT.col, MEET_SLOT.row);
+const MEET_AT = onScreen(MEET_BOX.x + MEET_BOX.w / 2, MEET_BOX.y + MEET_BOX.h / 2); // Meet's icon on page 2
+/** The corners of the display (app px), which an app's window has while it fills it. */
+const SCREEN_R = 55;
 
 /** The shared-element curve (card transition-travel A): 25f to 1.03, then 10f back to 1. */
 const morphP = (f: number, start: number) =>
@@ -65,8 +75,9 @@ export const openingCam = (f: number): Cam => {
     { f: O.crash + 6, cam: { x: WHERE_AT.x, y: WHERE_AT.y, zoom: 3.0 }, ease: EASE.crash },
     { f: O.crash + 11, cam: { x: WHERE_AT.x, y: WHERE_AT.y, zoom: 2.85 }, ease: Easing.out(Easing.cubic) },
     { f: O.pullBack, cam: { x: WHERE_AT.x, y: WHERE_AT.y, zoom: 2.85 } },
-    { f: O.pullBack + 26, cam: { x: 520, y: 1180, zoom: 1.36 } },
-    { f: O.sendTap, cam: { x: 520, y: 1140, zoom: 1.4 }, ease: Easing.inOut(Easing.sin) },
+    // close on the keyboard and both thumbs (the hands holding the phone just out of frame)
+    { f: O.pullBack + 26, cam: { x: 540, y: 1180, zoom: 1.56 } },
+    { f: O.sendTap, cam: { x: 540, y: 1165, zoom: 1.62 }, ease: Easing.inOut(Easing.sin) },
     { f: O.swipeUp, cam: { x: 540, y: 1000, zoom: 1.3 } },
     { f: O.morphIn + 22, cam: { x: 540, y: 960, zoom: 0.96 } },
     { f: O.release + 12, cam: { x: 540, y: 960, zoom: 0.98 }, ease: Easing.inOut(Easing.sin) },
@@ -87,7 +98,7 @@ export const openingCam = (f: number): Cam => {
   // While Meet opens out of its icon its wordmark is still on the move: the dive follows where it is.
   if (f > O.launch) {
     const p = morphP(f, O.launch);
-    const icon = iconBox(0, 0);
+    const icon = MEET_BOX;
     const ow = lerp(icon.w, 390, p), ox = lerp(icon.x, 0, p), oy = lerp(icon.y, 0, p);
     const now = onScreen(ox + WORD.x * (ow / 390), oy + WORD.y * (ow / 390));
     const t = Easing.in(Easing.quad)(Math.min(1, (f - O.launch) / (O.end - O.launch)));
@@ -116,7 +127,7 @@ export const Opening: React.FC = () => {
   const cw = cw0 * over, ch = ch0 * over;
   const cx = lerp(0, chats.x, pc) + (390 - cw0) / 2 * (1 - pc) + (cw0 - cw) / 2;
   const cy = lerp(0, chats.y, pc) + (844 - ch0) / 2 * (1 - pc) - 30 * lift * (1 - pc) + (ch0 - ch) / 2;
-  const cr = lerp(48, chats.w / 2, pc) * over; // (into a round icon)
+  const cr = lerp(SCREEN_R, iconRadius(chats.w), pc) * over; // (into a rounded-square icon)
   const appFade = interpolate(pClose, [0.55, 0.85], [1, 0], clamp);
   const homeIn = interpolate(f, [O.swipeUp, O.morphIn + 30], [0, 1], { ...clamp, easing: Easing.out(Easing.cubic) });
 
@@ -126,12 +137,12 @@ export const Opening: React.FC = () => {
   const page = f < O.release ? drag : settle;
 
   // ---- tap Meet; its icon grows into the app ----
-  const meet = iconBox(0, 0);
+  const meet = MEET_BOX;
   const press = interpolate(f, [O.tapMeet + 6, O.tapMeet + 8, O.launch - 2, O.launch + 2], [1, 0.86, 0.86, 1], clamp);
   const pOpen = f < O.launch ? 0 : morphP(f, O.launch);
   const ow = lerp(meet.w, 390, pOpen), oh = lerp(meet.h, 844, pOpen);
   const ox = lerp(meet.x, 0, pOpen), oy = lerp(meet.y, 0, pOpen);
-  const or = lerp(meet.w / 2, 48, Math.min(1, pOpen));
+  const or = lerp(iconRadius(meet.w), SCREEN_R, Math.min(1, pOpen));
   const iconFade = interpolate(pOpen, [0, 0.3], [1, 0], clamp);
 
   const chatOn = f < O.morphIn + 36;
@@ -165,13 +176,14 @@ export const Opening: React.FC = () => {
                 {iconFade > 0 && <div style={{ position: 'absolute', inset: 0, opacity: iconFade }}><AppIcon id="meet" size={ow} /></div>}
               </div>
             )}
-            {/* fingers */}
-            <Finger x={CHAT_FIELD.x} y={CHAT_FIELD.y} at={O.fieldTap - 8} taps={TAPS} leave={O.sendTap + 12} />
+            {/* both thumbs type; then the right hand lets go and its finger swipes and taps */}
+            <Finger digit="thumbR" x={CHAT_FIELD.x} y={CHAT_FIELD.y} at={O.fieldTap - 9} taps={TAPS_R} leave={O.sendTap + 13} />
+            <Finger digit="thumbL" x={TAPS_L[0].x} y={TAPS_L[0].y} at={O.fieldTap + 2} taps={TAPS_L} leave={O.sendTap + 10} />
             <Finger x={195} y={830} at={O.swipeUp - 6} down={O.swipeUp} up={O.morphIn + 2} leave={O.morphIn + 11}
               path={(fr) => (fr < O.swipeUp ? null : { x: 195, y: interpolate(fr, [O.swipeUp, O.morphIn + 2], [830, 560], { ...clamp, easing: Easing.in(Easing.quad) }) })} />
             <Finger x={320} y={420} at={O.swipeLeft - 6} down={O.swipeLeft} up={O.release} leave={O.release + 10}
               path={(fr) => (fr < O.swipeLeft ? null : { x: interpolate(fr, [O.swipeLeft, O.release], [320, 78], { ...clamp, easing: Easing.inOut(Easing.sin) }), y: 420 - (fr - O.swipeLeft) * 0.6 })} />
-            <Finger x={meet.x + 31} y={meet.y + 31} at={O.tapMeet} down={O.tapMeet + 7} up={O.launch - 1} leave={O.launch + 9} from={{ x: 190, y: 360 }} />
+            <Finger x={meet.x + meet.w / 2} y={meet.y + meet.h / 2} at={O.tapMeet} down={O.tapMeet + 7} up={O.launch - 1} leave={O.launch + 9} />
           </Phone>
         </Camera>
       </AbsoluteFill>

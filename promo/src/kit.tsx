@@ -6,6 +6,7 @@ import { CAP } from './captures';
 import frameGeo from '../public/phone/frame.json';
 import { StatusBar } from './screens/Chat';
 import handGeo from '../public/phone/hand.json';
+import thumbGeo from '../public/phone/thumb.json';
 
 // ---------------------------------------------------------------- the stage
 
@@ -77,10 +78,12 @@ export const FastCtx = React.createContext(1);
 
 export const CamCtx = React.createContext<Cam>({ x: W / 2, y: H / 2, zoom: 1, rx: 0, ry: 0, rz: 0 });
 
-/** The photographed phone (public/phone/frame.png): body and bezel, the display cut out. */
+/** The photographed phone (public/phone/frame.png): a modern titanium iPhone's body and bezel, the display cut out. */
 const FRAME = frameGeo as { w: number; h: number; screenX: number; screenY: number; screenW: number; screenH: number; radius: number };
 const OUTER_R = FRAME.radius + FRAME.screenX * 0.98; // the body's own corners
-const DEPTH = 88; // ~7.8 mm at this scale (the phone is ~71 mm across)
+const DEPTH = 92; // ~8.3 mm at this scale (the phone is ~71 mm across)
+/** The Dynamic Island (app px): 122 × 36, 11 from the top of the display. */
+export const ISLAND = { w: 122, h: 36, y: 11 };
 
 /** Fingers among a phone's children (at any depth of arrays and fragments): drawn above the glass. */
 const splitFingers = (children: React.ReactNode) => {
@@ -98,9 +101,9 @@ const splitFingers = (children: React.ReactNode) => {
 };
 
 /**
- * A real-looking phone: the photographed body (glossy black, unbranded, round front camera) around the
- * screen, with its thickness showing as the camera turns it, light sliding over the glass, and the
- * fingers that touch it drawn on top (their shadows fall on the screen).
+ * A real-looking phone: the photographed body (a titanium iPhone) around the screen, the Dynamic Island
+ * at the top of the display, its thickness showing as the camera turns it, light sliding over the
+ * glass, and the fingers and thumbs that touch it drawn on top (their shadows fall on the screen).
  */
 export const Phone: React.FC<{ x?: number; y?: number; screenBg?: string; glow?: number; children?: React.ReactNode; style?: React.CSSProperties }> = ({
   x = PHONE_X, y = PHONE_Y, screenBg = '#fff', glow = 1, children, style,
@@ -124,15 +127,15 @@ export const Phone: React.FC<{ x?: number; y?: number; screenBg?: string; glow?:
       {/* the soft shadow it throws */}
       <Img src={staticFile('phone/shadow.png')} style={{ position: 'absolute', left: fx - 180, top: fy - 180 + 20, width: FRAME.w + 360, height: FRAME.h + 360, opacity: 0.9 }} />
       {glow > 0 && <div style={{ position: 'absolute', left: fx - 40, top: fy - 40, width: FRAME.w + 80, height: FRAME.h + 80, borderRadius: OUTER_R + 40, boxShadow: `0 0 160px rgba(0,122,255,${0.12 * glow})` }} />}
-      {/* the edge (aluminium under a dark finish: a bright streak along its middle) */}
+      {/* the edge (brushed natural titanium: warm grey, a bright streak along its middle) */}
       {layers.map((i) => {
         const d = (i / N) * DEPTH;
         const mid = Math.exp(-((((i / N) - 0.45) / 0.22) ** 2));
-        const l = Math.round(10 + 46 * mid);
+        const l = Math.round(62 + 118 * mid);
         return (
           <div key={i} style={{
             position: 'absolute', left: fx + ex * d, top: fy + ey * d, width: FRAME.w, height: FRAME.h, borderRadius: OUTER_R,
-            background: `rgb(${l},${l},${l + 3})`, boxShadow: i === N ? '0 0 0 1px rgba(0,0,0,.6)' : undefined,
+            background: `rgb(${l + 4},${l + 1},${l - 5})`, boxShadow: i === N ? '0 0 0 1px rgba(0,0,0,.6)' : undefined,
           }} />
         );
       })}
@@ -142,12 +145,13 @@ export const Phone: React.FC<{ x?: number; y?: number; screenBg?: string; glow?:
       <div style={{ position: 'absolute', left: BEZEL, top: BEZEL, width: SCREEN_W, height: SCREEN_H, borderRadius: FRAME.radius, overflow: 'hidden', background: screenBg, isolation: 'isolate' }}>
         {screen}
         {fingers.map((el, i) => React.cloneElement(el as React.ReactElement<FingerProps>, { key: `s${i}`, part: 'shadow' }))}
-        {/* the front camera */}
-        <div style={{
-          position: 'absolute', top: 24, left: SCREEN_W / 2 - 17, width: 34, height: 34, borderRadius: '50%', zIndex: 50,
-          background: 'radial-gradient(circle at 50% 50%, #0b0c14 0 30%, #05050a 31% 56%, #121216 57% 100%)',
-          boxShadow: 'inset 0 0 0 2px #0a0a0c, inset 3px -3px 6px rgba(90,100,170,.45), 0 0 0 1.5px rgba(255,255,255,.04)',
-        }} />
+        {/* the Dynamic Island (the front camera behind its right end) */}
+        <div style={{ position: 'absolute', top: ISLAND.y * K, left: (195 - ISLAND.w / 2) * K, width: ISLAND.w * K, height: ISLAND.h * K, borderRadius: (ISLAND.h / 2) * K, background: '#000', zIndex: 50 }}>
+          <div style={{
+            position: 'absolute', right: 13 * K, top: (ISLAND.h / 2 - 6) * K, width: 12 * K, height: 12 * K, borderRadius: '50%',
+            background: 'radial-gradient(circle at 46% 42%, #20243a 0 18%, #0a0a12 26% 58%, #050507 64%)', boxShadow: 'inset 1px -1px 4px rgba(90,100,170,.35)',
+          }} />
+        </div>
         {/* the glass: a softbox's reflection sliding over it, and a faint sheen */}
         <div style={{
           position: 'absolute', inset: 0, zIndex: 55, pointerEvents: 'none',
@@ -190,7 +194,7 @@ export const Footage: React.FC<{ clip: string; n: number; style?: React.CSSPrope
   );
 };
 
-// ---------------------------------------------------------------- a finger
+// ---------------------------------------------------------------- a finger, or a thumb
 
 const HAND = handGeo as { w: number; h: number; contactX: number; contactY: number; axisX: number; axisY: number; fingerW: number };
 /** The hand's size: its finger ~14 mm across (a touch slimmer than life, so it hides less of the screen). */
@@ -198,14 +202,25 @@ const HS = 155 / HAND.fingerW;
 /** World px it travels in from (and back out to), along its own arm: far enough to leave the frame. */
 const REACH = 1700;
 
+/** The right thumb (public/phone/thumb.png; the left one is the same picture mirrored). */
+const THUMB = thumbGeo as { w: number; h: number; contactX: number; contactY: number; axisX: number; axisY: number; thumbW: number; pad: number };
+/** A thumb ~16 mm across (a touch slimmer than life). */
+const TS = 170 / THUMB.thumbW;
+/** Where each thumb turns from (app px): its root, at the phone's lower corners where the hands hold it. */
+export const THUMB_ROOT = { thumbL: { x: -40, y: 905 }, thumbR: { x: 430, y: 905 } };
+const T_REACH = 900;
+
 type Tap = { x: number; y: number; t: number };
+type Digit = 'index' | 'thumbL' | 'thumbR';
 type FingerProps = {
   x: number; y: number; at: number; down?: number; up?: number; leave?: number; from?: { x: number; y: number }; path?: (f: number) => { x: number; y: number } | null;
   /** Typing: several touches in a row (app px, frame), the hand hovering between them. */
   taps?: Tap[];
+  /** The index finger of a hand reaching in (the default), or the left or right thumb of hands holding the phone. */
+  digit?: Digit;
   part?: 'hand' | 'shadow';
 };
-type HandState = { px: number; py: number; lift: number; s: number };
+type HandState = { px: number; py: number; lift: number; s: number; rot: number };
 
 /**
  * A real hand (public/phone/hand.png) reaching in along its arm from out of frame, touching the glass
@@ -214,9 +229,15 @@ type HandState = { px: number; py: number; lift: number; s: number };
  * moving to the next in between. Lifted off the glass it is a little larger (nearer the lens) and its
  * shadow falls further away and softer. A phone draws it twice: its shadow on the screen, the hand
  * above the glass.
+ *
+ * As a thumb (`digit`), it swings from its root at the phone's lower corner (the hands hold the phone
+ * there, out of frame) so that its pad lands on each key: it turns as it goes across the keyboard,
+ * the way a typing thumb does.
  */
 export const Finger: React.FC<FingerProps> = (props) => {
-  const { x, y, at, path, taps, part = 'hand' } = props;
+  const { x, y, at, path, taps, part = 'hand', digit = 'index' } = props;
+  const thumb = digit !== 'index';
+  const left = digit === 'thumbL';
   const down = taps ? taps[0].t : props.down ?? at + 7;
   const up = taps ? taps[taps.length - 1].t + 1.5 : props.up ?? down + 3;
   const leave = props.leave ?? up + 8;
@@ -232,7 +253,7 @@ export const Finger: React.FC<FingerProps> = (props) => {
     if (g - a.t < hold || a === b) return { x: a.x, y: a.y, lift: 0 };
     const s = Math.min(1, (g - a.t - hold) / Math.max(0.5, b.t - a.t - hold));
     const e = Easing.inOut(Easing.sin)(s);
-    const hover = Math.min(0.32, (b.t - a.t) / 40 + 0.05);
+    const hover = Math.min(thumb ? 0.24 : 0.32, (b.t - a.t) / 40 + 0.05);
     return { x: a.x + (b.x - a.x) * e, y: a.y + (b.y - a.y) * e, lift: hover * Math.sin(Math.PI * s) };
   };
   const state = (g: number): HandState => {
@@ -243,24 +264,46 @@ export const Finger: React.FC<FingerProps> = (props) => {
     const c = contact(g);
     const lift = Math.min(1, Math.max(c.lift, away * 5)); // height above the glass (well off within the first part of the reach)
     const pressing = c.lift === 0 && away === 0;
+    if (thumb) {
+      // turned to point from its root at the key; in and out along that line
+      const root = THUMB_ROOT[digit];
+      const dx = root.x - c.x, dy = root.y - c.y, n = Math.hypot(dx, dy) || 1;
+      const ax = left ? -THUMB.axisX : THUMB.axisX;
+      const rot = ((Math.atan2(dy, dx) - Math.atan2(THUMB.axisY, ax)) * 180) / Math.PI;
+      return {
+        px: c.x * K + (dx / n) * T_REACH * away, py: c.y * K + (dy / n) * T_REACH * away, lift, rot,
+        s: TS * (1 + 0.07 * lift) * (pressing ? 0.99 : 1),
+      };
+    }
     return {
-      px: c.x * K + HAND.axisX * REACH * away, py: c.y * K + HAND.axisY * REACH * away, lift,
+      px: c.x * K + HAND.axisX * REACH * away, py: c.y * K + HAND.axisY * REACH * away, lift, rot: 0,
       s: HS * (1 + 0.1 * lift) * (pressing ? 0.988 : 1), // (the fingertip flattens a touch against the glass)
     };
   };
   const st = state(f);
+  // the picture's geometry: the contact point (mirrored for the left thumb)
+  const G = thumb ? THUMB : HAND;
+  const cx = left ? G.w - G.contactX : G.contactX, cy = G.contactY;
+  const src = thumb ? 'phone/thumb.png' : 'phone/hand.png';
   if (part === 'shadow') {
     // light from the upper left: the shadow falls down and right, further and softer the higher the
     // finger; on the glass, a tight dark pool right under the fingertip
     const off = { x: 6 + 70 * st.lift, y: 10 + 110 * st.lift };
-    const W2 = 556 * 4 * st.s, H2 = 704 * 4 * st.s, pad = 240 * st.s;
-    const base = { position: 'absolute' as const, left: st.px - HAND.contactX * st.s - pad + off.x, top: st.py - HAND.contactY * st.s - pad + off.y, width: W2, height: H2 };
-    const o = 0.72 - 0.42 * st.lift;
+    const pad = thumb ? THUMB.pad : 240;
+    const scale = thumb ? 2 : 4; // (the shadows are stored smaller than the picture)
+    const SW = (thumb ? (G.w + 2 * pad) : 556 * scale) * st.s, SH = (thumb ? (G.h + 2 * pad) : 704 * scale) * st.s;
+    const ox = (cx + pad) * st.s, oy = (cy + pad) * st.s;
+    const o = (thumb ? 0.6 : 0.72) - 0.42 * st.lift;
     const pool = Math.max(0, 1 - st.lift * 4);
+    const img = (name: string, opacity: number) => (
+      <div style={{ position: 'absolute', left: st.px - ox + off.x, top: st.py - oy + off.y, width: SW, height: SH, transformOrigin: `${ox}px ${oy}px`, transform: `rotate(${st.rot}deg)`, opacity }}>
+        <Img src={staticFile(`phone/${thumb ? 'thumb' : 'hand'}-shadow-${name}.png`)} style={{ width: '100%', height: '100%', transform: left ? 'scaleX(-1)' : undefined }} />
+      </div>
+    );
     return (
       <div style={{ position: 'absolute', inset: 0, zIndex: 45, pointerEvents: 'none' }}>
-        <Img src={staticFile('phone/hand-shadow-near.png')} style={{ ...base, opacity: o * (1 - st.lift) }} />
-        <Img src={staticFile('phone/hand-shadow-far.png')} style={{ ...base, opacity: o * st.lift }} />
+        {img('near', o * (1 - st.lift))}
+        {img('far', o * st.lift)}
         {pool > 0 && <div style={{ position: 'absolute', left: st.px - 30, top: st.py - 14, width: 110, height: 80, borderRadius: '50%', background: 'radial-gradient(closest-side, rgba(0,0,0,.42), rgba(0,0,0,.16) 55%, rgba(0,0,0,0))', opacity: pool }} />}
       </div>
     );
@@ -271,9 +314,12 @@ export const Finger: React.FC<FingerProps> = (props) => {
   const speed = Math.hypot(st.px - prev.px, st.py - prev.py) * 2;
   const n = speed > 24 ? Math.min(14, Math.ceil(speed / 7)) : 1; // (copies ≤7 px apart: a continuous smear, not ghosts)
   const draw = (s: HandState, o: number, key: string) => (
-    <Img key={key} src={staticFile('phone/hand.png')} style={{
-      position: 'absolute', left: s.px - HAND.contactX * s.s, top: s.py - HAND.contactY * s.s, width: HAND.w * s.s, height: HAND.h * s.s, opacity: o,
-    }} />
+    <div key={key} style={{
+      position: 'absolute', left: s.px - cx * s.s, top: s.py - cy * s.s, width: G.w * s.s, height: G.h * s.s, opacity: o,
+      transformOrigin: `${cx * s.s}px ${cy * s.s}px`, transform: s.rot ? `rotate(${s.rot}deg)` : undefined,
+    }}>
+      <Img src={staticFile(src)} style={{ width: '100%', height: '100%', transform: left ? 'scaleX(-1)' : undefined }} />
+    </div>
   );
   return (
     <div style={{ position: 'absolute', inset: 0, overflow: 'visible' }}>

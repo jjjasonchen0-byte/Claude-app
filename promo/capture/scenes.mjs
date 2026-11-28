@@ -1,5 +1,5 @@
 // The advert's app footage, captured in one session of the live site (meet-hhdt.onrender.com: its real
-// map, routing and places), with a fictional group in Sydney. Usage: node scenes.mjs [--until <clip>]
+// map, routing and places), with a fictional group in New York on a US phone (miles, Eastern time). Usage: node scenes.mjs [--until <clip>]
 import fs from 'node:fs';
 import path from 'node:path';
 import { openRig, LIVE } from './rig.mjs';
@@ -59,25 +59,26 @@ await rig.still('start');
 log('start still');
 
 // ---------------------------------------------------------------- off camera: the group (Leo comes later)
-// The group (fictional people at real Sydney addresses; the same as the test build's sample group)
+// The group: fictional people at public places in New York (Brooklyn, the Upper West Side, Queens,
+// and Leo across the river in Hoboken)
 const g = {
-  home: { address: '325 Eliza Street, Newtown', lat: -33.89724, lon: 151.17893 },
+  home: { address: 'Domino Park, 15 River St, Brooklyn', lat: 40.7145, lon: -73.9680 },
   friends: [
-    { address: '9 Paternoster Row, Pyrmont', lat: -33.86982, lon: 151.19446, nickname: 'Sam' },
-    { address: '246 Oxford Street, Paddington', lat: -33.88488, lon: 151.22638, nickname: 'Priya' },
-    { address: '115 Brett Whiteley Place, North Sydney', lat: -33.83911, lon: 151.20746, nickname: 'Leo' },
+    { address: 'Lincoln Center, 10 Lincoln Center Plaza, New York', lat: 40.7725, lon: -73.9835, nickname: 'Sam' },
+    { address: 'MoMA PS1, 22-25 Jackson Ave, Queens', lat: 40.7454, lon: -73.9471, nickname: 'Priya' },
+    { address: 'Hoboken Terminal, 1 Hudson Pl, Hoboken', lat: 40.7349, lon: -74.0279, nickname: 'Leo' },
   ],
 };
 meta.group = g;
 await page.evaluate(async (g) => {
   const { api, onUser } = window.__meet;
-  // You walk, Sam bikes (he switches on camera), Priya and Leo drive: on the live site's routing the
-  // fairest spot is then on King Street, Newtown (13 · 19 · 16 · 15 min).
-  await api.updateMe({ home: { ...g.home, mode: 'walk' } });
+  // You, Priya and Leo take the subway (Leo the PATH train), Sam bikes (he switches on camera): on the
+  // live site, on a Friday evening, the fairest spot is then in the East Village, on Avenue A.
+  await api.updateMe({ home: { ...g.home, mode: 'transit' } });
   await api.addPlace({ ...g.friends[0], mode: 'walk' }); // Sam
-  await api.addPlace({ ...g.friends[1], mode: 'drive' }); // Priya
+  await api.addPlace({ ...g.friends[1], mode: 'transit' }); // Priya
   const me = await api.me();
-  await api.updateMe({ settings: { ...(me.user.settings || {}), travel: 'drive' } }); // so Leo, added on camera, drives
+  await api.updateMe({ settings: { ...(me.user.settings || {}), travel: 'transit' } }); // so Leo, added on camera, takes the train
   onUser((await api.me()).user);
 }, g);
 await rig.idle(3000);
@@ -85,8 +86,8 @@ await rig.idle(3000);
 await page.evaluate((g) => {
   const m = window.__meet.map;
   const pts = [g.home, ...g.friends].map((p) => [p.lat, p.lon]);
-  // Close on Leo's corner of North Sydney, his spot a third of the way down: his address card then
-  // opens clear of the buttons at the top.
+  // Close on Leo's corner of Hoboken, his spot a third of the way down: his address card then opens
+  // clear of the buttons at the top.
   const leo = g.friends[2];
   m.setView([leo.lat, leo.lon], 13.25, { animate: false });
   m.panBy([-30, 122], { animate: false }); // (Leo ~300 down: his card opens below the status bar and the buttons)
@@ -133,7 +134,7 @@ await done('modes');
 
 // ---------------------------------------------------------------- 3. go: the sheet down, the play button, the race, the spot
 // (off camera, between shots: the map closer in on the four of them, so the whole screen is map once
-// the sheet is down: the built-in map of central Sydney ends a little south of Newtown)
+// the sheet is down)
 await rig.thaw();
 await page.evaluate((g) => {
   const m = window.__meet.map;
@@ -214,12 +215,14 @@ if (need > 0) {
 log('pills at', await pillsY());
 const tabs = await page.$$eval('.pills .pill', (els) => els.map((e) => { const r = e.getBoundingClientRect(); return { text: e.textContent.trim(), x: r.x + r.width / 2, y: r.y + r.height / 2 }; }));
 meta.places.tabs = tabs;
-const drinks = tabs.find((t) => /Drinks/.test(t.text)) || tabs[1];
-if (!(drinks.y > 80 && drinks.y < 800)) throw new Error('tabs not in sight ' + JSON.stringify(tabs));
+// (each tab found again just before it's tapped: a shorter list under one tab can shift the sheet)
+const tabAt = async (re) => (await page.$$eval('.pills .pill', (els) => els.map((e) => { const r = e.getBoundingClientRect(); return { text: e.textContent.trim(), x: r.x + r.width / 2, y: r.y + r.height / 2 }; }))).find((t) => re.test(t.text));
+const drinks = await tabAt(/Drinks/);
+if (!(drinks && drinks.y > 80 && drinks.y < 800)) throw new Error('tabs not in sight ' + JSON.stringify(tabs));
 await page.touchscreen.tap(drinks.x, drinks.y);
 meta.places.tapDrinks = { ...drinks, frame: rig.frame() };
 await rig.step(36);
-const food = tabs.find((t) => /Food/.test(t.text)) || tabs[0];
+const food = await tabAt(/Food/);
 await page.touchscreen.tap(food.x, food.y);
 meta.places.tapFood = { ...food, frame: rig.frame() };
 await rig.step(36);
@@ -242,10 +245,10 @@ await page.touchscreen.tap(send.x, send.y);
 for (let i = 0; i < 60 && !(await page.$('[data-action=native-share]')); i++) await rig.step(1);
 if (!(await page.$('#share-when'))) throw new Error('the invite page did not open: ' + (await page.textContent('#panel-body')).replace(/\s+/g, ' ').slice(0, 300));
 await rig.step(6);
-// when: this Friday, 6:30 pm (picked in the date field)
+// when: tonight, 8 pm (picked in the date field)
 await page.evaluate(() => {
   const w = document.querySelector('#share-when');
-  w.value = '2026-11-27T18:30';
+  w.value = '2026-12-04T20:00';
   w.dispatchEvent(new Event('change', { bubbles: true }));
 });
 await rig.step(38);

@@ -1,6 +1,6 @@
-// The group chat: an original chat app ("Chats"), not modelled on any phone maker's own: a left-aligned
-// header, white incoming and violet outgoing bubbles with each sender's name in their colour, a pill
-// composer with a round send button, and a plain keyboard. Drawn at app size (390×844 app px);
+// The group chat: an original chat app ("Chats"): a left-aligned header, white incoming and violet
+// outgoing bubbles with each sender's name in their colour, a composer with a send button, on an
+// iPhone (its status bar and keyboard). Drawn at app size (390×844 app px);
 // everything is a pure function of the frame.
 import React from 'react';
 import { interpolate, Easing } from 'remotion';
@@ -8,7 +8,7 @@ import { EASE, FONT, PEOPLE, clamp } from '../theme';
 
 export type Msg = { who: 'sam' | 'priya' | 'leo' | 'you'; text: string; at: number; typing?: number; card?: React.ReactNode };
 
-const STATUS_TIME = '6:30';
+const STATUS_TIME = '6:31';
 /** The chat app's own colours. */
 export const CH = {
   bg: '#f4f5f9',
@@ -20,17 +20,31 @@ export const CH = {
   field: '#eef0f5',
 };
 
+/**
+ * The phone's status bar, as on an iPhone with a Dynamic Island: the time in the left ear; signal,
+ * wifi and the battery in the right one.
+ */
 export const StatusBar: React.FC<{ color?: string; time?: string }> = ({ color = '#000', time = STATUS_TIME }) => (
-  <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 50, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', padding: '0 30px 8px 34px', fontFamily: FONT, color, zIndex: 20 }}>
-    <span style={{ fontWeight: 600, fontSize: 15, letterSpacing: '-0.01em' }}>{time}</span>
-    <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-      {/* wifi */}
-      <svg width="16" height="12" viewBox="0 0 16 12" fill={color}><path d="M8 11.5L.6 3.4a10.6 10.6 0 0 1 14.8 0z" opacity=".95" /></svg>
-      {/* signal */}
-      <svg width="14" height="12" viewBox="0 0 14 12" fill={color}><path d="M13.5 .5v11H2.5z" /></svg>
-      {/* battery (upright, with its level) */}
-      <svg width="12" height="16" viewBox="0 0 12 16"><rect x="2" y="2" width="8" height="13.4" rx="1.6" fill="none" stroke={color} strokeWidth="1.2" /><rect x="4" y="0.4" width="4" height="1.8" rx=".6" fill={color} /><rect x="3.4" y="5" width="5.2" height="9" rx=".8" fill={color} /></svg>
-      <span style={{ fontWeight: 600, fontSize: 13 }}>82%</span>
+  <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 54, fontFamily: FONT, color, zIndex: 20, pointerEvents: 'none' }}>
+    <span style={{ position: 'absolute', left: 0, width: 128, top: 17, textAlign: 'center', fontWeight: 600, fontSize: 16.5, letterSpacing: '-0.02em', lineHeight: '22px' }}>{time}</span>
+    <span style={{ position: 'absolute', left: 262, width: 128, top: 22, display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center' }}>
+      {/* signal: four bars */}
+      <svg width="18" height="12" viewBox="0 0 18 12" fill={color}>
+        <rect x="0" y="7.6" width="3.2" height="4.4" rx="1" /><rect x="4.8" y="5.2" width="3.2" height="6.8" rx="1" />
+        <rect x="9.6" y="2.6" width="3.2" height="9.4" rx="1" /><rect x="14.4" y="0" width="3.2" height="12" rx="1" />
+      </svg>
+      {/* wifi: three bands fanning out from a point */}
+      <svg width="16" height="12" viewBox="0 0 16 12" fill={color}>
+        <path d="M8 12L5.6 9.3a3.4 3.4 0 0 1 4.8 0z" />
+        <path d="M3.9 7.4a5.9 5.9 0 0 1 8.2 0l-1.1 1.2a4.3 4.3 0 0 0-6 0z" />
+        <path d="M1.4 4.8a9.4 9.4 0 0 1 13.2 0l-1.1 1.2a7.8 7.8 0 0 0-11 0z" />
+      </svg>
+      {/* battery: 82% */}
+      <svg width="27" height="13" viewBox="0 0 27 13">
+        <rect x=".5" y=".5" width="23" height="12" rx="3.6" fill="none" stroke={color} strokeOpacity=".38" />
+        <rect x="2.2" y="2.2" width={19.6 * 0.82} height="8.6" rx="2" fill={color} />
+        <path d="M25 4.4v4.2c.8-.3 1.4-1.1 1.4-2.1s-.6-1.8-1.4-2.1z" fill={color} fillOpacity=".4" />
+      </svg>
     </span>
   </div>
 );
@@ -45,25 +59,46 @@ const Avatar: React.FC<{ who: keyof typeof PEOPLE; size: number; ring?: boolean 
 
 // ---------------------------------------------------------------- the keyboard
 
-/** A plain on-screen keyboard (flat rounded keys, a suggestion strip), 300 app px tall with its foot. */
-export const KB_H = 300;
+/** An iPhone-style keyboard: a predictive bar, four rows of keys, the emoji and dictation keys under them. */
+export const KB_H = 336;
 const ROWS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
-const KW = 33, KG = 6, KH = 44, ROW_H = 54, TOP = 42;
+const KW = 33, KG = 6, KH = 42, ROW_H = 54, TOP = 52;
+const KB = { bg: '#d2d4da', key: '#ffffff', special: '#abb0ba', pressedSpecial: '#ffffff', ink: '#000' };
 /** Where a key sits (its centre, keyboard px). */
 const keyAt = (ch: string): { x: number; y: number; w: number } | null => {
-  if (ch === ' ') return { x: 195, y: TOP + 3 * ROW_H + KH / 2 + 2, w: 206 };
+  if (ch === ' ') return { x: 195, y: TOP + 3 * ROW_H + KH / 2, w: 198 };
   // (no apostrophe on the letters: the typist writes "Ive" and autocorrect makes it "I've")
   for (let r = 0; r < 3; r++) {
     const i = ROWS[r].indexOf(ch.toLowerCase());
     if (i < 0) continue;
     const n = ROWS[r].length;
     const x0 = (390 - (n * KW + (n - 1) * KG)) / 2;
-    return { x: x0 + i * (KW + KG) + KW / 2, y: TOP + r * ROW_H + KH / 2 + 2, w: KW };
+    return { x: x0 + i * (KW + KG) + KW / 2, y: TOP + r * ROW_H + KH / 2, w: KW };
   }
   return null;
 };
 /** A key's centre on the screen (app px) with the keyboard up. */
 export const keyPoint = (ch: string) => { const k = keyAt(ch); return k ? { x: k.x, y: 844 - KB_H + k.y } : null; };
+
+/** The balloon a pressed letter key grows above itself, with the letter in it, larger. */
+const Callout: React.FC<{ x: number; y: number; ch: string; o: number }> = ({ x, y, ch, o }) => {
+  const kx = x - KW / 2, ky = y - KH / 2; // the key's top-left
+  const bw = KW + 24, bh = 56; // the balloon
+  const bx = Math.max(1, Math.min(390 - bw - 1, x - bw / 2)), by = ky - bh + 6;
+  const r = 10;
+  // the outline: balloon top, down its sides, curving in to the key's sides, round the key's foot
+  const d = `M${bx + r},${by} H${bx + bw - r} Q${bx + bw},${by} ${bx + bw},${by + r} V${by + bh - 18}
+    C${bx + bw},${by + bh - 6} ${kx + KW},${ky + 4} ${kx + KW},${ky + 16} V${ky + KH - 5} Q${kx + KW},${ky + KH} ${kx + KW - 5},${ky + KH}
+    H${kx + 5} Q${kx},${ky + KH} ${kx},${ky + KH - 5} V${ky + 16} C${kx},${ky + 4} ${bx},${by + bh - 6} ${bx},${by + bh - 18} V${by + r} Q${bx},${by} ${bx + r},${by} Z`;
+  return (
+    <div style={{ position: 'absolute', inset: 0, opacity: o, zIndex: 3 }}>
+      <svg width="390" height={KB_H} style={{ position: 'absolute', left: 0, top: 0, overflow: 'visible', filter: 'drop-shadow(0 1px 1.5px rgba(0,0,0,.28)) drop-shadow(0 4px 10px rgba(0,0,0,.12))' }}>
+        <path d={d} fill="#fff" />
+      </svg>
+      <div style={{ position: 'absolute', left: bx, top: by, width: bw, height: bh - 12, display: 'grid', placeItems: 'center', fontSize: 34, fontWeight: 400, color: KB.ink }}>{ch}</div>
+    </div>
+  );
+};
 
 export const Keyboard: React.FC<{ frame: number; text: string; from: number; rate: number; sentAt?: number; suggestions?: (typed: string) => string[] }> = ({ frame, text, from, rate, sentAt = 1e9, suggestions }) => {
   // the key being pressed now (each held ~2.5 frames, its letter popping up above it)
@@ -73,56 +108,66 @@ export const Keyboard: React.FC<{ frame: number; text: string; from: number; rat
   const down = ch !== null && since < 2.6 ? keyAt(ch) : null;
   const typed = frame >= sentAt ? '' : text.slice(0, Math.max(0, Math.min(text.length, idx + 1)));
   const words = suggestions?.(typed) ?? [];
-  const shiftOn = typed.length === 0;
-  const key = (label: React.ReactNode, x: number, y: number, w: number, special = false, pressed = false, k?: string, accent = false) => (
+  // shift is on for the first letter (the keys show capitals), off after it
+  const shiftOn = typed.length === 0 || (ch !== null && idx === 0 && since < 2.6);
+  const caps = shiftOn && typed.length === 0;
+  const key = (label: React.ReactNode, x: number, y: number, w: number, special = false, pressed = false, k?: string, size = 22.5) => (
     <div key={k ?? String(label) + x} style={{
-      position: 'absolute', left: x - w / 2, top: y - KH / 2, width: w, height: KH, borderRadius: accent ? KH / 2 : 9,
-      background: accent ? (pressed ? '#3f2ed0' : CH.outFlat) : pressed ? (special ? '#b9bfcc' : '#dfe2ea') : special ? '#d3d8e2' : '#fff',
-      boxShadow: '0 0 0 .5px rgba(20,20,40,.06)', display: 'grid', placeItems: 'center',
-      fontSize: 21, fontWeight: 400, color: accent ? '#fff' : '#1b1b22', letterSpacing: 0,
+      position: 'absolute', left: x - w / 2, top: y - KH / 2, width: w, height: KH, borderRadius: 5.5,
+      background: special ? (pressed ? KB.key : KB.special) : pressed ? KB.special : KB.key,
+      boxShadow: '0 1px 0 rgba(0,0,0,.3)', display: 'grid', placeItems: 'center',
+      fontSize: size, fontWeight: 400, color: KB.ink, letterSpacing: 0,
     }}>{label}</div>
   );
   return (
-    <div style={{ position: 'absolute', left: 0, bottom: 0, width: 390, height: KB_H, background: '#e7e9ef', fontFamily: FONT }}>
-      {/* suggestions: three words, side by side */}
-      <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: TOP, display: 'flex', alignItems: 'center', justifyContent: 'space-evenly', fontSize: 16, color: '#3a3a46' }}>
-        {[0, 1, 2].map((i) => <span key={i} style={{ width: 110, textAlign: 'center' }}>{words[i] ?? ''}</span>)}
+    <div style={{ position: 'absolute', left: 0, bottom: 0, width: 390, height: KB_H, background: KB.bg, fontFamily: FONT }}>
+      {/* the predictive bar: three words, thin lines between them */}
+      <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 45, display: 'flex', alignItems: 'center', fontSize: 16.5, color: KB.ink, letterSpacing: '-0.01em' }}>
+        {[0, 1, 2].map((i) => (
+          <React.Fragment key={i}>
+            {i > 0 && <span style={{ width: 1, height: 24, background: 'rgba(0,0,0,.14)' }} />}
+            <span style={{ flex: 1, textAlign: 'center' }}>{words[i] ?? ''}</span>
+          </React.Fragment>
+        ))}
       </div>
       {ROWS.map((row, r) => row.split('').map((c) => {
         const p = keyAt(c)!;
-        return key(c, p.x, p.y, KW, false, !!down && down.x === p.x && down.y === p.y, c);
+        return key(caps ? c.toUpperCase() : c, p.x, p.y, KW, false, !!down && down.x === p.x && down.y === p.y, c);
       }))}
       {/* shift and delete */}
-      {key(<svg width="18" height="18" viewBox="0 0 24 24" fill={shiftOn ? '#1b1b22' : 'none'} stroke="#1b1b22" strokeWidth="1.8" strokeLinejoin="round"><path d="M12 4l8 8.5h-4.5V20h-7v-7.5H4z" /></svg>, 3 + 21, TOP + 2 * ROW_H + KH / 2 + 2, 42, !shiftOn, false, 'shift')}
-      {key(<svg width="22" height="16" viewBox="0 0 26 18" fill="none" stroke="#1b1b22" strokeWidth="1.7" strokeLinejoin="round"><path d="M8 2h15a1.5 1.5 0 0 1 1.5 1.5v11A1.5 1.5 0 0 1 23 16H8l-6.5-7z" /><path d="M12 6l6 6M18 6l-6 6" strokeLinecap="round" /></svg>, 390 - 3 - 21, TOP + 2 * ROW_H + KH / 2 + 2, 42, true, false, 'del')}
-      {/* bottom row: 123 · space · . · return */}
-      {key(<span style={{ fontSize: 15, fontWeight: 500 }}>123</span>, 3 + 26, TOP + 3 * ROW_H + KH / 2 + 2, 52, true, false, 'num')}
-      {key('', 195, TOP + 3 * ROW_H + KH / 2 + 2, 206, false, !!down && ch === ' ', 'space')}
-      {key('.', 390 - 3 - 64 - 6 - 20, TOP + 3 * ROW_H + KH / 2 + 2, 40, true, false, 'dot')}
-      {key(<svg width="22" height="18" viewBox="0 0 24 20" fill="none" stroke="#1b1b22" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 3v6a3 3 0 0 1-3 3H4M8 7l-4 5 4 5" /></svg>, 390 - 3 - 32, TOP + 3 * ROW_H + KH / 2 + 2, 64, true, false, 'ret')}
-      {/* the letter popping up over the key under the finger */}
-      {down && ch !== ' ' && (
-        <div style={{
-          position: 'absolute', left: down.x - 24, top: down.y - KH / 2 - 56, width: 48, height: 50, borderRadius: 12, background: '#fff',
-          boxShadow: '0 6px 16px rgba(20,20,40,.2), 0 0 0 .5px rgba(20,20,40,.1)', display: 'grid', placeItems: 'center', fontSize: 28, color: '#1b1b22',
-          opacity: interpolate(since, [0, 0.5, 2.1, 2.6], [0.5, 1, 1, 0], clamp),
-        }}>{ch}</div>
-      )}
+      {key(<svg width="20" height="19" viewBox="0 0 24 23" fill={shiftOn ? KB.ink : 'none'} stroke={KB.ink} strokeWidth="1.7" strokeLinejoin="round"><path d="M12 2.5l9 9.5h-5v8.5H8V12H3z" /></svg>, 3 + 21, TOP + 2 * ROW_H + KH / 2, 42, !shiftOn, false, 'shift')}
+      {key(<svg width="24" height="18" viewBox="0 0 27 19" fill="none" stroke={KB.ink} strokeWidth="1.6" strokeLinejoin="round"><path d="M8.5 1.5h15a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-15L1.5 9.5z" /><path d="M12.5 6l7 7M19.5 6l-7 7" strokeLinecap="round" /></svg>, 390 - 3 - 21, TOP + 2 * ROW_H + KH / 2, 42, true, false, 'del')}
+      {/* bottom row: 123 · space · return */}
+      {key('123', 3 + 43.5, TOP + 3 * ROW_H + KH / 2, 87, true, false, 'num', 16.5)}
+      {key('space', 195, TOP + 3 * ROW_H + KH / 2, 198, false, !!down && ch === ' ', 'space', 16.5)}
+      {key('return', 390 - 3 - 43.5, TOP + 3 * ROW_H + KH / 2, 87, true, false, 'ret', 16.5)}
+      {/* under the keys: emoji and dictation */}
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="#50555e" strokeWidth="1.7" style={{ position: 'absolute', left: 28 - 14, top: 286 - 14 }}>
+        <circle cx="14" cy="14" r="11" /><circle cx="10.2" cy="11.5" r="1.2" fill="#50555e" stroke="none" /><circle cx="17.8" cy="11.5" r="1.2" fill="#50555e" stroke="none" /><path d="M8.8 16.2a6 6 0 0 0 10.4 0" strokeLinecap="round" />
+      </svg>
+      <svg width="26" height="28" viewBox="0 0 26 28" fill="none" stroke="#50555e" strokeWidth="1.7" strokeLinecap="round" style={{ position: 'absolute', left: 362 - 13, top: 286 - 14 }}>
+        <rect x="9" y="3" width="8" height="14" rx="4" fill="#50555e" stroke="none" /><path d="M5.5 13a7.5 7.5 0 0 0 15 0M13 20.5V25" />
+      </svg>
+      {/* the letter in its balloon over the key under the thumb */}
+      {down && ch !== null && ch !== ' ' && <Callout x={down.x} y={down.y} ch={idx === 0 ? ch.toUpperCase() : ch} o={interpolate(since, [2.1, 2.6], [1, 0], clamp)} />}
       {/* the home indicator */}
-      <div style={{ position: 'absolute', bottom: 8, left: 195 - 60, width: 120, height: 4.5, borderRadius: 3, background: '#1b1b22' }} />
+      <div style={{ position: 'absolute', bottom: 8, left: 195 - 67, width: 134, height: 5, borderRadius: 3, background: '#000' }} />
     </div>
   );
 };
 
-/** What the strip suggests while "I've got just the thing" is typed. */
+/**
+ * What the predictive bar offers while "I've got just the thing" is typed: what's been typed so far
+ * of the word (in quotes when it isn't a word yet), then the likeliest words.
+ */
+const NEXT: Record<string, string[]> = { '': ['I', 'The', 'I’m'], "I've": ['got', 'been', 'never'], got: ['a', 'just', 'it'], just: ['the', 'a', 'like'], the: ['thing', 'place', 'best'] };
+const WORDS = ['I', 'I’m', "I've", 'got', 'gotta', 'going', 'good', 'just', 'jump', 'justice', 'the', 'they', 'then', 'to', 'that', 'thing', 'things', 'think', 'this'];
 const suggest = (t: string): string[] => {
+  if (!t || t.endsWith(' ')) return NEXT[t.trim().split(' ').pop() || ''] ?? ['the', 'a', 'it'];
   const last = t.split(' ').pop() || '';
-  if (!t) return ['I', 'Hey', 'Yes'];
-  if (t.endsWith(' ')) return t.trim().endsWith('got') ? ['a', 'just', 'it'] : t.trim().endsWith('just') ? ['a', 'the', 'got'] : t.trim().endsWith('the') ? ['place', 'thing', 'spot'] : ['have', 'got', 'been'];
-  if ('thing'.startsWith(last) && t.includes('the ')) return ['think', 'thing', 'things'];
-  if ('just'.startsWith(last)) return ['jus', 'just', 'judt'];
-  if ('got'.startsWith(last)) return ['go', 'got', 'gotta'];
-  return [last.toLowerCase(), last.replace(/^i/, 'I'), last + 's'];
+  const done = WORDS.filter((w) => w.toLowerCase().startsWith(last.toLowerCase()) && w !== last);
+  const pick = last === 'th' && t.includes('the ') ? ['thing', 'the'] : last === 'thi' || last === 'thin' ? ['thing', 'think'] : done.slice(0, 2);
+  return [WORDS.includes(last) ? last : `“${last}”`, ...pick];
 };
 
 // ---------------------------------------------------------------- the chat

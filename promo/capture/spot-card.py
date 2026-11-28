@@ -3,5 +3,5 @@
 from PIL import Image
 D = '/home/user/Claude-app/promo/public/captures'
 im = Image.open(f'{D}/raw/go/00262.jpg').convert('RGB')
-im.crop((80, 1210, 830, 1565)).save(f'{D}/spot-card.png')
+im.crop((250, 1068, 1000, 1422)).save(f'{D}/spot-card.png')  # (New York: everyone's routes into Mama Fina's, its label just below)
 print('spot-card', im.size)
