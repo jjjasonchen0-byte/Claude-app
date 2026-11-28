@@ -1,28 +1,28 @@
 {
   "group": {
     "home": {
-      "address": "Domino Park, 15 River St, Brooklyn",
-      "lat": 40.7145,
-      "lon": -73.968
+      "address": "McCarren Park, Brooklyn",
+      "lat": 40.72,
+      "lon": -73.951
     },
     "friends": [
       {
-        "address": "Lincoln Center, 10 Lincoln Center Plaza, New York",
-        "lat": 40.7725,
-        "lon": -73.9835,
-        "nickname": "Sam"
+        "address": "Broadway & West 86th Street, New York",
+        "lat": 40.7885,
+        "lon": -73.977,
+        "nickname": "Jake"
       },
       {
-        "address": "MoMA PS1, 22-25 Jackson Ave, Queens",
-        "lat": 40.7454,
-        "lon": -73.9471,
-        "nickname": "Priya"
+        "address": "Transmitter Park, Greenpoint, Brooklyn",
+        "lat": 40.7296,
+        "lon": -73.9603,
+        "nickname": "Emily"
       },
       {
         "address": "Hoboken Terminal, 1 Hudson Pl, Hoboken",
         "lat": 40.7349,
         "lon": -74.0279,
-        "nickname": "Leo"
+        "nickname": "Ryan"
       }
     ]
   },
@@ -41,23 +41,23 @@
     "tapAdd": {
       "x": 300.7890625,
       "y": 201.9765625,
-      "frame": 91
+      "frame": 96
     }
   },
   "frames": {
-    "crew": 166,
+    "crew": 171,
     "modes": 78,
     "go": 369,
-    "places": 322
+    "places": 302
   },
   "modes": {
     "tapPill": {
-      "x": 169.484375,
+      "x": 172,
       "y": 605.4296875,
       "frame": 12
     },
     "tapBike": {
-      "x": 228.5625,
+      "x": 231.078125,
       "y": 742.625,
       "frame": 38
     }
@@ -88,77 +88,72 @@
       "to": 110
     },
     "scroll": {
-      "by": 39.71875,
+      "by": 16.75,
       "frame": 74
     },
     "tabs": [
       {
-        "text": "Food50",
-        "x": 72.1875,
-        "y": 578.71875
+        "text": "Food49",
+        "x": 72.34375,
+        "y": 578.75
       },
       {
         "text": "Drinks50",
-        "x": 197.4765625,
-        "y": 578.71875
+        "x": 197.7890625,
+        "y": 578.75
       },
       {
-        "text": "Fun16",
-        "x": 316.9765625,
-        "y": 578.71875
+        "text": "Fun8",
+        "x": 314.453125,
+        "y": 578.75
       },
       {
-        "text": "Culture33",
-        "x": 439.3828125,
-        "y": 578.71875
+        "text": "Culture17",
+        "x": 432.1484375,
+        "y": 578.75
       },
       {
-        "text": "Outdoors21",
-        "x": 580.453125,
-        "y": 578.71875
+        "text": "Outdoors15",
+        "x": 571.359375,
+        "y": 578.75
       },
       {
-        "text": "Shopping29",
-        "x": 728.828125,
-        "y": 578.71875
+        "text": "Shopping33",
+        "x": 719.8046875,
+        "y": 578.75
       }
     ],
     "tapTab1": {
-      "text": "Fun16",
-      "x": 316.9765625,
-      "y": 578.71875,
+      "text": "Drinks50",
+      "x": 197.7890625,
+      "y": 578.75,
       "frame": 106
     },
     "tapTab2": {
-      "text": "Drinks50",
-      "x": 197.4765625,
-      "y": 618.71875,
+      "text": "Food49",
+      "x": 72.34375,
+      "y": 595.75,
       "frame": 142
     },
     "tapGroup": {
       "x": 195,
-      "y": 687.71875,
+      "y": 664.75,
       "frame": 178
-    },
-    "tapSort": {
-      "x": 283,
-      "y": 228.0625,
-      "frame": 202
     },
     "tapPlace": {
       "x": 195,
       "y": 313.15625,
-      "frame": 232
+      "frame": 212
     },
     "tapSend": {
       "x": 103.5,
-      "y": 258.6640625,
-      "frame": 278
+      "y": 289.8515625,
+      "frame": 258
     },
     "shareBtn": {
       "x": 195,
       "y": 556.546875
     }
   },
-  "shareText": "Let's meet at The Spotted Owl\n211 Avenue A, Manhattan\nFri, Dec 4, 8:00 PM\nhttps://www.google.com/maps/search/?api=1&query=40.7298793,-73.9809353\nSent with Meet"
+  "shareText": "Let's meet at Coletta Italian Vegan Restaurant\n365 3rd Avenue, Manhattan\nFri, Dec 4, 8:00 PM\nhttps://www.google.com/maps/search/?api=1&query=40.7409361,-73.981374\nSent with Meet"
 }
