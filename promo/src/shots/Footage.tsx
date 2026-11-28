@@ -23,10 +23,10 @@ const PhoneShot: React.FC<{ keys: Key[]; children: React.ReactNode; over?: React
   );
 };
 
-// ---------------------------------------------------------------- 4. crew: Leo, added from the map
+// ---------------------------------------------------------------- 4. crew: Ryan, added from the map
 
 const crewA = (CAP.crew.tapUse.frame ?? 37) + 12; // close on the map: the tap, the address, "Use this address"
-const crewBFrom = (CAP.crew.tapAdd.frame ?? 90) + 2; // (the name typed off camera) the sheet comes back down with Leo in
+const crewBFrom = (CAP.crew.tapAdd.frame ?? 90) + 2; // (the name typed off camera) the sheet comes back down with Ryan in
 const crewB = (F.crew ?? 165) - crewBFrom + 1;
 export const CREW_DUR = crewA + crewB + 10;
 
@@ -47,7 +47,7 @@ export const Crew: React.FC = () => {
   );
 };
 
-// ---------------------------------------------------------------- 5. modes: Sam walks → bikes
+// ---------------------------------------------------------------- 5. modes: Jake walks → bikes
 
 export const MODES_DUR = (F.modes ?? 78) + 6;
 export const Modes: React.FC = () => {

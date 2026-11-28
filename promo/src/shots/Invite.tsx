@@ -24,6 +24,10 @@ const BX = PHONE_X + 2400, BY = PHONE_Y + 160; // phone B's top-left
 const btnA = { x: AX + BEZEL + CAP.shareBtn.x * K, y: AY + BEZEL + CAP.shareBtn.y * K };
 const landB = { x: BX + BEZEL + 270 * K, y: BY + BEZEL + 430 * K };
 const P0 = btnA, P3 = landB;
+/** Where the camera opens (centred above the share button, 1.3×). */
+const START_C = { x: btnA.x, y: btnA.y - 200 };
+/** Phone A's display as the shot opens (frame px): the glide before it ends exactly here. */
+export const INVITE_OPEN = { left: W / 2 + (AX + BEZEL - START_C.x) * 1.3, top: H / 2 + (AY + BEZEL - START_C.y) * 1.3, zoom: 1.3 };
 const P1 = { x: P0.x + 700, y: P0.y - 1100 };
 const P2 = { x: P3.x - 700, y: P3.y - 900 };
 const bez = (t: number) => {
@@ -84,7 +88,7 @@ export const Invite: React.FC = () => {
   const takeP = interpolate(frame, TAKEOVER, [0, 1], { ...clamp, easing: Easing.inOut(Easing.cubic) });
   const follow = interpolate(frame, ZOOM_OUT, [0, 1], clamp);
   // camera: A's button → the plane → B's chat (centre and zoom continuous at the hand-over)
-  const startC = { x: btnA.x, y: btnA.y - 200 };
+  const startC = START_C;
   const bC = { x: BX + BEZEL + 195 * K, y: BY + BEZEL + 422 * K }; // (the whole screen in: its status bar and island too)
   let cx = startC.x + (pos.x - startC.x) * follow;
   let cy = startC.y + (pos.y - startC.y) * follow;

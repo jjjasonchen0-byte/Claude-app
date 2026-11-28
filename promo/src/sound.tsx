@@ -53,7 +53,7 @@ export const SFX: Sfx[] = [
   // ---- crew
   tap(S('crew') + fr(CAP.crew.tapMap, 15), 0.5),
   tap(S('crew') + fr(CAP.crew.tapUse, 37), 0.9),
-  { at: S('crew') + fr(CAP.crew.tapUse, 37) + 13, src: 'transition-soft', volume: 0.3, dur: 40 }, // cut to Leo in the list
+  { at: S('crew') + fr(CAP.crew.tapUse, 37) + 13, src: 'transition-soft', volume: 0.3, dur: 40 }, // cut to Ryan in the list
   // ---- modes
   tap(S('modes') + fr(CAP.modes.tapPill, 12), 0.9),
   tap(S('modes') + fr(CAP.modes.tapBike, 38), 0.9),

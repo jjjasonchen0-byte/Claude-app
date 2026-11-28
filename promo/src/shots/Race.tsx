@@ -75,7 +75,7 @@ export const Race: React.FC = () => {
     // in towards the spot through the stare
     { f: CRASH - 4, cam: { x: spot.x + 4, y: spot.y - 150, zoom: 1.04, rx: 0, ry: 0 }, ease: Easing.inOut(Easing.sin) },
     // the crash (6f, ease-in), stopping dead (impact), held while everyone gathers: framed so all four
-    // times and the place's name are in (the map from Leo's label on the left to Priya's on the right)
+    // times and the place's name are in (the map from Ryan's label on the left to Emily's on the right)
     { f: CRASH + 6, cam: { x: spot.x + 4, y: spot.y - 185, zoom: 1.54 }, ease: Easing.bezier(0.55, 0, 0.7, 1) },
     { f: HOLD, cam: { x: spot.x + 4, y: spot.y - 190, zoom: 1.58 } },
     // back out to the whole phone as the app zooms out to its result: the place, and the line above

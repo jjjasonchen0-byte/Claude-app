@@ -5,6 +5,7 @@ import { AbsoluteFill, Easing, Img, interpolate, staticFile, useCurrentFrame } f
 import { CamCtx, Camera, Caption, Finger, Footage, Lens, Phone, Stage, camAt, type Key } from '../kit';
 import { BEZEL, C, SCREEN_H, SCREEN_W, clamp, onScreen } from '../theme';
 import { CAP } from '../captures';
+import { INVITE_OPEN } from './Invite';
 
 const P = CAP.places as typeof CAP.places & { pull: { x: number; y: number; frame: number; to: number } };
 const fr = (p?: { frame?: number }, d = 0) => p?.frame ?? d;
@@ -73,14 +74,16 @@ export const Tabs: React.FC = () => {
 
 /** The place screens, in order (frames of the places clip, each once its page has settled). */
 const SCREENS = [fr(P.tapTab2) + 30, fr(P.tapSort, fr(P.tapGroup) + 24) + 26, fr(P.tapSend) - 4, CAP.placesLast]; // (Drinks, the bars by fairness, the bar, the invite)
-export const GLIDE_DUR = 118;
+export const GLIDE_DUR = 111; // (to the beat)
+/** The last frames: the last screen (the invite) turns to face the camera and settles where the next shot opens. */
+const SETTLE = 30;
 const GAP = 110;
 const STRIP_W = SCREENS.length * SCREEN_W + (SCREENS.length - 1) * GAP;
 // the fixed camera (demo constants; the angle is the card's identity, −60°)
 const CAM = { persp: 1100, origin: '30% 58%', rotY: -60, rotZ: -2, left: '30%', top: '13%', scale: 0.78 };
 
-const Strip: React.FC<{ shade: number }> = ({ shade }) => (
-  <CamCtx.Provider value={{ x: 0, y: 0, zoom: 1, rx: 0, ry: CAM.rotY, rz: CAM.rotZ }}>
+const Strip: React.FC<{ shade: number; ry: number; rz: number }> = ({ shade, ry, rz }) => (
+  <CamCtx.Provider value={{ x: 0, y: 0, zoom: 1, rx: 0, ry, rz }}>
     <div style={{ position: 'relative', width: STRIP_W, height: SCREEN_H }}>
       {SCREENS.map((n, i) => (
         <Phone key={i} x={i * (SCREEN_W + GAP) - BEZEL} y={-BEZEL} glow={0}>
@@ -92,34 +95,47 @@ const Strip: React.FC<{ shade: number }> = ({ shade }) => (
   </CamCtx.Provider>
 );
 
-const Layer: React.FC<{ lx: number; shade: number; opacity: number }> = ({ lx, shade, opacity }) => (
+type View = { lx: number; ry: number; rz: number; scale: number; left: number; top: number };
+const Layer: React.FC<{ v: View; shade: number; opacity: number }> = ({ v, shade, opacity }) => (
   <AbsoluteFill style={{ opacity }}>
     <AbsoluteFill style={{ perspective: CAM.persp, perspectiveOrigin: CAM.origin }}>
-      <div style={{ position: 'absolute', left: CAM.left, top: CAM.top, transform: `rotateY(${CAM.rotY}deg) rotateZ(${CAM.rotZ}deg)`, transformOrigin: 'left top' }}>
-        <div style={{ transform: `scale(${CAM.scale}) translateX(${lx}px)`, transformOrigin: 'left top' }}><Strip shade={shade} /></div>
+      <div style={{ position: 'absolute', left: v.left, top: v.top, transform: `rotateY(${v.ry}deg) rotateZ(${v.rz}deg)`, transformOrigin: 'left top' }}>
+        <div style={{ transform: `scale(${v.scale}) translateX(${v.lx}px)`, transformOrigin: 'left top' }}><Strip shade={shade} ry={v.ry} rz={v.rz} /></div>
       </div>
     </AbsoluteFill>
   </AbsoluteFill>
 );
+const LEFT0 = 0.3 * 1080, TOP0 = 0.13 * 1920; // (CAM.left, CAM.top)
+const LAST_X = (SCREENS.length - 1) * (SCREEN_W + GAP); // the last screen's place on the strip
 
 export const Glide: React.FC = () => {
   const f = useCurrentFrame();
   // the page moves, the camera doesn't: a soft start, then nearly steady, never stopping dead
   const glide = Easing.bezier(0.3, 0.12, 0.72, 0.9);
-  const lxAt = (g: number) => interpolate(interpolate(g, [0, GLIDE_DUR], [0, 1], { easing: glide, ...clamp }), [0, 1], [500, -(STRIP_W - SCREEN_W * 1.2)]);
-  const lx = lxAt(f);
+  const lxAt = (g: number) => interpolate(interpolate(g, [0, GLIDE_DUR + 20], [0, 1], { easing: glide, ...clamp }), [0, 1], [500, -(STRIP_W - SCREEN_W * 1.2)]);
+  // the settle: the strip turns square to the camera and the last screen lands where the invite opens
+  const viewAt = (g: number): View => {
+    const p = Easing.inOut(Easing.cubic)(Math.min(1, Math.max(0, (g - (GLIDE_DUR - SETTLE)) / SETTLE)));
+    const lxEnd = (INVITE_OPEN.left - LEFT0) / INVITE_OPEN.zoom - LAST_X;
+    return {
+      lx: lxAt(g) * (1 - p) + lxEnd * p, ry: CAM.rotY * (1 - p), rz: CAM.rotZ * (1 - p),
+      scale: CAM.scale + (INVITE_OPEN.zoom - CAM.scale) * p, left: LEFT0, top: TOP0 + (INVITE_OPEN.top - TOP0) * p,
+    };
+  };
+  const v = viewAt(f);
+  const settle = Math.min(1, Math.max(0, (f - (GLIDE_DUR - SETTLE)) / SETTLE));
   const shade = interpolate(f, [0, 16, 40], [0.7, 0.4, 0], clamp);
-  const speed = Math.abs(lxAt(f - 1) - lxAt(f + 1)) / 2;
+  const speed = Math.abs(lxAt(f - 1) - lxAt(f + 1)) / 2 * (1 - settle);
   const g1 = Math.min(0.42, speed * 0.03), g2 = Math.min(0.22, speed * 0.016);
   return (
     <Stage>
-      {g2 > 0.02 && <Layer lx={lxAt(f - 5)} shade={shade} opacity={g2} />}
-      {g1 > 0.02 && <Layer lx={lxAt(f - 2.5)} shade={shade} opacity={g1} />}
-      <Layer lx={lx} shade={shade} opacity={1} />
-      <AbsoluteFill style={{ background: 'radial-gradient(ellipse 105% 95% at 55% 42%, transparent 60%, rgba(0,0,0,0.25) 85%, rgba(0,0,0,0.55) 100%)' }} />
+      {g2 > 0.02 && <Layer v={viewAt(f - 5)} shade={shade} opacity={g2} />}
+      {g1 > 0.02 && <Layer v={viewAt(f - 2.5)} shade={shade} opacity={g1} />}
+      <Layer v={v} shade={shade} opacity={1} />
+      <AbsoluteFill style={{ opacity: 1 - settle, background: 'radial-gradient(ellipse 105% 95% at 55% 42%, transparent 60%, rgba(0,0,0,0.25) 85%, rgba(0,0,0,0.55) 100%)' }} />
       {/* the light falls off towards the floor: room for the line */}
-      <AbsoluteFill style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0) 58%, rgba(0,0,0,.62) 76%, rgba(0,0,0,.82) 100%)' }} />
-      <Caption text="Then pick a *place.*" at={10} out={GLIDE_DUR - 14} top={1600} />
+      <AbsoluteFill style={{ opacity: 1 - settle, background: 'linear-gradient(180deg, rgba(0,0,0,0) 58%, rgba(0,0,0,.62) 76%, rgba(0,0,0,.82) 100%)' }} />
+      <Caption text="Then pick a *place.*" at={10} out={GLIDE_DUR - SETTLE} top={1600} />
     </Stage>
   );
 };

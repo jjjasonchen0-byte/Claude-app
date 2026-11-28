@@ -33,9 +33,9 @@ export const C = {
 /** The people (the same as in the app's sample group). */
 export const PEOPLE = {
   you: { name: 'You', initial: 'Y', color: '#007aff' },
-  sam: { name: 'Sam', initial: 'S', color: '#ff9500' },
-  priya: { name: 'Priya', initial: 'P', color: '#34c759' },
-  leo: { name: 'Leo', initial: 'L', color: '#af52de' },
+  sam: { name: 'Jake', initial: 'J', color: '#ff9500' },
+  priya: { name: 'Emily', initial: 'E', color: '#34c759' },
+  leo: { name: 'Ryan', initial: 'R', color: '#af52de' },
 };
 
 /** Motion tokens. */

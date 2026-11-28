@@ -93,27 +93,29 @@ await page.evaluate(() => document.fonts.ready);
 await rig.still('start');
 log('start still');
 
-// ---------------------------------------------------------------- off camera: the group (Leo comes later)
-// The group: fictional people at public places in New York (Brooklyn, the Upper West Side, Queens,
-// and Leo across the river in Hoboken)
+// ---------------------------------------------------------------- off camera: the group (Ryan comes later)
+// The group: fictional people at public places in New York (You by McCarren Park in Williamsburg, Jake
+// on the Upper West Side, Emily in Greenpoint, and Ryan across the river in Hoboken)
 const g = {
-  home: { address: 'Domino Park, 15 River St, Brooklyn', lat: 40.7145, lon: -73.9680 },
+  home: { address: 'McCarren Park, Brooklyn', lat: 40.7200, lon: -73.9510 },
   friends: [
-    { address: 'Lincoln Center, 10 Lincoln Center Plaza, New York', lat: 40.7725, lon: -73.9835, nickname: 'Sam' },
-    { address: 'MoMA PS1, 22-25 Jackson Ave, Queens', lat: 40.7454, lon: -73.9471, nickname: 'Priya' },
-    { address: 'Hoboken Terminal, 1 Hudson Pl, Hoboken', lat: 40.7349, lon: -74.0279, nickname: 'Leo' },
+    { address: 'Broadway & West 86th Street, New York', lat: 40.7885, lon: -73.9770, nickname: 'Jake' },
+    { address: 'Transmitter Park, Greenpoint, Brooklyn', lat: 40.7296, lon: -73.9603, nickname: 'Emily' },
+    { address: 'Hoboken Terminal, 1 Hudson Pl, Hoboken', lat: 40.7349, lon: -74.0279, nickname: 'Ryan' },
   ],
 };
+/** Where the race sends them (the live site's answer for this group on a Friday evening): the invite goes there. */
+const SPOT_NAME = 'Handcraft';
 meta.group = g;
 await page.evaluate(async (g) => {
   const { api, onUser } = window.__meet;
-  // You, Priya and Leo take the subway (Leo the PATH train), Sam bikes (he switches on camera): on the
-  // live site, on a Friday evening, the fairest spot is then in the East Village, on Avenue A.
+  // You, Emily and Ryan take the subway (Ryan the PATH train), Jake bikes (he switches on camera): on the
+  // live site, on a Friday evening, the fairest spot is Handcraft on 3rd Avenue (30 · 29 · 34 · 31 min).
   await api.updateMe({ home: { ...g.home, mode: 'transit' } });
-  await api.addPlace({ ...g.friends[0], mode: 'walk' }); // Sam
-  await api.addPlace({ ...g.friends[1], mode: 'transit' }); // Priya
+  await api.addPlace({ ...g.friends[0], mode: 'walk' }); // Jake
+  await api.addPlace({ ...g.friends[1], mode: 'transit' }); // Emily
   const me = await api.me();
-  await api.updateMe({ settings: { ...(me.user.settings || {}), travel: 'transit' } }); // so Leo, added on camera, takes the train
+  await api.updateMe({ settings: { ...(me.user.settings || {}), travel: 'transit' } }); // so Ryan, added on camera, takes the train
   onUser((await api.me()).user);
 }, g);
 await rig.idle(3000);
@@ -131,7 +133,7 @@ await rig.idle(2500);
 await tilesDrawn('crew');
 await rig.freeze();
 
-// ---------------------------------------------------------------- 1. crew: Leo is added from the map
+// ---------------------------------------------------------------- 1. crew: Ryan is added from the map
 rig.record('crew');
 await rig.step(15);
 const leo = g.friends[2];
@@ -146,7 +148,7 @@ meta.crew.tapUse = { x: use.x, y: use.y, frame: rig.frame() };
 await page.touchscreen.tap(use.x, use.y);
 await rig.step(24);
 meta.crew.typeFrom = rig.frame();
-for (const ch of 'Leo') { await page.keyboard.type(ch); await rig.step(5); }
+for (const ch of 'Ryan') { await page.keyboard.type(ch); await rig.step(5); }
 await rig.step(14);
 const add = await box('[data-action=add-person]');
 meta.crew.tapAdd = { x: add.x, y: add.y, frame: rig.frame() };
@@ -154,7 +156,7 @@ await page.touchscreen.tap(add.x, add.y);
 await rig.step(75);
 await done('crew');
 
-// ---------------------------------------------------------------- 2. modes: Sam walks → bikes
+// ---------------------------------------------------------------- 2. modes: Jake walks → bikes
 rig.record('modes');
 await rig.step(12);
 const pill = await box('.person:nth-child(2) .mode-pill');
@@ -252,29 +254,27 @@ const tabs = await page.$$eval('.pills .pill', (els) => els.map((e) => { const r
 meta.places.tabs = tabs;
 // (each tab found again just before it's tapped: a shorter list under one tab can shift the sheet)
 const tabAt = async (re) => (await page.$$eval('.pills .pill', (els) => els.map((e) => { const r = e.getBoundingClientRect(); return { text: e.textContent.trim(), x: r.x + r.width / 2, y: r.y + r.height / 2 }; }))).find((t) => re.test(t.text));
-// Fun first (the highlight slides two tabs right), then Drinks (one back): the night ends in a bar
-const fun = await tabAt(/Fun/);
-if (!(fun && fun.y > 80 && fun.y < 800)) throw new Error('tabs not in sight ' + JSON.stringify(tabs));
-await page.touchscreen.tap(fun.x, fun.y);
-meta.places.tapTab1 = { ...fun, frame: rig.frame() };
-await rig.step(36);
+// Drinks (the highlight slides along), then Food (back): the restaurants, nearest first: the meeting
+// point itself (Handcraft) is the first of them
 const drinks = await tabAt(/Drinks/);
+if (!(drinks && drinks.y > 80 && drinks.y < 800)) throw new Error('tabs not in sight ' + JSON.stringify(tabs));
 await page.touchscreen.tap(drinks.x, drinks.y);
-meta.places.tapTab2 = { ...drinks, frame: rig.frame() };
+meta.places.tapTab1 = { ...drinks, frame: rig.frame() };
 await rig.step(36);
-// the bars, then sorted by Fairest (the bar whose trips are most even for everyone comes first)
-const bars = await page.locator('[data-action=group]', { hasText: 'Bars' }).first().boundingBox();
-if (!bars) throw new Error('no Bars group: ' + (await page.textContent('#panel-body')).replace(/\s+/g, ' ').slice(0, 300));
-meta.places.tapGroup = { x: bars.x + bars.width / 2, y: bars.y + bars.height / 2, frame: rig.frame() };
+const food = await tabAt(/Food/);
+await page.touchscreen.tap(food.x, food.y);
+meta.places.tapTab2 = { ...food, frame: rig.frame() };
+await rig.step(36);
+const rest = await page.locator('[data-action=group]', { hasText: 'Restaurants' }).first().boundingBox();
+if (!rest) throw new Error('no Restaurants group: ' + (await page.textContent('#panel-body')).replace(/\s+/g, ' ').slice(0, 300));
+meta.places.tapGroup = { x: rest.x + rest.width / 2, y: rest.y + rest.height / 2, frame: rig.frame() };
 await page.touchscreen.tap(meta.places.tapGroup.x, meta.places.tapGroup.y);
 for (let i = 0; i < 60 && !(await page.$('[data-action=place]')); i++) await rig.step(1);
-if (!(await page.$('[data-action=place]'))) { console.log('panel:', (await page.textContent('#panel-body')).slice(0, 600)); }
-await rig.step(24);
-const fair = await box('[data-action=sort][data-sort=fair]');
-meta.places.tapSort = { x: fair.x, y: fair.y, frame: rig.frame() };
-await page.touchscreen.tap(fair.x, fair.y);
-await rig.step(30);
-const place = await box('[data-action=place]');
+await rig.step(34);
+// the meeting point's own row (or, failing that, the nearest)
+const named = await page.locator('[data-action=place]', { hasText: SPOT_NAME }).first().boundingBox().catch(() => null);
+if (!named) log('no row named', SPOT_NAME, ': taking the first');
+const place = named ? { x: named.x + named.width / 2, y: named.y + named.height / 2 } : await box('[data-action=place]');
 meta.places.tapPlace = { x: place.x, y: place.y, frame: rig.frame() };
 await page.touchscreen.tap(place.x, place.y);
 for (let i = 0; i < 60 && !(await page.$('[data-action=choose]')); i++) await rig.step(1);

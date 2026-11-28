@@ -188,12 +188,12 @@ const suggest = (raw: string): string[] => {
 /** A bubble arriving: grows from its tail corner, ~14f. */
 const pop = (frame: number, at: number) => interpolate(frame, [at, at + 14], [0, 1], { ...clamp, easing: EASE.spring });
 
-/** A bubble's tail, curling out from its lower corner (a disc of the bubble's colour, trimmed by one of the page's). */
+/** A bubble's tail: a small hook curling out of its lower corner, drawn as one shape in the bubble's
+ * colour (nothing laid over what's beside it). */
 const Tail: React.FC<{ side: 'left' | 'right'; color: string }> = ({ side, color }) => (
-  <>
-    <div style={{ position: 'absolute', bottom: 0, [side]: -6, width: 18, height: 18, background: color, [side === 'left' ? 'borderBottomRightRadius' : 'borderBottomLeftRadius']: 14 }} />
-    <div style={{ position: 'absolute', bottom: 0, [side]: -14, width: 14, height: 20, background: CH.bg, [side === 'left' ? 'borderBottomRightRadius' : 'borderBottomLeftRadius']: 10 }} />
-  </>
+  <svg width="17" height="19" viewBox="0 0 17 19" style={{ position: 'absolute', bottom: 0, [side]: -6, transform: side === 'right' ? 'scaleX(-1)' : undefined }}>
+    <path d="M6 0 C6 9 4.4 14.6 0 19 C5.2 19 9.6 17.4 12.6 14.6 L17 14.6 L17 0 Z" fill={color} />
+  </svg>
 );
 
 const Bubble: React.FC<{ mine?: boolean; children: React.ReactNode; style?: React.CSSProperties }> = ({ mine, children, style }) => (
@@ -256,10 +256,9 @@ export const ChatScreen: React.FC<{
       <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 120, background: CH.bar, boxShadow: `0 .5px 0 ${CH.barLine}`, zIndex: 10 }}>
         <svg width="14" height="24" viewBox="0 0 14 24" fill="none" stroke={CH.accent} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: 14, top: 70 }}><path d="M11 3L3 12l8 9" /></svg>
         <div style={{ position: 'absolute', left: 32, top: 70, fontSize: 17, color: CH.accent }}>3</div>
-        <div style={{ position: 'absolute', left: 195 - 37, top: 56, width: 74, height: 40 }}>
-          <div style={{ position: 'absolute', left: 0, top: 6 }}><Avatar who="sam" size={30} ring /></div>
-          <div style={{ position: 'absolute', left: 22, top: 0 }}><Avatar who="priya" size={32} ring /></div>
-          <div style={{ position: 'absolute', left: 44, top: 6 }}><Avatar who="leo" size={30} ring /></div>
+        {/* the group's faces, side by side (none cut into another) */}
+        <div style={{ position: 'absolute', left: 0, right: 0, top: 58, display: 'flex', justifyContent: 'center', alignItems: 'flex-end', gap: 4 }}>
+          <Avatar who="sam" size={28} /><Avatar who="priya" size={34} /><Avatar who="leo" size={28} />
         </div>
         <div style={{ position: 'absolute', left: 0, right: 0, top: 98, textAlign: 'center', fontSize: 12, color: CH.ink, letterSpacing: '-0.005em' }}>The Crew <span style={{ color: CH.soft }}>›</span></div>
         <svg width="30" height="20" viewBox="0 0 30 20" style={{ position: 'absolute', right: 16, top: 71 }}><rect x="1" y="2" width="19" height="16" rx="4" fill={CH.accent} /><path d="M21.5 8l7-4.5v13l-7-4.5z" fill={CH.accent} /></svg>

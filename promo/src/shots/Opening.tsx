@@ -48,8 +48,46 @@ const SIDE = KEYS.map((k, i, all) => (k.ch === ' ' ? !LEFT_KEYS.includes(all[i -
 const keyFor = (k: (typeof KEYS)[number], left: boolean) => (k.ch === ' ' ? { ...k, x: left ? 140 : 250 } : k);
 const TAPS_L = KEYS.filter((_, i) => SIDE[i]).map((k) => keyFor(k, true));
 const TAPS_R = [{ ...CHAT_FIELD, t: O.fieldTap }, ...KEYS.filter((_, i) => !SIDE[i]).map((k) => keyFor(k, false)), { ...SEND_UP, t: O.sendTap }];
-/** Where a thumb waits, raised, on its own half while the other one types (so they never cross). */
-const REST_L = { x: 66, y: 700 }, REST_R = { x: 322, y: 700 };
+/** Where a thumb waits, raised, on its own half while the other one types. */
+const REST_L = { x: 60, y: 705 }, REST_R = { x: 330, y: 705 };
+
+/**
+ * Both thumbs, worked out together so they never overlap. Each one presses its keys in turn (on a key
+ * for 1.5 frames), goes back to its resting place when there's time before its next key, and comes in
+ * from there; and their pads are never nearer each other across the keyboard than SEP: whichever is
+ * further from its next press gives way, sideways to its own side.
+ */
+type Pt = { x: number; y: number; lift: number; busy: number };
+const HOLD = 1.5, APPROACH = 3, RETURN = 3.5, SEP = 125;
+const eio = Easing.inOut(Easing.sin);
+const c01 = (v: number) => Math.min(1, Math.max(0, v));
+const mix = (a: { x: number; y: number }, b: { x: number; y: number }, t: number) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+const solo = (taps: { x: number; y: number; t: number }[], rest: { x: number; y: number }, g: number): Pt => {
+  const i = taps.findIndex((k) => k.t > g);
+  const next = i === -1 ? null : taps[i];
+  const prev = i === -1 ? taps[taps.length - 1] : i > 0 ? taps[i - 1] : null;
+  if (prev && g - prev.t < HOLD) return { x: prev.x, y: prev.y, lift: 0, busy: 0 };
+  if (!prev && next) { const e = eio(c01((g - (next.t - APPROACH)) / APPROACH)); return { ...mix(rest, next, e), lift: 0.24 * (1 - e), busy: next.t - g }; }
+  if (prev && !next) { const e = eio(c01((g - prev.t - HOLD) / RETURN)); return { ...mix(prev, rest, e), lift: 0.24 * e, busy: 99 }; }
+  const a = prev!, b = next!;
+  if (b.t - a.t <= HOLD + APPROACH + RETURN) {
+    const s = c01((g - a.t - HOLD) / (b.t - a.t - HOLD));
+    return { ...mix(a, b, eio(s)), lift: 0.16 * Math.sin(Math.PI * s), busy: b.t - g };
+  }
+  if (g < a.t + HOLD + RETURN) { const e = eio(c01((g - a.t - HOLD) / RETURN)); return { ...mix(a, rest, e), lift: 0.24 * e, busy: b.t - g }; }
+  if (g < b.t - APPROACH) return { ...rest, lift: 0.24, busy: b.t - g };
+  const e = eio(c01((g - (b.t - APPROACH)) / APPROACH));
+  return { ...mix(rest, b, e), lift: 0.24 * (1 - e), busy: b.t - g };
+};
+const thumbsAt = (g: number) => {
+  const L = solo(TAPS_L, REST_L, g), R = solo(TAPS_R, REST_R, g);
+  const short = SEP - (R.x - L.x);
+  if (short > 0) {
+    if (L.busy >= R.busy) L.x -= short; else R.x += short;
+  }
+  return { L, R };
+};
+const trackL = (g: number) => thumbsAt(g).L, trackR = (g: number) => thumbsAt(g).R;
 
 /** The dive's target on Meet's start screen (app px): the end of the wordmark, its blue dot. */
 const WORD = { x: 262, y: 336 };
@@ -181,8 +219,8 @@ export const Opening: React.FC = () => {
               </div>
             )}
             {/* both thumbs type; then the right hand lets go and its finger swipes and taps */}
-            <Finger digit="thumbR" x={CHAT_FIELD.x} y={CHAT_FIELD.y} at={O.fieldTap - 9} taps={TAPS_R} rest={REST_R} leave={O.sendTap + 13} />
-            <Finger digit="thumbL" x={TAPS_L[0].x} y={TAPS_L[0].y} at={O.fieldTap + 2} taps={TAPS_L} rest={REST_L} leave={O.sendTap + 10} />
+            <Finger digit="thumbR" x={CHAT_FIELD.x} y={CHAT_FIELD.y} at={O.fieldTap - 9} taps={TAPS_R} track={trackR} leave={O.sendTap + 13} />
+            <Finger digit="thumbL" x={TAPS_L[0].x} y={TAPS_L[0].y} at={O.fieldTap + 2} taps={TAPS_L} track={trackL} leave={O.sendTap + 10} />
             <Finger x={195} y={830} at={O.swipeUp - 6} down={O.swipeUp} up={O.morphIn + 2} leave={O.morphIn + 11}
               path={(fr) => (fr < O.swipeUp ? null : { x: 195, y: interpolate(fr, [O.swipeUp, O.morphIn + 2], [830, 560], { ...clamp, easing: Easing.in(Easing.quad) }) })} />
             <Finger x={320} y={420} at={O.swipeLeft - 6} down={O.swipeLeft} up={O.release} leave={O.release + 10}

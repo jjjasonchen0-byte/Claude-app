@@ -220,6 +220,8 @@ type FingerProps = {
   digit?: Digit;
   /** Typing: where this hand waits (raised) through a longer gap between its keys, out of the other's way. */
   rest?: { x: number; y: number };
+  /** Typing with both thumbs: where this one is at each frame (app px, and how far it's lifted), worked out with the other. */
+  track?: (g: number) => { x: number; y: number; lift: number };
   part?: 'hand' | 'shadow';
 };
 type HandState = { px: number; py: number; lift: number; s: number; rot: number };
@@ -237,7 +239,7 @@ type HandState = { px: number; py: number; lift: number; s: number; rot: number 
  * the way a typing thumb does.
  */
 export const Finger: React.FC<FingerProps> = (props) => {
-  const { x, y, at, path, taps, rest, part = 'hand', digit = 'index' } = props;
+  const { x, y, at, path, taps, rest, track, part = 'hand', digit = 'index' } = props;
   const thumb = digit !== 'index';
   const left = digit === 'thumbL';
   const down = taps ? taps[0].t : props.down ?? at + 7;
@@ -246,6 +248,7 @@ export const Finger: React.FC<FingerProps> = (props) => {
   const f = useCurrentFrame();
   if (f < at - 1 || f > leave + 1) return null;
   const contact = (g: number): { x: number; y: number; lift: number } => {
+    if (track) return track(Math.min(Math.max(g, down), up));
     if (!taps) { const p = path?.(Math.min(Math.max(g, down), up)); return { x: p ? p.x : x, y: p ? p.y : y, lift: 0 }; }
     // typing: on each key for 1.5 frames, then across to the next, lifting with the distance in time
     let i = 0;
