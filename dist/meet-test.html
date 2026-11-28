@@ -2088,6 +2088,36 @@ function lineLength(pts) {
 
 __m["geo"] = { haversine, dist, makeProjector, centroid, paddedBBox, span, smallestEnclosingCircle, simplify, lineLength };
 })();
+// ---- units
+(() => {
+// Distances as people read them: metres and kilometres, or feet and miles where the phone is set to
+// a country that measures in those (the US, Liberia, Myanmar).
+
+const FT = 3.28084;
+const MI = 1609.344;
+
+/** True for a language tag like "en-US" (the regions that use miles). */
+const usesMiles = (tag = '') => /-(US|LR|MM)\b/i.test(tag);
+
+/** "350 m", "2.4 km", "12 km" (or "500 ft", "1.5 mi", "12 mi"). */
+function fmtDist(m, imperial = false) {
+  if (imperial) {
+    if (m * FT < 1000) return `${Math.max(50, Math.round((m * FT) / 50) * 50)} ft`;
+    const mi = m / MI;
+    return `${mi.toFixed(mi < 9.5 ? 1 : 0)} mi`;
+  }
+  if (m < 950) return `${Math.max(10, Math.round(m / 10) * 10)} m`;
+  return `${(m / 1000).toFixed(m < 9500 ? 1 : 0)} km`;
+}
+
+/** The search radius: "800 m", "1 km", "1.5 km" (or "500 ft", "0.6 mi", "1.9 mi"). */
+function fmtRadius(r, imperial = false) {
+  if (imperial) return r * FT >= 1300 ? `${+(r / MI).toFixed(1)} mi` : `${Math.round((r * FT) / 50) * 50} ft`;
+  return r >= 1000 ? `${+(r / 1000).toFixed(1)} km` : `${Math.round(r / 10) * 10} m`;
+}
+
+__m["units"] = { usesMiles, fmtDist, fmtRadius };
+})();
 // ---- graph
 (() => {
 // A compact road graph and shortest paths: the test version's routing, and
@@ -6392,6 +6422,7 @@ const { KIND_GLYPHS, groupIcon, placeIcon } = __m["kinds"];
 const { getConfig, ratingsSource, rateAll, thumbFor, detailsFor } = __m["rated"];
 const { openStatus, weekTable } = __m["hours"];
 const { haversine } = __m["geo"];
+const { usesMiles, fmtDist: fmtDistIn, fmtRadius: fmtRadiusIn } = __m["units"];
 const { pickAnchor } = __m["anchor"];
 const { loadPlacesKit, placeIdFor, rowPhoto, placeCard, samePlace } = __m["placeskit"];
 const { mapLinks, shareText, messagingLinks, nativeShare, copyText, calendarInvite, download } = __m["share"];
@@ -6474,10 +6505,9 @@ const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const isMobile = () => window.matchMedia('(max-width: 759px)').matches;
 
-function fmtDist(m) {
-  if (m < 950) return `${Math.max(10, Math.round(m / 10) * 10)} m`;
-  return `${(m / 1000).toFixed(m < 9500 ? 1 : 0)} km`;
-}
+/** Miles and feet where the phone is set to a country that uses them. */
+const IMPERIAL = usesMiles((navigator.languages && navigator.languages[0]) || navigator.language || '');
+const fmtDist = (m) => fmtDistIn(m, IMPERIAL);
 function travelMinutes(m, mode = state.settings.travel) {
   return Math.round(estimateSeconds(mode, m / 1.3) / 60);
 }
@@ -8701,8 +8731,8 @@ function renderResults() {
 // ------------------------------------------------ how far to look: the slider
 
 const radiusShare = (r) => ((r - RADIUS.min) / (RADIUS.max - RADIUS.min)) * 100;
-/** "800 m", "1 km". */
-const fmtRadius = (r) => (r >= 1000 ? `${+(r / 1000).toFixed(1)} km` : `${Math.round(r / 10) * 10} m`);
+/** "800 m", "1 km" (or "500 ft", "0.6 mi"). */
+const fmtRadius = (r) => fmtRadiusIn(r, IMPERIAL);
 
 /** "23 places within 800 m" (a spinner in place of the number while they load), and the slider. */
 function radiusRow(s, total) {
