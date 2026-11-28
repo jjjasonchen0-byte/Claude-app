@@ -104,7 +104,7 @@ const g = {
     { address: 'Hoboken Terminal, 1 Hudson Pl, Hoboken', lat: 40.7349, lon: -74.0279, nickname: 'Ryan' },
   ],
 };
-/** Where the race sends them (the live site's answer for this group on a Friday evening): the invite goes there. */
+/** Where the race sends them (the live site's answer for this group on a Friday evening, a pub): the invite goes there. */
 const SPOT_NAME = 'Handcraft';
 meta.group = g;
 await page.evaluate(async (g) => {
@@ -254,20 +254,20 @@ const tabs = await page.$$eval('.pills .pill', (els) => els.map((e) => { const r
 meta.places.tabs = tabs;
 // (each tab found again just before it's tapped: a shorter list under one tab can shift the sheet)
 const tabAt = async (re) => (await page.$$eval('.pills .pill', (els) => els.map((e) => { const r = e.getBoundingClientRect(); return { text: e.textContent.trim(), x: r.x + r.width / 2, y: r.y + r.height / 2 }; }))).find((t) => re.test(t.text));
-// Drinks (the highlight slides along), then Food (back): the restaurants, nearest first: the meeting
-// point itself (Handcraft) is the first of them
+// Fun (the highlight slides two tabs along), then Drinks (one back): the pubs, nearest first: the
+// meeting point itself (Handcraft, a pub) is the first of them
+const fun = await tabAt(/Fun/);
+if (!(fun && fun.y > 80 && fun.y < 800)) throw new Error('tabs not in sight ' + JSON.stringify(tabs));
+await page.touchscreen.tap(fun.x, fun.y);
+meta.places.tapTab1 = { ...fun, frame: rig.frame() };
+await rig.step(36);
 const drinks = await tabAt(/Drinks/);
-if (!(drinks && drinks.y > 80 && drinks.y < 800)) throw new Error('tabs not in sight ' + JSON.stringify(tabs));
 await page.touchscreen.tap(drinks.x, drinks.y);
-meta.places.tapTab1 = { ...drinks, frame: rig.frame() };
+meta.places.tapTab2 = { ...drinks, frame: rig.frame() };
 await rig.step(36);
-const food = await tabAt(/Food/);
-await page.touchscreen.tap(food.x, food.y);
-meta.places.tapTab2 = { ...food, frame: rig.frame() };
-await rig.step(36);
-const rest = await page.locator('[data-action=group]', { hasText: 'Restaurants' }).first().boundingBox();
-if (!rest) throw new Error('no Restaurants group: ' + (await page.textContent('#panel-body')).replace(/\s+/g, ' ').slice(0, 300));
-meta.places.tapGroup = { x: rest.x + rest.width / 2, y: rest.y + rest.height / 2, frame: rig.frame() };
+const pubs = await page.locator('[data-action=group]', { hasText: 'Pubs' }).first().boundingBox();
+if (!pubs) throw new Error('no Pubs group: ' + (await page.textContent('#panel-body')).replace(/\s+/g, ' ').slice(0, 300));
+meta.places.tapGroup = { x: pubs.x + pubs.width / 2, y: pubs.y + pubs.height / 2, frame: rig.frame() };
 await page.touchscreen.tap(meta.places.tapGroup.x, meta.places.tapGroup.y);
 for (let i = 0; i < 60 && !(await page.$('[data-action=place]')); i++) await rig.step(1);
 await rig.step(34);
