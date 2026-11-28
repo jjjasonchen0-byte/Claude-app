@@ -1,0 +1,159 @@
+{
+  "group": {
+    "home": {
+      "address": "Domino Park, 15 River St, Brooklyn",
+      "lat": 40.7145,
+      "lon": -73.968
+    },
+    "friends": [
+      {
+        "address": "Lincoln Center, 10 Lincoln Center Plaza, New York",
+        "lat": 40.7725,
+        "lon": -73.9835,
+        "nickname": "Sam"
+      },
+      {
+        "address": "MoMA PS1, 22-25 Jackson Ave, Queens",
+        "lat": 40.7454,
+        "lon": -73.9471,
+        "nickname": "Priya"
+      },
+      {
+        "address": "Hoboken Terminal, 1 Hudson Pl, Hoboken",
+        "lat": 40.7349,
+        "lon": -74.0279,
+        "nickname": "Leo"
+      }
+    ]
+  },
+  "crew": {
+    "tapMap": {
+      "x": 225,
+      "y": 300,
+      "frame": 15
+    },
+    "tapUse": {
+      "x": 224.5,
+      "y": 250,
+      "frame": 38
+    },
+    "typeFrom": 62,
+    "tapAdd": {
+      "x": 300.7890625,
+      "y": 201.9765625,
+      "frame": 91
+    }
+  },
+  "frames": {
+    "crew": 166,
+    "modes": 78,
+    "go": 369,
+    "places": 302
+  },
+  "modes": {
+    "tapPill": {
+      "x": 169.484375,
+      "y": 605.4296875,
+      "frame": 12
+    },
+    "tapBike": {
+      "x": 228.5625,
+      "y": 742.625,
+      "frame": 38
+    }
+  },
+  "go": {
+    "drag": {
+      "x": 195,
+      "y": 443,
+      "frame": 10,
+      "to": 963
+    },
+    "tapPlay": {
+      "x": 344,
+      "y": 658,
+      "frame": 48
+    },
+    "resultsAt": 289
+  },
+  "spot": {
+    "x": 200,
+    "y": 407
+  },
+  "places": {
+    "pull": {
+      "x": 195,
+      "y": 712,
+      "frame": 16,
+      "to": 110
+    },
+    "scroll": {
+      "by": 39.71875,
+      "frame": 74
+    },
+    "tabs": [
+      {
+        "text": "Food50",
+        "x": 72.1875,
+        "y": 578.71875
+      },
+      {
+        "text": "Drinks50",
+        "x": 197.4765625,
+        "y": 578.71875
+      },
+      {
+        "text": "Fun16",
+        "x": 316.9765625,
+        "y": 578.71875
+      },
+      {
+        "text": "Culture33",
+        "x": 439.3828125,
+        "y": 578.71875
+      },
+      {
+        "text": "Outdoors21",
+        "x": 580.453125,
+        "y": 578.71875
+      },
+      {
+        "text": "Shopping29",
+        "x": 728.828125,
+        "y": 578.71875
+      }
+    ],
+    "tapDrinks": {
+      "text": "Drinks50",
+      "x": 197.4765625,
+      "y": 578.71875,
+      "frame": 106
+    },
+    "tapFood": {
+      "text": "Food50",
+      "x": 72.1875,
+      "y": 618.71875,
+      "frame": 142
+    },
+    "tapGroup": {
+      "x": 195,
+      "y": 687.71875,
+      "frame": 178
+    },
+    "tapPlace": {
+      "x": 195,
+      "y": 313.15625,
+      "frame": 212
+    },
+    "tapSend": {
+      "x": 103.5,
+      "y": 409.8515625,
+      "frame": 258
+    },
+    "shareBtn": {
+      "x": 195,
+      "y": 556.9375
+    }
+  },
+  "shareText": "Let's meet at Mama Fina's House of Filipino Sisig\n167 Avenue A, Manhattan\nFri, Dec 4, 8:00 PM\nhttps://www.google.com/maps/search/?api=1&query=40.7282376,-73.9821344\nSent with Meet"
+}
